@@ -11,10 +11,11 @@
 | 命令 | 内容 |
 | --- | --- |
 | `pnpm verify` | 类型检查（`tsc --noEmit`）+ ESLint + Vitest 单元/组件测试。**推送前必跑**，Husky `pre-push` 钩子会自动执行 |
-| `pnpm test:e2e` | Playwright E2E（会先 `pnpm build` 再启动服务）；首次需 `pnpm exec playwright install chromium` |
+| `pnpm test:integration` | Vitest 集成测试（`*.int.test.ts`），用 Testcontainers 自动启动真实 Postgres 并执行迁移；**需要 Docker**。改动数据库、认证、数据访问层时推送前必跑 |
+| `pnpm test:e2e` | Playwright E2E（会先 `pnpm db:migrate`、`pnpm build` 再启动服务）；需要 `DATABASE_URL` 指向可写的 Postgres；首次需 `pnpm exec playwright install chromium` |
 | `pnpm test:watch` | Vitest 监听模式 |
 
-CI（`.github/workflows/ci.yml`）在每个 PR 和 main 推送上运行 `pnpm verify` 和 `pnpm test:e2e`。
+CI（`.github/workflows/ci.yml`）在每个 PR 和 main 推送上运行 `pnpm verify`、`pnpm test:integration` 和 `pnpm test:e2e`。
 
 ## 工具无关（可随时迁移到 Claude Code / Codex）
 
@@ -29,7 +30,10 @@ CI（`.github/workflows/ci.yml`）在每个 PR 和 main 推送上运行 `pnpm ve
 ## 约定
 
 - 包管理器：pnpm；Node 22+。
-- 单元测试与源码同目录，命名 `*.test.ts(x)`；E2E 放在 `e2e/`，命名 `*.spec.ts`。
+- 单元测试与源码同目录，命名 `*.test.ts(x)`；集成测试同目录，命名 `*.int.test.ts`（共用工具在 `test/integration/`）；E2E 放在 `e2e/`，命名 `*.spec.ts`。
+- 配置只通过环境变量注入（见 `.env.example`），在 `src/lib/env.ts` 用 Zod 校验；不使用云厂商专有 SDK。
+- 数据库：Drizzle schema 在 `src/db/schema.ts`；改 schema 后用 `pnpm db:generate --name <描述>` 生成迁移（`drizzle/`，提交进仓库），不要手改已提交的迁移。`pnpm db:migrate` 执行迁移。
+- 用户数据隔离：用户 ID 只能来自会话（`src/lib/session.ts` 的 `getSessionUser`），不能取自请求参数或 body；数据访问函数（`src/lib/data/`）显式接收 `userId` 并按它过滤。
 
 <!-- BEGIN:nextjs-agent-rules -->
 

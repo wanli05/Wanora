@@ -15,7 +15,13 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `pnpm build && pnpm start --port ${port}`,
+    // Requires DATABASE_URL pointing at a Postgres the tests may write to.
+    command: `pnpm db:migrate && pnpm build && pnpm start --port ${port}`,
+    env: {
+      AUTH_SECRET:
+        process.env.AUTH_SECRET ?? "e2e-only-secret-0123456789abcdefghij",
+      AUTH_URL: baseURL,
+    },
     url: `${baseURL}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
