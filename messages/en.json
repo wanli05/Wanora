@@ -1,0 +1,36 @@
+{
+  "Metadata": {
+    "description": "Job application tracker for job seekers in Japan"
+  },
+  "Nav": {
+    "language": "Language"
+  },
+  "Home": {
+    "tagline": "Job application tracker for job seekers in Japan"
+  },
+  "Account": {
+    "signIn": "Sign in",
+    "signUp": "Create account",
+    "signOut": "Sign out"
+  },
+  "Auth": {
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "emailTaken": "This email is already registered",
+    "signIn": {
+      "title": "Sign in",
+      "submit": "Sign in",
+      "switchText": "Don't have an account?",
+      "switchLabel": "Create account",
+      "error": "Incorrect email or password"
+    },
+    "signUp": {
+      "title": "Create account",
+      "submit": "Create account",
+      "switchText": "Already have an account?",
+      "switchLabel": "Sign in",
+      "error": "Could not create the account"
+    }
+  }
+}

@@ -27,6 +27,12 @@ CI（`.github/workflows/ci.yml`）在每个 PR 和 main 推送上运行 `pnpm ve
   - Codex 原生读取 `AGENTS.md`，无需额外文件。
 - 构建、测试、运行不依赖任何工具专有功能：一律通过 `package.json` 中的 pnpm 脚本完成，相关文档放在仓库里（`AGENTS.md`、`README.md`）。
 
+## Git 提交
+
+- **每次 commit 都必须写清楚改动内容**：subject 一行概要；必要时用正文列出主要变更。
+- **不允许**空 subject，也不允许纯占位说明（如 `update`、`fix`、`wip`、`changes`）。
+- Husky `commit-msg` 钩子会校验 subject；推送前仍会跑 `pre-push` → `pnpm verify`。
+
 ## 约定
 
 - 包管理器：pnpm；Node 22+。
