@@ -1,0 +1,36 @@
+{
+  "Metadata": {
+    "description": "为在日本求职、跳槽的人打造的投递进度管理应用"
+  },
+  "Nav": {
+    "language": "界面语言"
+  },
+  "Home": {
+    "tagline": "为在日本求职、跳槽的人打造的投递进度管理应用"
+  },
+  "Account": {
+    "signIn": "登录",
+    "signUp": "注册",
+    "signOut": "退出登录"
+  },
+  "Auth": {
+    "name": "姓名",
+    "email": "邮箱",
+    "password": "密码",
+    "emailTaken": "该邮箱已被注册",
+    "signIn": {
+      "title": "登录",
+      "submit": "登录",
+      "switchText": "还没有账号？",
+      "switchLabel": "注册",
+      "error": "邮箱或密码不正确"
+    },
+    "signUp": {
+      "title": "注册",
+      "submit": "注册",
+      "switchText": "已有账号？",
+      "switchLabel": "登录",
+      "error": "注册失败"
+    }
+  }
+}

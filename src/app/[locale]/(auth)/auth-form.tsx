@@ -2,46 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth-constants";
+import { applyAccountLocale } from "@/lib/locale-actions";
+import { loadPage } from "@/lib/reload";
 
 type Mode = "sign-in" | "sign-up";
 
-const copy = {
-  "sign-in": {
-    title: "ログイン",
-    submit: "ログイン",
-    switchText: "アカウントをお持ちでない方",
-    switchLabel: "新規登録",
-    switchHref: "/sign-up",
-    error: "メールアドレスまたはパスワードが正しくありません",
-  },
-  "sign-up": {
-    title: "新規登録",
-    submit: "登録する",
-    switchText: "アカウントをお持ちの方",
-    switchLabel: "ログイン",
-    switchHref: "/sign-in",
-    error: "登録できませんでした",
-  },
-} as const;
-
-const EMAIL_TAKEN = "このメールアドレスは既に登録されています";
-
-// UI copy moves to next-intl in M2; until then map Better Auth error codes here.
-function errorMessage(mode: Mode, code: string | undefined): string {
-  if (mode === "sign-up" && code?.startsWith("USER_ALREADY_EXISTS")) {
-    return EMAIL_TAKEN;
-  }
-  return copy[mode].error;
-}
+const SWITCH_HREF: Record<Mode, string> = {
+  "sign-in": "/sign-up",
+  "sign-up": "/sign-in",
+};
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("Auth");
+  const copy = mode === "sign-up" ? "signUp" : "signIn";
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const t = copy[mode];
 
   // Next.js keeps visited pages mounted (hidden) via <Activity>; clear
   // credentials whenever this page is hidden. Must be a stable ref, or the
@@ -66,20 +47,30 @@ export function AuthForm({ mode }: { mode: Mode }) {
             email,
             password,
             name: String(form.get("name")),
+            uiLocale: locale,
           })
         : await authClient.signIn.email({ email, password });
-    setPending(false);
     if (error) {
-      setError(errorMessage(mode, error.code));
+      setPending(false);
+      setError(
+        mode === "sign-up" && error.code?.startsWith("USER_ALREADY_EXISTS")
+          ? t("emailTaken")
+          : t(`${copy}.error`),
+      );
       return;
     }
+    if (mode === "sign-in" && (await applyAccountLocale())) {
+      loadPage("/");
+      return;
+    }
+    setPending(false);
     router.push("/");
     router.refresh();
   }
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 p-8">
-      <h1 className="text-2xl font-semibold">{t.title}</h1>
+      <h1 className="text-2xl font-semibold">{t(`${copy}.title`)}</h1>
       <form
         method="post"
         onSubmit={onSubmit}
@@ -87,16 +78,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
         className="flex flex-col gap-4"
       >
         {mode === "sign-up" && (
-          <Field label="氏名" name="name" type="text" autoComplete="name" />
+          <Field label={t("name")} name="name" type="text" autoComplete="name" />
         )}
         <Field
-          label="メールアドレス"
+          label={t("email")}
           name="email"
           type="email"
           autoComplete="email"
         />
         <Field
-          label="パスワード"
+          label={t("password")}
           name="password"
           type="password"
           minLength={MIN_PASSWORD_LENGTH}
@@ -114,13 +105,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
           disabled={pending}
           className="rounded bg-zinc-900 px-4 py-2 text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
         >
-          {t.submit}
+          {t(`${copy}.submit`)}
         </button>
       </form>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        {t.switchText}{" "}
-        <Link href={t.switchHref} className="underline">
-          {t.switchLabel}
+        {t(`${copy}.switchText`)}{" "}
+        <Link href={SWITCH_HREF[mode]} className="underline">
+          {t(`${copy}.switchLabel`)}
         </Link>
       </p>
     </main>

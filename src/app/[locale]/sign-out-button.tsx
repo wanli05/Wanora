@@ -1,8 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { authClient } from "@/lib/auth-client";
+import { loadPage } from "@/lib/reload";
 
 export function SignOutButton() {
+  const t = useTranslations("Account");
   return (
     <button
       type="button"
@@ -11,11 +14,10 @@ export function SignOutButton() {
         await authClient.signOut();
         // Full reload drops all client state of the previous user, including
         // pages Next.js keeps hidden for back/forward navigation.
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/";
+        loadPage("/");
       }}
     >
-      ログアウト
+      {t("signOut")}
     </button>
   );
 }

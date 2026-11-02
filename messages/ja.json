@@ -1,0 +1,36 @@
+{
+  "Metadata": {
+    "description": "日本で就職・転職活動をする人のための応募管理アプリ"
+  },
+  "Nav": {
+    "language": "表示言語"
+  },
+  "Home": {
+    "tagline": "日本で就職・転職活動をする人のための応募管理アプリ"
+  },
+  "Account": {
+    "signIn": "ログイン",
+    "signUp": "新規登録",
+    "signOut": "ログアウト"
+  },
+  "Auth": {
+    "name": "氏名",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "emailTaken": "このメールアドレスは既に登録されています",
+    "signIn": {
+      "title": "ログイン",
+      "submit": "ログイン",
+      "switchText": "アカウントをお持ちでない方",
+      "switchLabel": "新規登録",
+      "error": "メールアドレスまたはパスワードが正しくありません"
+    },
+    "signUp": {
+      "title": "新規登録",
+      "submit": "登録する",
+      "switchText": "アカウントをお持ちの方",
+      "switchLabel": "ログイン",
+      "error": "登録できませんでした"
+    }
+  }
+}

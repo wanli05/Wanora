@@ -1,19 +1,23 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { getTranslations } from "next-intl/server";
 import { getSessionUser } from "@/lib/session";
 import { SignOutButton } from "./sign-out-button";
 
 export async function AccountStatus() {
-  const user = await getSessionUser(await headers());
+  const [user, t] = await Promise.all([
+    getSessionUser(await headers()),
+    getTranslations("Account"),
+  ]);
 
   if (!user) {
     return (
       <nav className="flex gap-4">
         <Link href="/sign-in" className="underline">
-          ログイン
+          {t("signIn")}
         </Link>
         <Link href="/sign-up" className="underline">
-          新規登録
+          {t("signUp")}
         </Link>
       </nav>
     );
