@@ -1,14 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { changeLocale } from "@/lib/locale-actions";
 import { LOCALE_NAMES, LOCALES, type Locale } from "@/lib/locale";
-import { reloadPage } from "@/lib/reload";
 
 export function LocaleSwitcher() {
   const t = useTranslations("Nav");
   const locale = useLocale();
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -21,11 +22,12 @@ export function LocaleSwitcher() {
         className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
         onChange={(event) => {
           const next = event.target.value as Locale;
-          startTransition(async () => {
-            await changeLocale(next);
-            // URLs carry no locale, so the client router cache would keep
-            // serving pages rendered in the old language; reload instead.
-            reloadPage();
+          if (next === locale) return;
+          startTransition(() => {
+            void (async () => {
+              await changeLocale(next);
+              router.refresh();
+            })();
           });
         }}
       >

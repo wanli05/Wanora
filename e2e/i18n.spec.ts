@@ -47,20 +47,18 @@ test("language switcher changes UI copy", async ({ page, context }) => {
     },
   ]);
   await page.goto("/");
-  await Promise.all([
-    page.waitForLoadState("load"),
-    page.getByLabel("表示言語").selectOption("en"),
-  ]);
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.getByLabel("表示言語").selectOption("en");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en", {
+    timeout: 10_000,
+  });
   await expect(
     page.getByText("Job application tracker for job seekers in Japan"),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 
-  await Promise.all([
-    page.waitForLoadState("load"),
-    page.getByLabel("Language").selectOption("zh-CN"),
-  ]);
-  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await page.getByLabel("Language").selectOption("zh-CN");
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN", {
+    timeout: 10_000,
+  });
   await expect(page.getByRole("link", { name: "登录" })).toBeVisible();
 });
