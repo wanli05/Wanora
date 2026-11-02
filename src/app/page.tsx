@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { AccountStatus } from "./account-status";
+
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
@@ -5,6 +8,9 @@ export default function Home() {
       <p className="text-zinc-600 dark:text-zinc-400">
         Job application tracker for job seekers in Japan.
       </p>
+      <Suspense fallback={null}>
+        <AccountStatus />
+      </Suspense>
     </main>
   );
 }
