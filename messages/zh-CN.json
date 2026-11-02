@@ -1,12 +1,13 @@
 {
   "Metadata": {
-    "description": "为在日本求职、跳槽的人打造的投递进度管理应用"
+    "description": "面向在日本求职者的投递进度管理应用"
   },
   "Nav": {
-    "language": "界面语言"
+    "language": "界面语言",
+    "profile": "个人资料"
   },
   "Home": {
-    "tagline": "为在日本求职、跳槽的人打造的投递进度管理应用"
+    "tagline": "面向在日本求职者的投递进度管理应用"
   },
   "Account": {
     "signIn": "登录",
@@ -17,7 +18,7 @@
     "name": "姓名",
     "email": "邮箱",
     "password": "密码",
-    "emailTaken": "该邮箱已被注册",
+    "emailTaken": "该邮箱已注册",
     "signIn": {
       "title": "登录",
       "submit": "登录",
@@ -27,10 +28,106 @@
     },
     "signUp": {
       "title": "注册",
-      "submit": "注册",
+      "submit": "创建账号",
       "switchText": "已有账号？",
       "switchLabel": "登录",
-      "error": "注册失败"
+      "error": "无法完成注册"
+    }
+  },
+  "Profile": {
+    "title": "个人资料",
+    "subtitle": "管理履历书、职务经历书用的基本信息、学历、职历与资格。",
+    "nav": {
+      "basic": "基本信息",
+      "education": "学历",
+      "workHistory": "职历（履历书）",
+      "licenses": "证书・资格"
+    },
+    "localizedField": {
+      "tabsAria": "{label} 的语言标签",
+      "inputLabel": "{label}（{locale}）",
+      "completion": "已填写 {filled}/{total} 种语言"
+    },
+    "photo": {
+      "title": "证件照",
+      "hint": "按 3:4 自动裁剪，并保存印刷尺寸。",
+      "previewAlt": "证件照预览",
+      "uploadError": "上传失败",
+      "uploadSuccess": "照片已保存",
+      "storageDisabled": "未配置对象存储，无法保存照片（请在 .env.local 设置 S3_*）。"
+    },
+    "basic": {
+      "fullName": "姓名",
+      "fullNameKana": "假名读音",
+      "birthDate": "出生日期",
+      "age": "{age} 岁",
+      "gender": "性别（可选）",
+      "postalCode": "邮编",
+      "dateFormat": "日期格式（日文文档）",
+      "dateFormatWareki": "和历",
+      "dateFormatSeireki": "公历",
+      "address": "现住址",
+      "addressKana": "现住址读音",
+      "phone": "电话",
+      "email": "邮箱",
+      "altContact": "联系地址（与现住址不同时）",
+      "save": "保存基本信息"
+    },
+    "education": {
+      "listTitle": "已登记学历",
+      "empty": "暂无学历记录。",
+      "addTitle": "添加学历",
+      "school": "学校・院系",
+      "event": "事项",
+      "note": "补充（可选）",
+      "year": "年",
+      "month": "月",
+      "add": "添加",
+      "update": "更新",
+      "delete": "删除"
+    },
+    "workHistory": {
+      "listTitle": "已登记职历",
+      "empty": "暂无职历记录。",
+      "addTitle": "添加职历",
+      "company": "公司名称",
+      "event": "事项",
+      "note": "补充（可选）",
+      "year": "年",
+      "month": "月",
+      "add": "添加",
+      "update": "更新",
+      "delete": "删除"
+    },
+    "licenses": {
+      "listTitle": "已登记证书・资格",
+      "empty": "暂无证书或资格。",
+      "addTitle": "添加证书・资格",
+      "name": "名称",
+      "status": "状态",
+      "score": "分数（可选）",
+      "year": "取得年",
+      "month": "取得月",
+      "add": "添加",
+      "update": "更新",
+      "delete": "删除"
+    },
+    "events": {
+      "education": {
+        "enrolled": "入学",
+        "graduated": "毕业",
+        "withdrawn": "退学",
+        "completed": "结业"
+      },
+      "workHistory": {
+        "joined": "入职",
+        "left": "离职",
+        "transferred": "调动"
+      },
+      "licenseStatus": {
+        "acquired": "已取得",
+        "expected": "预计取得"
+      }
     }
   }
 }

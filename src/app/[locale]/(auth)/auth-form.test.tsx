@@ -61,7 +61,7 @@ describe("AuthForm", () => {
     fill("姓名", "张三");
     fill("邮箱", "zhang@example.test");
     fill("密码", "password123");
-    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
 
     await waitFor(() =>
       expect(signUpEmail).toHaveBeenCalledWith(

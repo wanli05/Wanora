@@ -5,19 +5,20 @@ import { getSessionUser } from "@/lib/session";
 import { SignOutButton } from "./sign-out-button";
 
 export async function AccountStatus() {
-  const [user, t] = await Promise.all([
+  const [user, tAccount, tNav] = await Promise.all([
     getSessionUser(await headers()),
     getTranslations("Account"),
+    getTranslations("Nav"),
   ]);
 
   if (!user) {
     return (
       <nav className="flex gap-4">
         <Link href="/sign-in" className="underline">
-          {t("signIn")}
+          {tAccount("signIn")}
         </Link>
         <Link href="/sign-up" className="underline">
-          {t("signUp")}
+          {tAccount("signUp")}
         </Link>
       </nav>
     );
@@ -25,6 +26,9 @@ export async function AccountStatus() {
 
   return (
     <div className="flex items-center gap-4">
+      <Link href="/profile" className="underline">
+        {tNav("profile")}
+      </Link>
       <p data-testid="signed-in-as">{user.email}</p>
       <SignOutButton />
     </div>

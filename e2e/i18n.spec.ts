@@ -8,7 +8,7 @@ const cases = [
   },
   {
     locale: "zh-CN",
-    tagline: "为在日本求职、跳槽的人打造的投递进度管理应用",
+    tagline: "面向在日本求职者的投递进度管理应用",
     signIn: "登录",
   },
   {

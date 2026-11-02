@@ -3,7 +3,8 @@
     "description": "Job application tracker for job seekers in Japan"
   },
   "Nav": {
-    "language": "Language"
+    "language": "Language",
+    "profile": "Profile"
   },
   "Home": {
     "tagline": "Job application tracker for job seekers in Japan"
@@ -31,6 +32,102 @@
       "switchText": "Already have an account?",
       "switchLabel": "Sign in",
       "error": "Could not create the account"
+    }
+  },
+  "Profile": {
+    "title": "Profile",
+    "subtitle": "Manage resume basics, education, work history, and licenses.",
+    "nav": {
+      "basic": "Basics",
+      "education": "Education",
+      "workHistory": "Work (resume)",
+      "licenses": "Licenses"
+    },
+    "localizedField": {
+      "tabsAria": "Language tabs for {label}",
+      "inputLabel": "{label} ({locale})",
+      "completion": "{filled}/{total} languages filled"
+    },
+    "photo": {
+      "title": "ID photo",
+      "hint": "Crops to 3:4 and stores a print-ready JPEG.",
+      "previewAlt": "ID photo preview",
+      "uploadError": "Upload failed",
+      "uploadSuccess": "Photo saved",
+      "storageDisabled": "Object storage is not configured (set S3_* in .env.local)."
+    },
+    "basic": {
+      "fullName": "Full name",
+      "fullNameKana": "Furigana",
+      "birthDate": "Date of birth",
+      "age": "Age {age}",
+      "gender": "Gender (optional)",
+      "postalCode": "Postal code",
+      "dateFormat": "Date style (Japanese documents)",
+      "dateFormatWareki": "Japanese era",
+      "dateFormatSeireki": "Western calendar",
+      "address": "Address",
+      "addressKana": "Address (furigana)",
+      "phone": "Phone",
+      "email": "Email",
+      "altContact": "Alternate contact",
+      "save": "Save basics"
+    },
+    "education": {
+      "listTitle": "Education entries",
+      "empty": "No education entries yet.",
+      "addTitle": "Add education",
+      "school": "School / faculty",
+      "event": "Event",
+      "note": "Note (optional)",
+      "year": "Year",
+      "month": "Month",
+      "add": "Add",
+      "update": "Update",
+      "delete": "Delete"
+    },
+    "workHistory": {
+      "listTitle": "Work history entries",
+      "empty": "No work history yet.",
+      "addTitle": "Add work history",
+      "company": "Company",
+      "event": "Event",
+      "note": "Note (optional)",
+      "year": "Year",
+      "month": "Month",
+      "add": "Add",
+      "update": "Update",
+      "delete": "Delete"
+    },
+    "licenses": {
+      "listTitle": "Licenses",
+      "empty": "No licenses yet.",
+      "addTitle": "Add license",
+      "name": "Name",
+      "status": "Status",
+      "score": "Score (optional)",
+      "year": "Year",
+      "month": "Month",
+      "add": "Add",
+      "update": "Update",
+      "delete": "Delete"
+    },
+    "events": {
+      "education": {
+        "enrolled": "Enrolled",
+        "graduated": "Graduated",
+        "withdrawn": "Withdrawn",
+        "completed": "Completed"
+      },
+      "workHistory": {
+        "joined": "Joined",
+        "left": "Left",
+        "transferred": "Transferred"
+      },
+      "licenseStatus": {
+        "acquired": "Acquired",
+        "expected": "Expected"
+      }
     }
   }
 }
