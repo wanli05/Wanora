@@ -136,6 +136,30 @@ describe("AuthForm", () => {
     );
   });
 
+  it("shows password length errors from Better Auth", async () => {
+    signUpEmail.mockResolvedValue({ error: { code: "PASSWORD_TOO_SHORT" } });
+    renderWithIntl(<AuthForm mode="sign-up" />);
+    fill("氏名", "山田 太郎");
+    fill("メールアドレス", "taro@example.test");
+    fill("パスワード", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "登録する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "パスワードは8文字以上",
+    );
+  });
+
+  it("shows invalid origin guidance", async () => {
+    signUpEmail.mockResolvedValue({ error: { code: "INVALID_ORIGIN" } });
+    renderWithIntl(<AuthForm mode="sign-up" />);
+    fill("氏名", "山田 太郎");
+    fill("メールアドレス", "taro@example.test");
+    fill("パスワード", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "登録する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("AUTH_URL");
+  });
+
   it("enforces the minimum password length in the input", () => {
     renderWithIntl(<AuthForm mode="sign-up" />);
     expect(screen.getByLabelText("パスワード")).toHaveAttribute(

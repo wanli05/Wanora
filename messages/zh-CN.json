@@ -19,6 +19,9 @@
     "email": "邮箱",
     "password": "密码",
     "emailTaken": "该邮箱已注册",
+    "invalidEmail": "邮箱格式不正确（需包含 @）",
+    "passwordTooShort": "密码至少 8 个字符",
+    "invalidOrigin": "浏览器地址与 AUTH_URL 不一致。请用与 AUTH_URL 相同的主机打开（如 http://localhost:3000），或检查环境变量配置",
     "signIn": {
       "title": "登录",
       "submit": "登录",

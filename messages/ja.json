@@ -19,6 +19,9 @@
     "email": "メールアドレス",
     "password": "パスワード",
     "emailTaken": "このメールアドレスは既に登録されています",
+    "invalidEmail": "メールアドレスの形式が正しくありません（@ を含めてください）",
+    "passwordTooShort": "パスワードは8文字以上にしてください",
+    "invalidOrigin": "ブラウザのアドレスと AUTH_URL の設定が一致していません。http://localhost:3000 で開くか、127.0.0.1 でもアクセスできるよう設定を確認してください",
     "signIn": {
       "title": "ログイン",
       "submit": "ログイン",

@@ -19,6 +19,9 @@
     "email": "Email",
     "password": "Password",
     "emailTaken": "This email is already registered",
+    "invalidEmail": "Enter a valid email address (include @)",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "invalidOrigin": "Browser URL does not match AUTH_URL. Open the app at the same host as AUTH_URL (e.g. http://localhost:3000), or align both settings",
     "signIn": {
       "title": "Sign in",
       "submit": "Sign in",
