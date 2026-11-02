@@ -16,6 +16,16 @@
 
 CI（`.github/workflows/ci.yml`）在每个 PR 和 main 推送上运行 `pnpm verify` 和 `pnpm test:e2e`。
 
+## 工具无关（可随时迁移到 Claude Code / Codex）
+
+本项目目前用 Cursor 开发，但必须能随时切换到 Claude Code 或 Codex 继续开发。
+
+- **`AGENTS.md` 是 agent 规则的唯一来源。** 新增或修改规则只改这个文件。
+- 不要把 Cursor 专用配置（`.cursor/rules`、`.cursorrules` 等）当作存放规则的地方；其他工具的入口文件只能指向本文件，不能另写规则。
+  - `CLAUDE.md` 只包含 `@AGENTS.md`，让 Claude Code 读到同一份规则。
+  - Codex 原生读取 `AGENTS.md`，无需额外文件。
+- 构建、测试、运行不依赖任何工具专有功能：一律通过 `package.json` 中的 pnpm 脚本完成，相关文档放在仓库里（`AGENTS.md`、`README.md`）。
+
 ## 约定
 
 - 包管理器：pnpm；Node 22+。
