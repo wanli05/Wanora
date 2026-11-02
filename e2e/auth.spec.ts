@@ -1,7 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
-test("sign up, sign out, and sign back in", async ({ page }) => {
+const localeCookie = {
+  name: "NEXT_LOCALE",
+  value: "ja",
+  domain: "localhost",
+  path: "/",
+  sameSite: "Lax" as const,
+};
+
+test("sign up, sign out, and sign back in", async ({ page, context }) => {
+  await context.addCookies([localeCookie]);
   const email = `e2e-${randomUUID()}@example.test`;
   const password = "correct-horse-battery";
 
