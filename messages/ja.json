@@ -39,17 +39,23 @@
   },
   "Profile": {
     "title": "個人資料",
-    "subtitle": "履歴書・職務経歴書に載せる基本情報と学歴・職歴・資格を管理します。",
+    "subtitle": "履歴書・職務経歴書の内容は日本語で入力します（画面表示言語は右上で切り替え）。",
     "nav": {
       "basic": "基本情報",
       "education": "学歴",
       "workHistory": "職歴（履歴書）",
       "licenses": "免許・資格"
     },
-    "localizedField": {
-      "tabsAria": "{label}の言語タブ",
-      "inputLabel": "{label}（{locale}）",
-      "completion": "{filled}/{total} 言語入力済み"
+    "japaneseField": {
+      "hint": "履歴書・職務経歴書用の日本語で入力してください。エクスポート時の中国語・英語は後から自動翻訳します（未実装）。"
+    },
+    "saveFeedback": {
+      "saved": "基本情報を保存しました。",
+      "fullNameRequired": "氏名（日本語）を入力してください。",
+      "invalidEmail": "メールアドレスの形式が正しくありません。",
+      "invalidDateFormat": "日付表記の選択が不正です。",
+      "saveFailed": "保存に失敗しました。しばらくしてから再度お試しください。",
+      "unauthenticated": "ログインし直してから保存してください。"
     },
     "photo": {
       "title": "証明写真",

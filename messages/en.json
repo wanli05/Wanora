@@ -39,17 +39,23 @@
   },
   "Profile": {
     "title": "Profile",
-    "subtitle": "Manage resume basics, education, work history, and licenses.",
+    "subtitle": "Enter resume content in Japanese only (switch UI language in the header).",
     "nav": {
       "basic": "Basics",
       "education": "Education",
       "workHistory": "Work (resume)",
       "licenses": "Licenses"
     },
-    "localizedField": {
-      "tabsAria": "Language tabs for {label}",
-      "inputLabel": "{label} ({locale})",
-      "completion": "{filled}/{total} languages filled"
+    "japaneseField": {
+      "hint": "Enter Japanese text for resumes. Chinese and English export will be auto-translated later (not wired yet)."
+    },
+    "saveFeedback": {
+      "saved": "Basics saved.",
+      "fullNameRequired": "Enter your full name in Japanese.",
+      "invalidEmail": "Enter a valid email address.",
+      "invalidDateFormat": "Invalid date format preference.",
+      "saveFailed": "Could not save. Try again.",
+      "unauthenticated": "Sign in again to save."
     },
     "photo": {
       "title": "ID photo",

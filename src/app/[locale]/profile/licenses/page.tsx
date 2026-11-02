@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { LocalizedTextField } from "@/components/localized-text-field";
+import { JapaneseTextField } from "@/components/japanese-text-field";
 import { getDb } from "@/db";
 import { listLicenses } from "@/lib/data/licenses";
 import { LICENSE_STATUSES } from "@/lib/domain/resume-events";
@@ -20,6 +20,7 @@ export default async function LicensesPage() {
   const userId = await requireProfileAccess();
   const entries = await listLicenses(getDb(), userId);
   const t = await getTranslations("Profile.licenses");
+  const tField = await getTranslations("Profile.japaneseField");
   const ts = await getTranslations("Profile.events.licenseStatus");
 
   return (
@@ -61,10 +62,12 @@ export default async function LicensesPage() {
                       yearLabel={t("year")}
                       monthLabel={t("month")}
                     />
-                    <LocalizedTextField
+                    <JapaneseTextField
                       fieldPrefix="name"
                       label={t("name")}
                       value={name}
+                      required
+                      hint={tField("hint")}
                     />
                     <EventSelect
                       name="status"
@@ -98,7 +101,7 @@ export default async function LicensesPage() {
         <h2 className="text-lg font-semibold">{t("addTitle")}</h2>
         <form action={saveLicenseAction} className="space-y-4">
           <YearMonthFields yearLabel={t("year")} monthLabel={t("month")} />
-          <LocalizedTextField fieldPrefix="name" label={t("name")} />
+          <JapaneseTextField fieldPrefix="name" label={t("name")} required hint={tField("hint")} />
           <EventSelect
             name="status"
             codes={LICENSE_STATUSES}

@@ -15,16 +15,18 @@ import {
   deleteLicense,
   updateLicense,
 } from "@/lib/data/licenses";
-import { upsertProfile } from "@/lib/data/profiles";
+import { getProfileByUserId, upsertProfile } from "@/lib/data/profiles";
 import {
   createWorkHistoryEntry,
   deleteWorkHistoryEntry,
   updateWorkHistoryEntry,
 } from "@/lib/data/work-history-entries";
 import { parseDateInput, yearMonthFromInput } from "@/lib/domain/dates";
+import type { LocalizedText } from "@/lib/domain/localized-text";
 import {
-  localizedTextFromForm,
-  parseLocalizedText,
+  japaneseTextFromForm,
+  optionalJapaneseFromForm,
+  requireJapaneseFromForm,
 } from "@/lib/domain/localized-text";
 import {
   EDUCATION_EVENT_CODES,
@@ -34,49 +36,85 @@ import {
 import { getSessionUser } from "@/lib/session";
 
 const dateFormatSchema = z.enum(["wareki", "seireki"]);
+const optionalEmailSchema = z.union([z.literal(""), z.string().email()]);
+
+export type ProfileSaveError =
+  | "unauthenticated"
+  | "fullNameRequired"
+  | "invalidEmail"
+  | "invalidDateFormat"
+  | "saveFailed";
+
+export type ProfileSaveState = {
+  ok?: boolean;
+  error?: ProfileSaveError;
+};
 
 async function requireUserId(): Promise<string | null> {
   const user = await getSessionUser(await headers());
   return user?.id ?? null;
 }
 
-function optionalLocalizedFromForm(
+function resolveFullNameForSave(
   formData: FormData,
-  prefix: string,
-): ReturnType<typeof parseLocalizedText> | null {
-  const text = localizedTextFromForm(formData, prefix);
-  return Object.keys(text).length > 0 ? text : null;
+  existing: LocalizedText | undefined,
+): LocalizedText | null {
+  const incoming = japaneseTextFromForm(formData, "fullName");
+  if (incoming.ja) return { ja: incoming.ja };
+  if (existing?.ja) return { ja: existing.ja };
+  return null;
 }
 
-export async function saveProfileAction(formData: FormData): Promise<void> {
+export async function saveProfileAction(
+  _prev: ProfileSaveState,
+  formData: FormData,
+): Promise<ProfileSaveState> {
   const userId = await requireUserId();
-  if (!userId) return;
+  if (!userId) return { error: "unauthenticated" };
 
   try {
-    const fullName = localizedTextFromForm(formData, "fullName");
-    if (Object.keys(fullName).length === 0) {
-      return;
+    const db = getDb();
+    const existing = await getProfileByUserId(db, userId);
+    const fullName = resolveFullNameForSave(
+      formData,
+      existing?.fullName as LocalizedText | undefined,
+    );
+    if (!fullName) {
+      return { error: "fullNameRequired" };
     }
+
+    const emailRaw = formData.get("email")?.toString().trim() ?? "";
+    const emailParsed = optionalEmailSchema.safeParse(emailRaw);
+    if (!emailParsed.success) {
+      return { error: "invalidEmail" };
+    }
+
     const birthRaw = formData.get("birthDate")?.toString();
     const dateFormat = dateFormatSchema.parse(
       formData.get("dateFormat")?.toString() ?? "wareki",
     );
-    await upsertProfile(getDb(), userId, {
+
+    await upsertProfile(db, userId, {
       fullName,
-      fullNameKana: formData.get("fullNameKana")?.toString() || null,
+      fullNameKana: formData.get("fullNameKana")?.toString().trim() || null,
       birthDate: birthRaw ? parseDateInput(birthRaw) : null,
-      gender: optionalLocalizedFromForm(formData, "gender"),
-      postalCode: formData.get("postalCode")?.toString() || null,
-      address: optionalLocalizedFromForm(formData, "address"),
-      addressKana: formData.get("addressKana")?.toString() || null,
-      phone: formData.get("phone")?.toString() || null,
-      email: formData.get("email")?.toString() || null,
-      altContact: optionalLocalizedFromForm(formData, "altContact"),
+      gender: optionalJapaneseFromForm(formData, "gender"),
+      postalCode: formData.get("postalCode")?.toString().trim() || null,
+      address: optionalJapaneseFromForm(formData, "address"),
+      addressKana: formData.get("addressKana")?.toString().trim() || null,
+      phone: formData.get("phone")?.toString().trim() || null,
+      email: emailParsed.data || null,
+      altContact: optionalJapaneseFromForm(formData, "altContact"),
       dateFormat,
     });
+    revalidatePath("/profile", "layout");
     revalidatePath("/profile");
-  } catch {
-    /* validation errors are ignored until we add form error UI */
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return { error: "invalidDateFormat" };
+    }
+    return { error: "saveFailed" };
   }
 }
 
@@ -94,8 +132,8 @@ export async function saveEducationEntryAction(formData: FormData): Promise<void
   if (!userId) return;
   const id = formData.get("id")?.toString();
   try {
-    const school = localizedTextFromForm(formData, "school");
-    if (Object.keys(school).length === 0) {
+    const school = requireJapaneseFromForm(formData, "school");
+    if (!school) {
       return;
     }
     const eventCode = z.enum(EDUCATION_EVENT_CODES).parse(
@@ -105,7 +143,7 @@ export async function saveEducationEntryAction(formData: FormData): Promise<void
       yearMonth: parseYearMonth(formData),
       school,
       eventCode,
-      note: optionalLocalizedFromForm(formData, "note"),
+      note: optionalJapaneseFromForm(formData, "note"),
       sortOrder: Number(formData.get("sortOrder") ?? 0) || 0,
     };
     const db = getDb();
@@ -134,8 +172,8 @@ export async function saveWorkHistoryEntryAction(
   if (!userId) return;
   const id = formData.get("id")?.toString();
   try {
-    const company = localizedTextFromForm(formData, "company");
-    if (Object.keys(company).length === 0) {
+    const company = requireJapaneseFromForm(formData, "company");
+    if (!company) {
       return;
     }
     const eventCode = z.enum(WORK_HISTORY_EVENT_CODES).parse(
@@ -145,7 +183,7 @@ export async function saveWorkHistoryEntryAction(
       yearMonth: parseYearMonth(formData),
       company,
       eventCode,
-      note: optionalLocalizedFromForm(formData, "note"),
+      note: optionalJapaneseFromForm(formData, "note"),
       sortOrder: Number(formData.get("sortOrder") ?? 0) || 0,
     };
     const db = getDb();
@@ -172,8 +210,8 @@ export async function saveLicenseAction(formData: FormData): Promise<void> {
   if (!userId) return;
   const id = formData.get("id")?.toString();
   try {
-    const name = localizedTextFromForm(formData, "name");
-    if (Object.keys(name).length === 0) {
+    const name = requireJapaneseFromForm(formData, "name");
+    if (!name) {
       return;
     }
     const status = z.enum(LICENSE_STATUSES).parse(

@@ -39,17 +39,23 @@
   },
   "Profile": {
     "title": "个人资料",
-    "subtitle": "管理履历书、职务经历书用的基本信息、学历、职历与资格。",
+    "subtitle": "履历内容请用日语填写（界面语言可在顶部切换）。",
     "nav": {
       "basic": "基本信息",
       "education": "学历",
       "workHistory": "职历（履历书）",
       "licenses": "证书・资格"
     },
-    "localizedField": {
-      "tabsAria": "{label} 的语言标签",
-      "inputLabel": "{label}（{locale}）",
-      "completion": "已填写 {filled}/{total} 种语言"
+    "japaneseField": {
+      "hint": "请用日语填写履历内容。导出中文/英文时将自动翻译（尚未接入）。"
+    },
+    "saveFeedback": {
+      "saved": "基本信息已保存。",
+      "fullNameRequired": "请填写姓名（日语）。",
+      "invalidEmail": "邮箱格式不正确。",
+      "invalidDateFormat": "日期格式选项无效。",
+      "saveFailed": "保存失败，请稍后重试。",
+      "unauthenticated": "请重新登录后再保存。"
     },
     "photo": {
       "title": "证件照",

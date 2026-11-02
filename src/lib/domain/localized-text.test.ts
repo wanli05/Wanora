@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countLocalizedFilled,
+  japaneseTextFromForm,
   localizedTextCompletion,
   parseLocalizedText,
   resolveLocalizedText,
@@ -39,5 +40,14 @@ describe("localizedTextCompletion", () => {
       en: false,
     });
     expect(countLocalizedFilled(text)).toBe(2);
+  });
+});
+
+describe("japaneseTextFromForm", () => {
+  it("reads fullName_ja", () => {
+    const fd = new FormData();
+    fd.set("school_ja", "東京大学");
+    fd.set("school_en", "Tokyo");
+    expect(japaneseTextFromForm(fd, "school")).toEqual({ ja: "東京大学" });
   });
 });

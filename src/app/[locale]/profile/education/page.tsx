@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { LocalizedTextField } from "@/components/localized-text-field";
+import { JapaneseTextField } from "@/components/japanese-text-field";
 import { getDb } from "@/db";
 import { listEducationEntries } from "@/lib/data/education-entries";
 import { EDUCATION_EVENT_CODES } from "@/lib/domain/resume-events";
@@ -20,6 +20,7 @@ export default async function EducationPage() {
   const userId = await requireProfileAccess();
   const entries = await listEducationEntries(getDb(), userId);
   const t = await getTranslations("Profile.education");
+  const tField = await getTranslations("Profile.japaneseField");
   const te = await getTranslations("Profile.events.education");
 
   return (
@@ -61,10 +62,12 @@ export default async function EducationPage() {
                       yearLabel={t("year")}
                       monthLabel={t("month")}
                     />
-                    <LocalizedTextField
+                    <JapaneseTextField
                       fieldPrefix="school"
                       label={t("school")}
                       value={school}
+                      required
+                      hint={tField("hint")}
                     />
                     <EventSelect
                       name="eventCode"
@@ -73,11 +76,12 @@ export default async function EducationPage() {
                       label={t("event")}
                       translate={(code) => te(code as EducationEventCode)}
                     />
-                    <LocalizedTextField
+                    <JapaneseTextField
                       fieldPrefix="note"
                       label={t("note")}
                       value={(entry.note ?? {}) as LocalizedText}
                       multiline
+                      hint={tField("hint")}
                     />
                     <button
                       type="submit"
@@ -99,7 +103,7 @@ export default async function EducationPage() {
             yearLabel={t("year")}
             monthLabel={t("month")}
           />
-          <LocalizedTextField fieldPrefix="school" label={t("school")} />
+          <JapaneseTextField fieldPrefix="school" label={t("school")} required hint={tField("hint")} />
           <EventSelect
             name="eventCode"
             codes={EDUCATION_EVENT_CODES}
@@ -107,7 +111,7 @@ export default async function EducationPage() {
             label={t("event")}
             translate={(code) => te(code as EducationEventCode)}
           />
-          <LocalizedTextField fieldPrefix="note" label={t("note")} multiline />
+          <JapaneseTextField fieldPrefix="note" label={t("note")} multiline hint={tField("hint")} />
           <button
             type="submit"
             className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"

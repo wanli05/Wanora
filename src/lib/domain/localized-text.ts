@@ -47,6 +47,34 @@ export function localizedTextFromForm(
   return parseLocalizedText(raw);
 }
 
+/** Profile/resume forms: single Japanese input (`${prefix}_ja`), stored as LocalizedText. */
+export function japaneseTextFromForm(
+  formData: FormData,
+  fieldPrefix: string,
+): LocalizedText {
+  const ja = normalizeEntry(
+    formData.get(`${fieldPrefix}_ja`)?.toString(),
+  );
+  if (ja) return { ja };
+  return localizedTextFromForm(formData, fieldPrefix);
+}
+
+export function optionalJapaneseFromForm(
+  formData: FormData,
+  fieldPrefix: string,
+): LocalizedText | null {
+  const text = japaneseTextFromForm(formData, fieldPrefix);
+  return text.ja ? { ja: text.ja } : null;
+}
+
+export function requireJapaneseFromForm(
+  formData: FormData,
+  fieldPrefix: string,
+): LocalizedText | null {
+  const text = japaneseTextFromForm(formData, fieldPrefix);
+  return text.ja ? { ja: text.ja } : null;
+}
+
 const FALLBACK_ORDER: Record<Locale, readonly Locale[]> = {
   ja: ["ja", "en", "zh-CN"],
   "zh-CN": ["zh-CN", "en", "ja"],

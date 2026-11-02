@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { LocalizedTextField } from "@/components/localized-text-field";
+import { JapaneseTextField } from "@/components/japanese-text-field";
 import { getDb } from "@/db";
 import { listWorkHistoryEntries } from "@/lib/data/work-history-entries";
 import { WORK_HISTORY_EVENT_CODES } from "@/lib/domain/resume-events";
@@ -20,6 +20,7 @@ export default async function WorkHistoryPage() {
   const userId = await requireProfileAccess();
   const entries = await listWorkHistoryEntries(getDb(), userId);
   const t = await getTranslations("Profile.workHistory");
+  const tField = await getTranslations("Profile.japaneseField");
   const te = await getTranslations("Profile.events.workHistory");
 
   return (
@@ -61,10 +62,12 @@ export default async function WorkHistoryPage() {
                       yearLabel={t("year")}
                       monthLabel={t("month")}
                     />
-                    <LocalizedTextField
+                    <JapaneseTextField
                       fieldPrefix="company"
                       label={t("company")}
                       value={company}
+                      required
+                      hint={tField("hint")}
                     />
                     <EventSelect
                       name="eventCode"
@@ -73,11 +76,12 @@ export default async function WorkHistoryPage() {
                       label={t("event")}
                       translate={(code) => te(code as WorkHistoryEventCode)}
                     />
-                    <LocalizedTextField
+                    <JapaneseTextField
                       fieldPrefix="note"
                       label={t("note")}
                       value={(entry.note ?? {}) as LocalizedText}
                       multiline
+                      hint={tField("hint")}
                     />
                     <button
                       type="submit"
@@ -96,7 +100,7 @@ export default async function WorkHistoryPage() {
         <h2 className="text-lg font-semibold">{t("addTitle")}</h2>
         <form action={saveWorkHistoryEntryAction} className="space-y-4">
           <YearMonthFields yearLabel={t("year")} monthLabel={t("month")} />
-          <LocalizedTextField fieldPrefix="company" label={t("company")} />
+          <JapaneseTextField fieldPrefix="company" label={t("company")} required hint={tField("hint")} />
           <EventSelect
             name="eventCode"
             codes={WORK_HISTORY_EVENT_CODES}
@@ -104,7 +108,7 @@ export default async function WorkHistoryPage() {
             label={t("event")}
             translate={(code) => te(code as WorkHistoryEventCode)}
           />
-          <LocalizedTextField fieldPrefix="note" label={t("note")} multiline />
+          <JapaneseTextField fieldPrefix="note" label={t("note")} multiline hint={tField("hint")} />
           <button
             type="submit"
             className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
