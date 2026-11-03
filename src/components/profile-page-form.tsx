@@ -208,45 +208,18 @@ export function ProfilePageForm({
   const inputClass =
     "w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950";
 
-  return (
-    <form action={formAction} className="space-y-8">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {editing ? (
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            {pending ? "…" : labels.save}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-          >
-            {labels.edit}
-          </button>
-        )}
-      </div>
+  const saveButton = (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+    >
+      {pending ? "…" : labels.save}
+    </button>
+  );
 
-      {state.ok ? (
-        <p
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
-          role="status"
-        >
-          {labels.savedMessage}
-        </p>
-      ) : null}
-      {state.error ? (
-        <p
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
-          role="alert"
-        >
-          {labels.errorMessages[state.error]}
-        </p>
-      ) : null}
-
+  const sections = (
+    <>
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">{labels.sections.basic}</h2>
         {editing ? (
@@ -895,6 +868,50 @@ export function ProfilePageForm({
           </TimelineTable>
         )}
       </section>
-    </form>
+    </>
+  );
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {!editing ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
+          >
+            {labels.edit}
+          </button>
+        ) : null}
+      </div>
+
+      {state.ok && !editing ? (
+        <p
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+          role="status"
+        >
+          {labels.savedMessage}
+        </p>
+      ) : null}
+      {state.error ? (
+        <p
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+          role="alert"
+        >
+          {labels.errorMessages[state.error]}
+        </p>
+      ) : null}
+
+      {editing ? (
+        <form action={formAction} className="space-y-8">
+          {sections}
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            {saveButton}
+          </div>
+        </form>
+      ) : (
+        <div className="space-y-8">{sections}</div>
+      )}
+    </div>
   );
 }

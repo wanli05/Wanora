@@ -28,6 +28,9 @@ test("signed-in user can edit profile and add education on one page", async ({
   await expect(page).toHaveURL("/profile");
 
   await page.getByRole("button", { name: "編集" }).click();
+  await expect(page.getByLabel("氏名")).toBeVisible();
+  await expect(page.getByText("個人資料を保存しました。")).not.toBeVisible();
+
   await page.locator("#fullName_ja").fill("山田太郎");
   await page.getByRole("button", { name: "行を追加" }).first().click();
   await page.locator('input[name="education.0.year"]').fill("2020");
