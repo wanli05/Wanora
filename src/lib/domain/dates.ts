@@ -76,3 +76,40 @@ export function parseDateInput(value: string): Date {
 export function yearMonthFromInput(year: number, month: number): Date {
   return new Date(Date.UTC(year, month - 1, 1));
 }
+
+/** HTML `<input type="month">` value from year and month. */
+export function formatYearMonthInputValue(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+/** Parse HTML month input or `YYYY-MM` into calendar parts. */
+export function parseYearMonthInputValue(value: string): {
+  year: number;
+  month: number;
+} {
+  const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
+  if (!match) {
+    throw new Error("invalid year month");
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    throw new Error("invalid year month");
+  }
+  return { year, month };
+}
+
+/** Profile table display: `2020年4月`. */
+export function formatYearMonthJa(year: number, month: number): string {
+  return `${year}年${month}月`;
+}
+
+export function yearMonthFromInputValue(value: string): Date {
+  const { year, month } = parseYearMonthInputValue(value);
+  return yearMonthFromInput(year, month);
+}

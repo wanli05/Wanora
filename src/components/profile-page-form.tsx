@@ -4,19 +4,21 @@ import { useRouter } from "next/navigation";
 import { useActionState, useCallback, useState, type ReactNode } from "react";
 import { JapaneseTextField } from "@/components/japanese-text-field";
 import { PhotoUpload } from "@/components/photo-upload";
+import { YearMonthField } from "@/app/[locale]/profile/form-fields";
 import type { EducationEventCode } from "@/lib/domain/resume-events";
-import type { LicenseStatus } from "@/lib/domain/resume-events";
 import type { WorkHistoryEventCode } from "@/lib/domain/resume-events";
 import {
   EDUCATION_EVENT_CODES,
-  LICENSE_STATUSES,
   WORK_HISTORY_EVENT_CODES,
 } from "@/lib/domain/resume-events";
 import {
-  formatEducationLine,
-  formatLicenseLine,
-  formatWorkHistoryLine,
+  formatWorkHistoryYearMonthEvent,
+  formatYearMonthJa,
 } from "@/lib/domain/profile-display";
+import {
+  formatYearMonthInputValue,
+  parseYearMonthInputValue,
+} from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 import {
   saveFullProfileAction,
@@ -26,8 +28,7 @@ import {
 type EducationRow = {
   clientKey: string;
   id?: string;
-  year: number;
-  month: number;
+  yearMonth: string;
   schoolJa: string;
   eventCode: EducationEventCode;
 };
@@ -35,8 +36,7 @@ type EducationRow = {
 type WorkHistoryRow = {
   clientKey: string;
   id?: string;
-  year: number;
-  month: number;
+  yearMonth: string;
   workContentJa: string;
   eventCode: WorkHistoryEventCode;
 };
@@ -44,11 +44,8 @@ type WorkHistoryRow = {
 type LicenseRow = {
   clientKey: string;
   id?: string;
-  year: number;
-  month: number;
+  yearMonth: string;
   nameJa: string;
-  status: LicenseStatus;
-  score: string;
 };
 
 export type ProfilePageFormLabels = {
@@ -85,28 +82,22 @@ export type ProfilePageFormLabels = {
     empty: string;
     school: string;
     event: string;
-    year: string;
-    month: string;
+    yearMonth: string;
   };
   workHistory: {
     empty: string;
     workContent: string;
     event: string;
-    year: string;
-    month: string;
+    yearMonth: string;
   };
   licenses: {
     empty: string;
     name: string;
-    status: string;
-    score: string;
-    year: string;
-    month: string;
+    yearMonth: string;
   };
   events: {
     education: Record<EducationEventCode, string>;
     workHistory: Record<WorkHistoryEventCode, string>;
-    licenseStatus: Record<LicenseStatus, string>;
   };
 };
 
@@ -159,14 +150,33 @@ function RirekishoTable({ children }: { children: ReactNode }) {
   );
 }
 
-function TimelineTable({ children }: { children: ReactNode }) {
+function TimelineTableWithHead({
+  head,
+  children,
+}: {
+  head: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b border-zinc-300 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-700">
+          {head}
+        </tr>
+      </thead>
       <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
         {children}
       </tbody>
     </table>
   );
+}
+
+function yearMonthParts(yearMonth: string): { year: number; month: number } {
+  return parseYearMonthInputValue(yearMonth);
+}
+
+function defaultYearMonth(month = 4): string {
+  return formatYearMonthInputValue(new Date().getFullYear(), month);
 }
 
 export function ProfilePageForm({
@@ -388,52 +398,20 @@ export function ProfilePageForm({
                   name={`education.${index}.id`}
                   value={row.id ?? ""}
                 />
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <label className="text-sm">
-                    <span className="font-medium">{labels.education.year}</span>
-                    <input
-                      name={`education.${index}.year`}
-                      type="number"
-                      required
-                      min={1900}
-                      max={2100}
-                      value={row.year || ""}
-                      onChange={(e) =>
-                        setEducationRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, year: Number(e.target.value) }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    />
-                  </label>
-                  <label className="text-sm">
-                    <span className="font-medium">
-                      {labels.education.month}
-                    </span>
-                    <input
-                      name={`education.${index}.month`}
-                      type="number"
-                      required
-                      min={1}
-                      max={12}
-                      value={row.month || ""}
-                      onChange={(e) =>
-                        setEducationRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, month: Number(e.target.value) }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    />
-                  </label>
-                  <label className="text-sm sm:col-span-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <YearMonthField
+                    name={`education.${index}.yearMonth`}
+                    label={labels.education.yearMonth}
+                    value={row.yearMonth}
+                    onChange={(yearMonth) =>
+                      setEducationRows((rows) =>
+                        rows.map((r) =>
+                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                        ),
+                      )
+                    }
+                  />
+                  <label className="block space-y-1 text-sm">
                     <span className="font-medium">
                       {labels.education.event}
                     </span>
@@ -453,7 +431,7 @@ export function ProfilePageForm({
                           ),
                         )
                       }
-                      className={`mt-1 ${inputClass}`}
+                      className={inputClass}
                     >
                       {EDUCATION_EVENT_CODES.map((code) => (
                         <option key={code} value={code}>
@@ -502,8 +480,7 @@ export function ProfilePageForm({
                   ...rows,
                   {
                     clientKey: `new-${crypto.randomUUID()}`,
-                    year: new Date().getFullYear(),
-                    month: 4,
+                    yearMonth: defaultYearMonth(),
                     schoolJa: "",
                     eventCode: "enrolled",
                   },
@@ -516,20 +493,36 @@ export function ProfilePageForm({
         ) : educationRows.length === 0 ? (
           <p className="text-sm text-zinc-500">{labels.education.empty}</p>
         ) : (
-          <TimelineTable>
-            {educationRows.map((row) => (
-              <tr key={row.clientKey}>
-                <td className="py-2.5">
-                  {formatEducationLine(
-                    row.year,
-                    row.month,
-                    row.schoolJa,
-                    labels.events.education[row.eventCode],
-                  )}
-                </td>
-              </tr>
-            ))}
-          </TimelineTable>
+          <TimelineTableWithHead
+            head={
+              <>
+                <th className="py-2 pr-4 font-medium normal-case">
+                  {labels.education.school}
+                </th>
+                <th className="py-2 pr-4 font-medium normal-case">
+                  {labels.education.yearMonth}
+                </th>
+                <th className="py-2 font-medium normal-case">
+                  {labels.education.event}
+                </th>
+              </>
+            }
+          >
+            {educationRows.map((row) => {
+              const { year, month } = yearMonthParts(row.yearMonth);
+              return (
+                <tr key={row.clientKey}>
+                  <td className="py-2.5 pr-4">{row.schoolJa || "—"}</td>
+                  <td className="py-2.5 pr-4 whitespace-nowrap">
+                    {formatYearMonthJa(year, month)}
+                  </td>
+                  <td className="py-2.5">
+                    {labels.events.education[row.eventCode]}
+                  </td>
+                </tr>
+              );
+            })}
+          </TimelineTableWithHead>
         )}
       </section>
 
@@ -547,54 +540,20 @@ export function ProfilePageForm({
                   name={`workHistory.${index}.id`}
                   value={row.id ?? ""}
                 />
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <label className="text-sm">
-                    <span className="font-medium">
-                      {labels.workHistory.year}
-                    </span>
-                    <input
-                      name={`workHistory.${index}.year`}
-                      type="number"
-                      required
-                      min={1900}
-                      max={2100}
-                      value={row.year || ""}
-                      onChange={(e) =>
-                        setWorkRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, year: Number(e.target.value) }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    />
-                  </label>
-                  <label className="text-sm">
-                    <span className="font-medium">
-                      {labels.workHistory.month}
-                    </span>
-                    <input
-                      name={`workHistory.${index}.month`}
-                      type="number"
-                      required
-                      min={1}
-                      max={12}
-                      value={row.month || ""}
-                      onChange={(e) =>
-                        setWorkRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, month: Number(e.target.value) }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    />
-                  </label>
-                  <label className="text-sm sm:col-span-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <YearMonthField
+                    name={`workHistory.${index}.yearMonth`}
+                    label={labels.workHistory.yearMonth}
+                    value={row.yearMonth}
+                    onChange={(yearMonth) =>
+                      setWorkRows((rows) =>
+                        rows.map((r) =>
+                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                        ),
+                      )
+                    }
+                  />
+                  <label className="block space-y-1 text-sm">
                     <span className="font-medium">
                       {labels.workHistory.event}
                     </span>
@@ -614,7 +573,7 @@ export function ProfilePageForm({
                           ),
                         )
                       }
-                      className={`mt-1 ${inputClass}`}
+                      className={inputClass}
                     >
                       {WORK_HISTORY_EVENT_CODES.map((code) => (
                         <option key={code} value={code}>
@@ -665,8 +624,7 @@ export function ProfilePageForm({
                   ...rows,
                   {
                     clientKey: `new-${crypto.randomUUID()}`,
-                    year: new Date().getFullYear(),
-                    month: 4,
+                    yearMonth: defaultYearMonth(),
                     workContentJa: "",
                     eventCode: "joined",
                   },
@@ -679,20 +637,34 @@ export function ProfilePageForm({
         ) : workRows.length === 0 ? (
           <p className="text-sm text-zinc-500">{labels.workHistory.empty}</p>
         ) : (
-          <TimelineTable>
-            {workRows.map((row) => (
-              <tr key={row.clientKey}>
-                <td className="whitespace-nowrap py-2.5 pr-4 align-top">
-                  {formatWorkHistoryLine(
-                    row.year,
-                    row.month,
-                    labels.events.workHistory[row.eventCode],
-                  )}
-                </td>
-                <td className="py-2.5">{row.workContentJa || "—"}</td>
-              </tr>
-            ))}
-          </TimelineTable>
+          <TimelineTableWithHead
+            head={
+              <>
+                <th className="py-2 pr-4 font-medium normal-case">
+                  {labels.workHistory.yearMonth}
+                </th>
+                <th className="py-2 font-medium normal-case">
+                  {labels.workHistory.workContent}
+                </th>
+              </>
+            }
+          >
+            {workRows.map((row) => {
+              const { year, month } = yearMonthParts(row.yearMonth);
+              return (
+                <tr key={row.clientKey}>
+                  <td className="whitespace-nowrap py-2.5 pr-4 align-top">
+                    {formatWorkHistoryYearMonthEvent(
+                      year,
+                      month,
+                      labels.events.workHistory[row.eventCode],
+                    )}
+                  </td>
+                  <td className="py-2.5">{row.workContentJa || "—"}</td>
+                </tr>
+              );
+            })}
+          </TimelineTableWithHead>
         )}
       </section>
 
@@ -710,76 +682,18 @@ export function ProfilePageForm({
                   name={`licenses.${index}.id`}
                   value={row.id ?? ""}
                 />
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <label className="text-sm">
-                    <span className="font-medium">{labels.licenses.year}</span>
-                    <input
-                      name={`licenses.${index}.year`}
-                      type="number"
-                      required
-                      min={1900}
-                      max={2100}
-                      value={row.year || ""}
-                      onChange={(e) =>
-                        setLicenseRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, year: Number(e.target.value) }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    />
-                  </label>
-                  <label className="text-sm">
-                    <span className="font-medium">{labels.licenses.month}</span>
-                    <input
-                      name={`licenses.${index}.month`}
-                      type="number"
-                      required
-                      min={1}
-                      max={12}
-                      value={row.month || ""}
-                      onChange={(e) =>
-                        setLicenseRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, month: Number(e.target.value) }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    />
-                  </label>
-                  <label className="text-sm sm:col-span-2">
-                    <span className="font-medium">{labels.licenses.status}</span>
-                    <select
-                      name={`licenses.${index}.status`}
-                      value={row.status}
-                      onChange={(e) =>
-                        setLicenseRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? {
-                                  ...r,
-                                  status: e.target.value as LicenseStatus,
-                                }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={`mt-1 ${inputClass}`}
-                    >
-                      {LICENSE_STATUSES.map((code) => (
-                        <option key={code} value={code}>
-                          {labels.events.licenseStatus[code]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                <YearMonthField
+                  name={`licenses.${index}.yearMonth`}
+                  label={labels.licenses.yearMonth}
+                  value={row.yearMonth}
+                  onChange={(yearMonth) =>
+                    setLicenseRows((rows) =>
+                      rows.map((r) =>
+                        r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                      ),
+                    )
+                  }
+                />
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium">{labels.licenses.name}</span>
                   <input
@@ -791,23 +705,6 @@ export function ProfilePageForm({
                         rows.map((r) =>
                           r.clientKey === row.clientKey
                             ? { ...r, nameJa: e.target.value }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={inputClass}
-                  />
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium">{labels.licenses.score}</span>
-                  <input
-                    name={`licenses.${index}.score`}
-                    value={row.score}
-                    onChange={(e) =>
-                      setLicenseRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey
-                            ? { ...r, score: e.target.value }
                             : r,
                         ),
                       )
@@ -836,11 +733,8 @@ export function ProfilePageForm({
                   ...rows,
                   {
                     clientKey: `new-${crypto.randomUUID()}`,
-                    year: new Date().getFullYear(),
-                    month: 12,
+                    yearMonth: defaultYearMonth(12),
                     nameJa: "",
-                    status: "acquired",
-                    score: "",
                   },
                 ])
               }
@@ -851,21 +745,30 @@ export function ProfilePageForm({
         ) : licenseRows.length === 0 ? (
           <p className="text-sm text-zinc-500">{labels.licenses.empty}</p>
         ) : (
-          <TimelineTable>
-            {licenseRows.map((row) => (
-              <tr key={row.clientKey}>
-                <td className="py-2.5">
-                  {formatLicenseLine(
-                    row.year,
-                    row.month,
-                    row.nameJa,
-                    labels.events.licenseStatus[row.status],
-                  )}
-                  {row.score ? `（${row.score}）` : ""}
-                </td>
-              </tr>
-            ))}
-          </TimelineTable>
+          <TimelineTableWithHead
+            head={
+              <>
+                <th className="py-2 pr-4 font-medium normal-case">
+                  {labels.licenses.name}
+                </th>
+                <th className="py-2 font-medium normal-case">
+                  {labels.licenses.yearMonth}
+                </th>
+              </>
+            }
+          >
+            {licenseRows.map((row) => {
+              const { year, month } = yearMonthParts(row.yearMonth);
+              return (
+                <tr key={row.clientKey}>
+                  <td className="py-2.5 pr-4">{row.nameJa || "—"}</td>
+                  <td className="py-2.5 whitespace-nowrap">
+                    {formatYearMonthJa(year, month)}
+                  </td>
+                </tr>
+              );
+            })}
+          </TimelineTableWithHead>
         )}
       </section>
     </>

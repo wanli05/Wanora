@@ -9,8 +9,8 @@ import { fullYearsOld } from "@/lib/domain/dates";
 import { localizedJa } from "@/lib/domain/profile-display";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 import type { EducationEventCode } from "@/lib/domain/resume-events";
-import type { LicenseStatus } from "@/lib/domain/resume-events";
 import type { WorkHistoryEventCode } from "@/lib/domain/resume-events";
+import { formatYearMonthInputValue } from "@/lib/domain/dates";
 import { getDb } from "@/db";
 import { listEducationEntries } from "@/lib/data/education-entries";
 import { listLicenses } from "@/lib/data/licenses";
@@ -38,7 +38,6 @@ export default async function ProfilePage() {
   const tLicenses = await getTranslations("Profile.licenses");
   const te = await getTranslations("Profile.events.education");
   const tw = await getTranslations("Profile.events.workHistory");
-  const ts = await getTranslations("Profile.events.licenseStatus");
 
   const age =
     profile?.birthDate != null ? fullYearsOld(profile.birthDate) : null;
@@ -62,8 +61,7 @@ export default async function ProfilePage() {
       const ym = formatYearMonthDate(entry.yearMonth);
       return {
         id: entry.id,
-        year: ym.year,
-        month: ym.month,
+        yearMonth: formatYearMonthInputValue(ym.year, ym.month),
         schoolJa: localizedJa(entry.school as LocalizedText),
         eventCode: entry.eventCode as EducationEventCode,
       };
@@ -72,8 +70,7 @@ export default async function ProfilePage() {
       const ym = formatYearMonthDate(entry.yearMonth);
       return {
         id: entry.id,
-        year: ym.year,
-        month: ym.month,
+        yearMonth: formatYearMonthInputValue(ym.year, ym.month),
         workContentJa: localizedJa(entry.company as LocalizedText),
         eventCode: entry.eventCode as WorkHistoryEventCode,
       };
@@ -82,11 +79,8 @@ export default async function ProfilePage() {
       const ym = formatYearMonthDate(entry.acquiredYm);
       return {
         id: entry.id,
-        year: ym.year,
-        month: ym.month,
+        yearMonth: formatYearMonthInputValue(ym.year, ym.month),
         nameJa: localizedJa(entry.name as LocalizedText),
-        status: entry.status as LicenseStatus,
-        score: entry.score ?? "",
       };
     }),
     storageReady: isObjectStorageConfigured(),
@@ -132,23 +126,18 @@ export default async function ProfilePage() {
       empty: tEducation("empty"),
       school: tEducation("school"),
       event: tEducation("event"),
-      year: tEducation("year"),
-      month: tEducation("month"),
+      yearMonth: tEducation("yearMonth"),
     },
     workHistory: {
       empty: tWork("empty"),
       workContent: tWork("workContent"),
       event: tWork("event"),
-      year: tWork("year"),
-      month: tWork("month"),
+      yearMonth: tWork("yearMonth"),
     },
     licenses: {
       empty: tLicenses("empty"),
       name: tLicenses("name"),
-      status: tLicenses("status"),
-      score: tLicenses("score"),
-      year: tLicenses("year"),
-      month: tLicenses("month"),
+      yearMonth: tLicenses("yearMonth"),
     },
     events: {
       education: {
@@ -161,10 +150,6 @@ export default async function ProfilePage() {
         joined: tw("joined"),
         left: tw("left"),
         transferred: tw("transferred"),
-      },
-      licenseStatus: {
-        acquired: ts("acquired"),
-        expected: ts("expected"),
       },
     },
   };

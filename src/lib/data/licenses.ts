@@ -1,7 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { licenses } from "@/db/schema";
-import type { LicenseStatus } from "@/lib/domain/resume-events";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 
 export type LicenseRow = typeof licenses.$inferSelect;
@@ -9,8 +8,6 @@ export type LicenseRow = typeof licenses.$inferSelect;
 export type LicenseInput = {
   name: LocalizedText;
   acquiredYm: Date;
-  status: LicenseStatus;
-  score?: string | null;
   sortOrder?: number;
 };
 
@@ -46,8 +43,6 @@ export async function createLicense(
       userId,
       name: input.name,
       acquiredYm: input.acquiredYm,
-      status: input.status,
-      score: input.score ?? null,
       sortOrder: input.sortOrder ?? 0,
     })
     .returning();
@@ -65,8 +60,6 @@ export async function updateLicense(
     .set({
       name: input.name,
       acquiredYm: input.acquiredYm,
-      status: input.status,
-      score: input.score ?? null,
       sortOrder: input.sortOrder ?? 0,
     })
     .where(and(eq(licenses.id, id), eq(licenses.userId, userId)))

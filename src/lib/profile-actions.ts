@@ -24,7 +24,7 @@ import {
   listWorkHistoryEntries,
   updateWorkHistoryEntry,
 } from "@/lib/data/work-history-entries";
-import { parseDateInput, yearMonthFromInput } from "@/lib/domain/dates";
+import { parseDateInput, yearMonthFromInputValue } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 import {
   japaneseTextFromForm,
@@ -33,7 +33,6 @@ import {
 } from "@/lib/domain/localized-text";
 import {
   EDUCATION_EVENT_CODES,
-  LICENSE_STATUSES,
   WORK_HISTORY_EVENT_CODES,
 } from "@/lib/domain/resume-events";
 import { getSessionUser } from "@/lib/session";
@@ -140,6 +139,18 @@ function jaFromIndexedField(
   return formData.get(`${prefix}.${index}.${field}_ja`)?.toString().trim() ?? "";
 }
 
+function yearMonthFromIndexedForm(
+  formData: FormData,
+  prefix: string,
+  index: number,
+): Date {
+  const raw = formData.get(`${prefix}.${index}.yearMonth`)?.toString();
+  if (!raw) {
+    throw new Error("missing year month");
+  }
+  return yearMonthFromInputValue(raw);
+}
+
 async function syncEducationFromForm(
   db: ReturnType<typeof getDb>,
   userId: string,
@@ -151,15 +162,13 @@ async function syncEducationFromForm(
 
   for (const i of indexedFormKeys(formData, "education")) {
     const id = formData.get(`education.${i}.id`)?.toString() || undefined;
-    const year = Number(formData.get(`education.${i}.year`));
-    const month = Number(formData.get(`education.${i}.month`));
     const schoolJa = jaFromIndexedField(formData, "education", i, "school");
     if (!schoolJa) continue;
     const eventCode = z.enum(EDUCATION_EVENT_CODES).parse(
       formData.get(`education.${i}.eventCode`)?.toString(),
     );
     const input = {
-      yearMonth: yearMonthFromInput(year, month),
+      yearMonth: yearMonthFromIndexedForm(formData, "education", i),
       school: { ja: schoolJa },
       eventCode,
       note: null,
@@ -192,15 +201,13 @@ async function syncWorkHistoryFromForm(
 
   for (const i of indexedFormKeys(formData, "workHistory")) {
     const id = formData.get(`workHistory.${i}.id`)?.toString() || undefined;
-    const year = Number(formData.get(`workHistory.${i}.year`));
-    const month = Number(formData.get(`workHistory.${i}.month`));
     const companyJa = jaFromIndexedField(formData, "workHistory", i, "company");
     if (!companyJa) continue;
     const eventCode = z.enum(WORK_HISTORY_EVENT_CODES).parse(
       formData.get(`workHistory.${i}.eventCode`)?.toString(),
     );
     const input = {
-      yearMonth: yearMonthFromInput(year, month),
+      yearMonth: yearMonthFromIndexedForm(formData, "workHistory", i),
       company: { ja: companyJa },
       eventCode,
       note: null,
@@ -233,20 +240,11 @@ async function syncLicensesFromForm(
 
   for (const i of indexedFormKeys(formData, "licenses")) {
     const id = formData.get(`licenses.${i}.id`)?.toString() || undefined;
-    const year = Number(formData.get(`licenses.${i}.year`));
-    const month = Number(formData.get(`licenses.${i}.month`));
     const nameJa = jaFromIndexedField(formData, "licenses", i, "name");
     if (!nameJa) continue;
-    const status = z.enum(LICENSE_STATUSES).parse(
-      formData.get(`licenses.${i}.status`)?.toString(),
-    );
-    const score =
-      formData.get(`licenses.${i}.score`)?.toString().trim() || null;
     const input = {
-      acquiredYm: yearMonthFromInput(year, month),
+      acquiredYm: yearMonthFromIndexedForm(formData, "licenses", i),
       name: { ja: nameJa },
-      status,
-      score,
       sortOrder: i,
     };
     if (id && existingIds.has(id)) {
@@ -296,12 +294,11 @@ export async function saveFullProfileAction(
 }
 
 function parseYearMonth(formData: FormData): Date {
-  const year = Number(formData.get("year"));
-  const month = Number(formData.get("month"));
-  if (!Number.isInteger(year) || !Number.isInteger(month)) {
-    throw new Error("invalid year month");
+  const raw = formData.get("yearMonth")?.toString();
+  if (!raw) {
+    throw new Error("missing year month");
   }
-  return yearMonthFromInput(year, month);
+  return yearMonthFromInputValue(raw);
 }
 
 export async function saveEducationEntryAction(formData: FormData): Promise<void> {
@@ -391,14 +388,9 @@ export async function saveLicenseAction(formData: FormData): Promise<void> {
     if (!name) {
       return;
     }
-    const status = z.enum(LICENSE_STATUSES).parse(
-      formData.get("status")?.toString(),
-    );
     const input = {
       name,
       acquiredYm: parseYearMonth(formData),
-      status,
-      score: formData.get("score")?.toString() || null,
       sortOrder: Number(formData.get("sortOrder") ?? 0) || 0,
     };
     const db = getDb();

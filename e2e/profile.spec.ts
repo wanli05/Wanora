@@ -33,11 +33,12 @@ test("signed-in user can edit profile and add education on one page", async ({
 
   await page.locator("#fullName_ja").fill("山田太郎");
   await page.getByRole("button", { name: "行を追加" }).first().click();
-  await page.locator('input[name="education.0.year"]').fill("2020");
-  await page.locator('input[name="education.0.month"]').fill("4");
+  await page.locator('input[name="education.0.yearMonth"]').fill("2020-04");
   await page.locator('input[name="education.0.school_ja"]').fill("テスト大学");
   await page.getByRole("button", { name: "保存" }).click();
 
   await expect(page.getByText("個人資料を保存しました。")).toBeVisible();
-  await expect(page.getByText("2020年4月，テスト大学 入学")).toBeVisible();
+  await expect(page.getByRole("cell", { name: "テスト大学" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "2020年4月" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "入学" })).toBeVisible();
 });

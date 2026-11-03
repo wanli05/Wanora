@@ -74,7 +74,6 @@ describe("resume data access", () => {
     await createLicense(db, user.id, {
       name: { ja: "普通自動車免許" },
       acquiredYm: yearMonthFromInput(2018, 3),
-      status: "acquired",
     });
     expect(await listLicenses(db, user.id)).toHaveLength(1);
 

@@ -60,23 +60,18 @@ const labels: ProfilePageFormLabels = {
     empty: "暂无学历",
     school: "学校",
     event: "事项",
-    year: "年",
-    month: "月",
+    yearMonth: "年月",
   },
   workHistory: {
     empty: "暂无职历",
     workContent: "工作内容",
     event: "事项",
-    year: "年",
-    month: "月",
+    yearMonth: "年月",
   },
   licenses: {
     empty: "暂无免许",
     name: "名称",
-    status: "状态",
-    score: "分数",
-    year: "年",
-    month: "月",
+    yearMonth: "取得年月",
   },
   events: {
     education: {
@@ -89,10 +84,6 @@ const labels: ProfilePageFormLabels = {
       joined: "入职",
       left: "离职",
       transferred: "调动",
-    },
-    licenseStatus: {
-      acquired: "已取得",
-      expected: "预计取得",
     },
   },
 };

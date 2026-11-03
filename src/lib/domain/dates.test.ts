@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   formatJapaneseResumeDate,
-  formatYearMonthColumn,
+  formatYearMonthInputValue,
   fullYearsOld,
   parseDateInput,
+  parseYearMonthInputValue,
+  yearMonthFromInputValue,
 } from "./dates";
 
 describe("fullYearsOld", () => {
@@ -29,12 +31,13 @@ describe("formatJapaneseResumeDate", () => {
   });
 });
 
-describe("formatYearMonthColumn", () => {
-  it("returns numeric month and seireki year", () => {
-    const ym = parseDateInput("2024-04-01");
-    expect(formatYearMonthColumn(ym, "seireki")).toEqual({
-      yearLabel: "2024",
-      monthLabel: "4",
+describe("year month input", () => {
+  it("round-trips HTML month values", () => {
+    expect(formatYearMonthInputValue(2020, 4)).toBe("2020-04");
+    expect(parseYearMonthInputValue("2021-12")).toEqual({
+      year: 2021,
+      month: 12,
     });
+    expect(yearMonthFromInputValue("2020-04").getUTCDate()).toBe(1);
   });
 });

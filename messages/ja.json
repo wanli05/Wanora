@@ -91,25 +91,20 @@
     },
     "education": {
       "empty": "まだ学歴がありません。",
-      "school": "学校・学部",
+      "school": "学校名",
       "event": "内容",
-      "year": "年",
-      "month": "月"
+      "yearMonth": "年月"
     },
     "workHistory": {
       "empty": "まだ職歴がありません。",
       "workContent": "職務内容",
       "event": "内容",
-      "year": "年",
-      "month": "月"
+      "yearMonth": "年月"
     },
     "licenses": {
       "empty": "まだ免許・資格がありません。",
       "name": "名称",
-      "status": "状態",
-      "score": "スコア（任意）",
-      "year": "取得年",
-      "month": "取得月"
+      "yearMonth": "取得年月"
     },
     "events": {
       "education": {
@@ -122,10 +117,6 @@
         "joined": "入社",
         "left": "退社",
         "transferred": "異動"
-      },
-      "licenseStatus": {
-        "acquired": "取得",
-        "expected": "取得見込み"
       }
     }
   }

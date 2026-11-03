@@ -15,7 +15,6 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   EDUCATION_EVENT_CODES,
-  LICENSE_STATUSES,
   WORK_HISTORY_EVENT_CODES,
 } from "@/lib/domain/resume-events";
 import { DEFAULT_LOCALE, LOCALES } from "@/lib/locale";
@@ -238,16 +237,10 @@ export const licenses = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: jsonb("name").notNull(),
     acquiredYm: date("acquired_ym", { mode: "date" }).notNull(),
-    status: text("status").notNull(),
-    score: text("score"),
     sortOrder: integer("sort_order").notNull().default(0),
     ...timestamps,
   },
   (t) => [
-    check(
-      "licenses_status_check",
-      inListCheck(t.status.name, LICENSE_STATUSES),
-    ),
     check("licenses_name_json_check", jsonObjectCheck(t.name)),
     check("licenses_acquired_ym_day_check", yearMonthDayOneCheck(t.acquiredYm)),
     index("licenses_user_acquired_idx").on(t.userId, t.acquiredYm),

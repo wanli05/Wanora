@@ -91,25 +91,20 @@
     },
     "education": {
       "empty": "暂无学历记录。",
-      "school": "学校・院系",
-      "event": "事项",
-      "year": "年",
-      "month": "月"
+      "school": "学校名",
+      "event": "内容",
+      "yearMonth": "年月"
     },
     "workHistory": {
       "empty": "暂无职历记录。",
       "workContent": "工作内容",
-      "event": "事项",
-      "year": "年",
-      "month": "月"
+      "event": "内容",
+      "yearMonth": "年月"
     },
     "licenses": {
       "empty": "暂无证书或资格。",
       "name": "名称",
-      "status": "状态",
-      "score": "分数（可选）",
-      "year": "取得年",
-      "month": "取得月"
+      "yearMonth": "取得年月"
     },
     "events": {
       "education": {
@@ -122,10 +117,6 @@
         "joined": "入职",
         "left": "离职",
         "transferred": "调动"
-      },
-      "licenseStatus": {
-        "acquired": "已取得",
-        "expected": "预计取得"
       }
     }
   }

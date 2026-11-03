@@ -91,25 +91,20 @@
     },
     "education": {
       "empty": "No education entries yet.",
-      "school": "School / faculty",
+      "school": "School",
       "event": "Event",
-      "year": "Year",
-      "month": "Month"
+      "yearMonth": "Year / month"
     },
     "workHistory": {
       "empty": "No work history yet.",
       "workContent": "Work content",
       "event": "Event",
-      "year": "Year",
-      "month": "Month"
+      "yearMonth": "Year / month"
     },
     "licenses": {
       "empty": "No licenses yet.",
       "name": "Name",
-      "status": "Status",
-      "score": "Score (optional)",
-      "year": "Year",
-      "month": "Month"
+      "yearMonth": "Acquired (year / month)"
     },
     "events": {
       "education": {
@@ -122,10 +117,6 @@
         "joined": "Joined",
         "left": "Left",
         "transferred": "Transferred"
-      },
-      "licenseStatus": {
-        "acquired": "Acquired",
-        "expected": "Expected"
       }
     }
   }

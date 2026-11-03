@@ -1,32 +1,16 @@
-/** Rirekisho-style display lines (Japanese punctuation for resume rows). */
+/** Rirekisho-style display helpers for profile timeline tables. */
 
-export function formatEducationLine(
-  year: number,
-  month: number,
-  schoolJa: string,
-  eventLabel: string,
-): string {
-  const school = schoolJa.trim() || "—";
-  return `${year}年${month}月，${school} ${eventLabel}`;
-}
+import { formatYearMonthJa } from "@/lib/domain/dates";
 
-export function formatWorkHistoryLine(
+export function formatWorkHistoryYearMonthEvent(
   year: number,
   month: number,
   eventLabel: string,
 ): string {
-  return `${year}年，${month}月，${eventLabel}`;
+  return `${formatYearMonthJa(year, month)} ${eventLabel}`;
 }
 
-export function formatLicenseLine(
-  year: number,
-  month: number,
-  nameJa: string,
-  statusLabel: string,
-): string {
-  const name = nameJa.trim() || "—";
-  return `${year}年${month}月，${name} ${statusLabel}`;
-}
+export { formatYearMonthJa };
 
 export function localizedJa(text: { ja?: string; en?: string; "zh-CN"?: string } | null | undefined): string {
   if (!text) return "";

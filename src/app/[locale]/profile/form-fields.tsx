@@ -1,3 +1,37 @@
+export function YearMonthField({
+  name,
+  value,
+  label,
+  required = true,
+  onChange,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  required?: boolean;
+  onChange?: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1 text-sm">
+      <span className="font-medium">{label}</span>
+      <input
+        name={name}
+        type="month"
+        required={required}
+        value={value}
+        onChange={
+          onChange
+            ? (e) => {
+                onChange(e.target.value);
+              }
+            : undefined
+        }
+        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+      />
+    </label>
+  );
+}
+
 export function YearMonthFields({
   year,
   month,
