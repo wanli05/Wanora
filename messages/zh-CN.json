@@ -40,17 +40,24 @@
   "Profile": {
     "title": "个人资料",
     "subtitle": "履历内容请用日语填写（界面语言可在顶部切换）。",
-    "nav": {
-      "basic": "基本信息",
-      "education": "学历",
-      "workHistory": "职历（履历书）",
-      "licenses": "证书・资格"
+    "page": {
+      "edit": "编辑",
+      "save": "保存",
+      "addRow": "添加一行",
+      "removeRow": "删除此行",
+      "sections": {
+        "basic": "基本信息",
+        "education": "学历",
+        "workHistory": "职历（履历书）",
+        "licenses": "免许·资格"
+      }
     },
     "japaneseField": {
       "hint": "请用日语填写履历内容。导出中文/英文时将自动翻译（尚未接入）。"
     },
     "saveFeedback": {
       "saved": "基本信息已保存。",
+      "savedAll": "个人资料已保存。",
       "fullNameRequired": "请填写姓名（日语）。",
       "invalidEmail": "邮箱格式不正确。",
       "invalidDateFormat": "日期格式选项无效。",
@@ -83,43 +90,26 @@
       "save": "保存基本信息"
     },
     "education": {
-      "listTitle": "已登记学历",
       "empty": "暂无学历记录。",
-      "addTitle": "添加学历",
       "school": "学校・院系",
       "event": "事项",
-      "note": "补充（可选）",
       "year": "年",
-      "month": "月",
-      "add": "添加",
-      "update": "更新",
-      "delete": "删除"
+      "month": "月"
     },
     "workHistory": {
-      "listTitle": "已登记职历",
       "empty": "暂无职历记录。",
-      "addTitle": "添加职历",
-      "company": "公司名称",
+      "workContent": "工作内容",
       "event": "事项",
-      "note": "补充（可选）",
       "year": "年",
-      "month": "月",
-      "add": "添加",
-      "update": "更新",
-      "delete": "删除"
+      "month": "月"
     },
     "licenses": {
-      "listTitle": "已登记证书・资格",
       "empty": "暂无证书或资格。",
-      "addTitle": "添加证书・资格",
       "name": "名称",
       "status": "状态",
       "score": "分数（可选）",
       "year": "取得年",
-      "month": "取得月",
-      "add": "添加",
-      "update": "更新",
-      "delete": "删除"
+      "month": "取得月"
     },
     "events": {
       "education": {

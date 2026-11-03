@@ -40,17 +40,24 @@
   "Profile": {
     "title": "個人資料",
     "subtitle": "履歴書・職務経歴書の内容は日本語で入力します（画面表示言語は右上で切り替え）。",
-    "nav": {
-      "basic": "基本情報",
-      "education": "学歴",
-      "workHistory": "職歴（履歴書）",
-      "licenses": "免許・資格"
+    "page": {
+      "edit": "編集",
+      "save": "保存",
+      "addRow": "行を追加",
+      "removeRow": "この行を削除",
+      "sections": {
+        "basic": "基本情報",
+        "education": "学歴",
+        "workHistory": "職歴（履歴書）",
+        "licenses": "免許・資格"
+      }
     },
     "japaneseField": {
       "hint": "履歴書・職務経歴書用の日本語で入力してください。エクスポート時の中国語・英語は後から自動翻訳します（未実装）。"
     },
     "saveFeedback": {
       "saved": "基本情報を保存しました。",
+      "savedAll": "個人資料を保存しました。",
       "fullNameRequired": "氏名（日本語）を入力してください。",
       "invalidEmail": "メールアドレスの形式が正しくありません。",
       "invalidDateFormat": "日付表記の選択が不正です。",
@@ -83,43 +90,26 @@
       "save": "基本情報を保存"
     },
     "education": {
-      "listTitle": "登録済みの学歴",
       "empty": "まだ学歴がありません。",
-      "addTitle": "学歴を追加",
       "school": "学校・学部",
       "event": "内容",
-      "note": "補足（任意）",
       "year": "年",
-      "month": "月",
-      "add": "追加",
-      "update": "更新",
-      "delete": "削除"
+      "month": "月"
     },
     "workHistory": {
-      "listTitle": "登録済みの職歴",
       "empty": "まだ職歴がありません。",
-      "addTitle": "職歴を追加",
-      "company": "会社名",
+      "workContent": "職務内容",
       "event": "内容",
-      "note": "補足（任意）",
       "year": "年",
-      "month": "月",
-      "add": "追加",
-      "update": "更新",
-      "delete": "削除"
+      "month": "月"
     },
     "licenses": {
-      "listTitle": "登録済みの免許・資格",
       "empty": "まだ免許・資格がありません。",
-      "addTitle": "免許・資格を追加",
       "name": "名称",
       "status": "状態",
       "score": "スコア（任意）",
       "year": "取得年",
-      "month": "取得月",
-      "add": "追加",
-      "update": "更新",
-      "delete": "削除"
+      "month": "取得月"
     },
     "events": {
       "education": {

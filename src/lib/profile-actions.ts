@@ -8,17 +8,20 @@ import { getDb } from "@/db";
 import {
   createEducationEntry,
   deleteEducationEntry,
+  listEducationEntries,
   updateEducationEntry,
 } from "@/lib/data/education-entries";
 import {
   createLicense,
   deleteLicense,
+  listLicenses,
   updateLicense,
 } from "@/lib/data/licenses";
 import { getProfileByUserId, upsertProfile } from "@/lib/data/profiles";
 import {
   createWorkHistoryEntry,
   deleteWorkHistoryEntry,
+  listWorkHistoryEntries,
   updateWorkHistoryEntry,
 } from "@/lib/data/work-history-entries";
 import { parseDateInput, yearMonthFromInput } from "@/lib/domain/dates";
@@ -109,6 +112,180 @@ export async function saveProfileAction(
     });
     revalidatePath("/profile", "layout");
     revalidatePath("/profile");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return { error: "invalidDateFormat" };
+    }
+    return { error: "saveFailed" };
+  }
+}
+
+function indexedFormKeys(formData: FormData, prefix: string): number[] {
+  const indices = new Set<number>();
+  const pattern = new RegExp(`^${prefix}\\.(\\d+)\\.`);
+  for (const key of formData.keys()) {
+    const match = key.match(pattern);
+    if (match) indices.add(Number(match[1]));
+  }
+  return [...indices].sort((a, b) => a - b);
+}
+
+function jaFromIndexedField(
+  formData: FormData,
+  prefix: string,
+  index: number,
+  field: string,
+): string {
+  return formData.get(`${prefix}.${index}.${field}_ja`)?.toString().trim() ?? "";
+}
+
+async function syncEducationFromForm(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  formData: FormData,
+): Promise<void> {
+  const existing = await listEducationEntries(db, userId);
+  const existingIds = new Set(existing.map((e) => e.id));
+  const keptIds = new Set<string>();
+
+  for (const i of indexedFormKeys(formData, "education")) {
+    const id = formData.get(`education.${i}.id`)?.toString() || undefined;
+    const year = Number(formData.get(`education.${i}.year`));
+    const month = Number(formData.get(`education.${i}.month`));
+    const schoolJa = jaFromIndexedField(formData, "education", i, "school");
+    if (!schoolJa) continue;
+    const eventCode = z.enum(EDUCATION_EVENT_CODES).parse(
+      formData.get(`education.${i}.eventCode`)?.toString(),
+    );
+    const input = {
+      yearMonth: yearMonthFromInput(year, month),
+      school: { ja: schoolJa },
+      eventCode,
+      note: null,
+      sortOrder: i,
+    };
+    if (id && existingIds.has(id)) {
+      await updateEducationEntry(db, userId, id, input);
+      keptIds.add(id);
+    } else {
+      const created = await createEducationEntry(db, userId, input);
+      keptIds.add(created.id);
+    }
+  }
+
+  for (const row of existing) {
+    if (!keptIds.has(row.id)) {
+      await deleteEducationEntry(db, userId, row.id);
+    }
+  }
+}
+
+async function syncWorkHistoryFromForm(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  formData: FormData,
+): Promise<void> {
+  const existing = await listWorkHistoryEntries(db, userId);
+  const existingIds = new Set(existing.map((e) => e.id));
+  const keptIds = new Set<string>();
+
+  for (const i of indexedFormKeys(formData, "workHistory")) {
+    const id = formData.get(`workHistory.${i}.id`)?.toString() || undefined;
+    const year = Number(formData.get(`workHistory.${i}.year`));
+    const month = Number(formData.get(`workHistory.${i}.month`));
+    const companyJa = jaFromIndexedField(formData, "workHistory", i, "company");
+    if (!companyJa) continue;
+    const eventCode = z.enum(WORK_HISTORY_EVENT_CODES).parse(
+      formData.get(`workHistory.${i}.eventCode`)?.toString(),
+    );
+    const input = {
+      yearMonth: yearMonthFromInput(year, month),
+      company: { ja: companyJa },
+      eventCode,
+      note: null,
+      sortOrder: i,
+    };
+    if (id && existingIds.has(id)) {
+      await updateWorkHistoryEntry(db, userId, id, input);
+      keptIds.add(id);
+    } else {
+      const created = await createWorkHistoryEntry(db, userId, input);
+      keptIds.add(created.id);
+    }
+  }
+
+  for (const row of existing) {
+    if (!keptIds.has(row.id)) {
+      await deleteWorkHistoryEntry(db, userId, row.id);
+    }
+  }
+}
+
+async function syncLicensesFromForm(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  formData: FormData,
+): Promise<void> {
+  const existing = await listLicenses(db, userId);
+  const existingIds = new Set(existing.map((e) => e.id));
+  const keptIds = new Set<string>();
+
+  for (const i of indexedFormKeys(formData, "licenses")) {
+    const id = formData.get(`licenses.${i}.id`)?.toString() || undefined;
+    const year = Number(formData.get(`licenses.${i}.year`));
+    const month = Number(formData.get(`licenses.${i}.month`));
+    const nameJa = jaFromIndexedField(formData, "licenses", i, "name");
+    if (!nameJa) continue;
+    const status = z.enum(LICENSE_STATUSES).parse(
+      formData.get(`licenses.${i}.status`)?.toString(),
+    );
+    const score =
+      formData.get(`licenses.${i}.score`)?.toString().trim() || null;
+    const input = {
+      acquiredYm: yearMonthFromInput(year, month),
+      name: { ja: nameJa },
+      status,
+      score,
+      sortOrder: i,
+    };
+    if (id && existingIds.has(id)) {
+      await updateLicense(db, userId, id, input);
+      keptIds.add(id);
+    } else {
+      const created = await createLicense(db, userId, input);
+      keptIds.add(created.id);
+    }
+  }
+
+  for (const row of existing) {
+    if (!keptIds.has(row.id)) {
+      await deleteLicense(db, userId, row.id);
+    }
+  }
+}
+
+/** Saves basic profile plus education, work history, and licenses from one form submit. */
+export async function saveFullProfileAction(
+  _prev: ProfileSaveState,
+  formData: FormData,
+): Promise<ProfileSaveState> {
+  const basic = await saveProfileAction(_prev, formData);
+  if (!basic.ok) return basic;
+
+  const userId = await requireUserId();
+  if (!userId) return { error: "unauthenticated" };
+
+  try {
+    const db = getDb();
+    await syncEducationFromForm(db, userId, formData);
+    await syncWorkHistoryFromForm(db, userId, formData);
+    await syncLicensesFromForm(db, userId, formData);
+    revalidatePath("/profile", "layout");
+    revalidatePath("/profile");
+    revalidatePath("/profile/education");
+    revalidatePath("/profile/work-history");
+    revalidatePath("/profile/licenses");
     return { ok: true };
   } catch (e) {
     if (e instanceof z.ZodError) {

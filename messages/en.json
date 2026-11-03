@@ -40,17 +40,24 @@
   "Profile": {
     "title": "Profile",
     "subtitle": "Enter resume content in Japanese only (switch UI language in the header).",
-    "nav": {
-      "basic": "Basics",
-      "education": "Education",
-      "workHistory": "Work (resume)",
-      "licenses": "Licenses"
+    "page": {
+      "edit": "Edit",
+      "save": "Save",
+      "addRow": "Add row",
+      "removeRow": "Remove row",
+      "sections": {
+        "basic": "Basics",
+        "education": "Education",
+        "workHistory": "Work (resume)",
+        "licenses": "Licenses"
+      }
     },
     "japaneseField": {
       "hint": "Enter Japanese text for resumes. Chinese and English export will be auto-translated later (not wired yet)."
     },
     "saveFeedback": {
       "saved": "Basics saved.",
+      "savedAll": "Profile saved.",
       "fullNameRequired": "Enter your full name in Japanese.",
       "invalidEmail": "Enter a valid email address.",
       "invalidDateFormat": "Invalid date format preference.",
@@ -83,43 +90,26 @@
       "save": "Save basics"
     },
     "education": {
-      "listTitle": "Education entries",
       "empty": "No education entries yet.",
-      "addTitle": "Add education",
       "school": "School / faculty",
       "event": "Event",
-      "note": "Note (optional)",
       "year": "Year",
-      "month": "Month",
-      "add": "Add",
-      "update": "Update",
-      "delete": "Delete"
+      "month": "Month"
     },
     "workHistory": {
-      "listTitle": "Work history entries",
       "empty": "No work history yet.",
-      "addTitle": "Add work history",
-      "company": "Company",
+      "workContent": "Work content",
       "event": "Event",
-      "note": "Note (optional)",
       "year": "Year",
-      "month": "Month",
-      "add": "Add",
-      "update": "Update",
-      "delete": "Delete"
+      "month": "Month"
     },
     "licenses": {
-      "listTitle": "Licenses",
       "empty": "No licenses yet.",
-      "addTitle": "Add license",
       "name": "Name",
       "status": "Status",
       "score": "Score (optional)",
       "year": "Year",
-      "month": "Month",
-      "add": "Add",
-      "update": "Update",
-      "delete": "Delete"
+      "month": "Month"
     },
     "events": {
       "education": {

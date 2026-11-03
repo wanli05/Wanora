@@ -1,145 +1,173 @@
 import { connection } from "next/server";
 import { getTranslations } from "next-intl/server";
-import { JapaneseTextField } from "@/components/japanese-text-field";
-import { PhotoUpload } from "@/components/photo-upload";
-import { ProfileBasicForm } from "@/components/profile-basic-form";
+import {
+  ProfilePageForm,
+  type ProfilePageFormLabels,
+  type ProfilePageInitial,
+} from "@/components/profile-page-form";
 import { fullYearsOld } from "@/lib/domain/dates";
+import { localizedJa } from "@/lib/domain/profile-display";
 import type { LocalizedText } from "@/lib/domain/localized-text";
+import type { EducationEventCode } from "@/lib/domain/resume-events";
+import type { LicenseStatus } from "@/lib/domain/resume-events";
+import type { WorkHistoryEventCode } from "@/lib/domain/resume-events";
 import { getDb } from "@/db";
+import { listEducationEntries } from "@/lib/data/education-entries";
+import { listLicenses } from "@/lib/data/licenses";
 import { getProfileByUserId } from "@/lib/data/profiles";
+import { listWorkHistoryEntries } from "@/lib/data/work-history-entries";
 import { isObjectStorageConfigured } from "@/lib/env";
 import { requireProfileAccess } from "@/lib/profile-actions";
-import { formatDateInputValue } from "./form-fields";
+import { formatYearMonthDate, formatDateInputValue } from "./form-fields";
 
 export default async function ProfilePage() {
   await connection();
   const userId = await requireProfileAccess();
-  const profile = await getProfileByUserId(getDb(), userId);
-  const t = await getTranslations("Profile.basic");
+  const db = getDb();
+  const profile = await getProfileByUserId(db, userId);
+  const educationEntries = await listEducationEntries(db, userId);
+  const workEntries = await listWorkHistoryEntries(db, userId);
+  const licenseEntries = await listLicenses(db, userId);
+
+  const tPage = await getTranslations("Profile.page");
+  const tBasic = await getTranslations("Profile.basic");
   const tField = await getTranslations("Profile.japaneseField");
   const tSave = await getTranslations("Profile.saveFeedback");
-  const storageReady = isObjectStorageConfigured();
-  const fullName = (profile?.fullName ?? {}) as LocalizedText;
+  const tEducation = await getTranslations("Profile.education");
+  const tWork = await getTranslations("Profile.workHistory");
+  const tLicenses = await getTranslations("Profile.licenses");
+  const te = await getTranslations("Profile.events.education");
+  const tw = await getTranslations("Profile.events.workHistory");
+  const ts = await getTranslations("Profile.events.licenseStatus");
+
   const age =
     profile?.birthDate != null ? fullYearsOld(profile.birthDate) : null;
 
-  const errorMessages = {
-    unauthenticated: tSave("unauthenticated"),
-    fullNameRequired: tSave("fullNameRequired"),
-    invalidEmail: tSave("invalidEmail"),
-    invalidDateFormat: tSave("invalidDateFormat"),
-    saveFailed: tSave("saveFailed"),
+  const initial: ProfilePageInitial = {
+    fullName: (profile?.fullName ?? {}) as LocalizedText,
+    fullNameKana: profile?.fullNameKana ?? "",
+    birthDate: profile?.birthDate
+      ? formatDateInputValue(profile.birthDate)
+      : "",
+    age,
+    gender: (profile?.gender ?? {}) as LocalizedText,
+    postalCode: profile?.postalCode ?? "",
+    dateFormat: (profile?.dateFormat ?? "wareki") as "wareki" | "seireki",
+    address: (profile?.address ?? {}) as LocalizedText,
+    addressKana: profile?.addressKana ?? "",
+    phone: profile?.phone ?? "",
+    email: profile?.email ?? "",
+    altContact: (profile?.altContact ?? {}) as LocalizedText,
+    education: educationEntries.map((entry) => {
+      const ym = formatYearMonthDate(entry.yearMonth);
+      return {
+        id: entry.id,
+        year: ym.year,
+        month: ym.month,
+        schoolJa: localizedJa(entry.school as LocalizedText),
+        eventCode: entry.eventCode as EducationEventCode,
+      };
+    }),
+    workHistory: workEntries.map((entry) => {
+      const ym = formatYearMonthDate(entry.yearMonth);
+      return {
+        id: entry.id,
+        year: ym.year,
+        month: ym.month,
+        workContentJa: localizedJa(entry.company as LocalizedText),
+        eventCode: entry.eventCode as WorkHistoryEventCode,
+      };
+    }),
+    licenses: licenseEntries.map((entry) => {
+      const ym = formatYearMonthDate(entry.acquiredYm);
+      return {
+        id: entry.id,
+        year: ym.year,
+        month: ym.month,
+        nameJa: localizedJa(entry.name as LocalizedText),
+        status: entry.status as LicenseStatus,
+        score: entry.score ?? "",
+      };
+    }),
+    storageReady: isObjectStorageConfigured(),
   };
 
-  return (
-    <ProfileBasicForm
-      saveLabel={t("save")}
-      savedMessage={tSave("saved")}
-      errorMessages={errorMessages}
-    >
-      <JapaneseTextField
-        fieldPrefix="fullName"
-        label={t("fullName")}
-        value={fullName}
-        required
-        hint={tField("hint")}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("fullNameKana")}</span>
-          <input
-            name="fullNameKana"
-            defaultValue={profile?.fullNameKana ?? ""}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("birthDate")}</span>
-          <input
-            type="date"
-            name="birthDate"
-            defaultValue={
-              profile?.birthDate
-                ? formatDateInputValue(profile.birthDate)
-                : ""
-            }
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-          />
-          {age != null ? (
-            <span className="text-xs text-zinc-500">{t("age", { age })}</span>
-          ) : null}
-        </label>
-      </div>
-      <JapaneseTextField
-        fieldPrefix="gender"
-        label={t("gender")}
-        value={(profile?.gender ?? {}) as LocalizedText}
-        hint={tField("hint")}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("postalCode")}</span>
-          <input
-            name="postalCode"
-            defaultValue={profile?.postalCode ?? ""}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("dateFormat")}</span>
-          <select
-            name="dateFormat"
-            defaultValue={profile?.dateFormat ?? "wareki"}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-          >
-            <option value="wareki">{t("dateFormatWareki")}</option>
-            <option value="seireki">{t("dateFormatSeireki")}</option>
-          </select>
-        </label>
-      </div>
-      <JapaneseTextField
-        fieldPrefix="address"
-        label={t("address")}
-        value={(profile?.address ?? {}) as LocalizedText}
-        hint={tField("hint")}
-      />
-      <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("addressKana")}</span>
-        <input
-          name="addressKana"
-          defaultValue={profile?.addressKana ?? ""}
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-        />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("phone")}</span>
-          <input
-            name="phone"
-            defaultValue={profile?.phone ?? ""}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("email")}</span>
-          <input
-            name="email"
-            type="text"
-            inputMode="email"
-            autoComplete="email"
-            defaultValue={profile?.email ?? ""}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-          />
-        </label>
-      </div>
-      <JapaneseTextField
-        fieldPrefix="altContact"
-        label={t("altContact")}
-        value={(profile?.altContact ?? {}) as LocalizedText}
-        multiline
-        hint={tField("hint")}
-      />
-      <PhotoUpload disabled={!storageReady} />
-    </ProfileBasicForm>
-  );
+  const labels: ProfilePageFormLabels = {
+    edit: tPage("edit"),
+    save: tPage("save"),
+    addRow: tPage("addRow"),
+    removeRow: tPage("removeRow"),
+    savedMessage: tSave("savedAll"),
+    errorMessages: {
+      unauthenticated: tSave("unauthenticated"),
+      fullNameRequired: tSave("fullNameRequired"),
+      invalidEmail: tSave("invalidEmail"),
+      invalidDateFormat: tSave("invalidDateFormat"),
+      saveFailed: tSave("saveFailed"),
+    },
+    sections: {
+      basic: tPage("sections.basic"),
+      education: tPage("sections.education"),
+      workHistory: tPage("sections.workHistory"),
+      licenses: tPage("sections.licenses"),
+    },
+    basic: {
+      fullName: tBasic("fullName"),
+      fullNameKana: tBasic("fullNameKana"),
+      birthDate: tBasic("birthDate"),
+      ageSuffix: age != null ? tBasic("age", { age }) : "",
+      gender: tBasic("gender"),
+      postalCode: tBasic("postalCode"),
+      dateFormat: tBasic("dateFormat"),
+      dateFormatWareki: tBasic("dateFormatWareki"),
+      dateFormatSeireki: tBasic("dateFormatSeireki"),
+      address: tBasic("address"),
+      addressKana: tBasic("addressKana"),
+      phone: tBasic("phone"),
+      email: tBasic("email"),
+      altContact: tBasic("altContact"),
+    },
+    japaneseHint: tField("hint"),
+    education: {
+      empty: tEducation("empty"),
+      school: tEducation("school"),
+      event: tEducation("event"),
+      year: tEducation("year"),
+      month: tEducation("month"),
+    },
+    workHistory: {
+      empty: tWork("empty"),
+      workContent: tWork("workContent"),
+      event: tWork("event"),
+      year: tWork("year"),
+      month: tWork("month"),
+    },
+    licenses: {
+      empty: tLicenses("empty"),
+      name: tLicenses("name"),
+      status: tLicenses("status"),
+      score: tLicenses("score"),
+      year: tLicenses("year"),
+      month: tLicenses("month"),
+    },
+    events: {
+      education: {
+        enrolled: te("enrolled"),
+        graduated: te("graduated"),
+        withdrawn: te("withdrawn"),
+        completed: te("completed"),
+      },
+      workHistory: {
+        joined: tw("joined"),
+        left: tw("left"),
+        transferred: tw("transferred"),
+      },
+      licenseStatus: {
+        acquired: ts("acquired"),
+        expected: ts("expected"),
+      },
+    },
+  };
+
+  return <ProfilePageForm initial={initial} labels={labels} />;
 }
