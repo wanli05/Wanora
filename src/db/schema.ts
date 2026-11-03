@@ -2,11 +2,21 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   index,
+  integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import {
+  EDUCATION_EVENT_CODES,
+  WORK_HISTORY_EVENT_CODES,
+} from "@/lib/domain/resume-events";
 import { DEFAULT_LOCALE, LOCALES } from "@/lib/locale";
 
 // Better Auth core tables. Property names are what Better Auth reads/writes;
@@ -95,4 +105,144 @@ export const verifications = pgTable(
     ...timestamps,
   },
   (t) => [index("verifications_identifier_idx").on(t.identifier)],
+);
+
+const jsonObjectCheck = (column: AnyPgColumn) =>
+  sql`jsonb_typeof(${column}) = 'object'`;
+
+const yearMonthDayOneCheck = (column: AnyPgColumn) =>
+  sql`extract(day from ${column}) = 1`;
+
+function inListCheck(columnName: string, values: readonly string[]) {
+  return sql.raw(
+    `${columnName} in (${values.map((v) => `'${v}'`).join(", ")})`,
+  );
+}
+
+export const profiles = pgTable(
+  "profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fullName: jsonb("full_name").notNull(),
+    fullNameKana: text("full_name_kana"),
+    birthDate: date("birth_date", { mode: "date" }),
+    gender: jsonb("gender"),
+    postalCode: text("postal_code"),
+    address: jsonb("address"),
+    addressKana: text("address_kana"),
+    phone: text("phone"),
+    email: text("email"),
+    altContact: jsonb("alt_contact"),
+    photoKey: text("photo_key"),
+    dateFormat: text("date_format").notNull().default("wareki"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("profiles_user_id_unique").on(t.userId),
+    check("profiles_date_format_check", inListCheck(t.dateFormat.name, ["wareki", "seireki"])),
+    check("profiles_full_name_json_check", jsonObjectCheck(t.fullName)),
+    check(
+      "profiles_gender_json_check",
+      sql`${t.gender} is null or ${jsonObjectCheck(t.gender)}`,
+    ),
+    check(
+      "profiles_address_json_check",
+      sql`${t.address} is null or ${jsonObjectCheck(t.address)}`,
+    ),
+    check(
+      "profiles_alt_contact_json_check",
+      sql`${t.altContact} is null or ${jsonObjectCheck(t.altContact)}`,
+    ),
+  ],
+);
+
+export const educationEntries = pgTable(
+  "education_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    yearMonth: date("year_month", { mode: "date" }).notNull(),
+    school: jsonb("school").notNull(),
+    eventCode: text("event_code").notNull(),
+    note: jsonb("note"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "education_entries_event_code_check",
+      inListCheck(t.eventCode.name, EDUCATION_EVENT_CODES),
+    ),
+    check("education_entries_school_json_check", jsonObjectCheck(t.school)),
+    check(
+      "education_entries_note_json_check",
+      sql`${t.note} is null or ${jsonObjectCheck(t.note)}`,
+    ),
+    check("education_entries_year_month_day_check", yearMonthDayOneCheck(t.yearMonth)),
+    index("education_entries_user_timeline_idx").on(
+      t.userId,
+      t.yearMonth,
+      t.sortOrder,
+    ),
+  ],
+);
+
+export const workHistoryEntries = pgTable(
+  "work_history_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    yearMonth: date("year_month", { mode: "date" }).notNull(),
+    company: jsonb("company").notNull(),
+    eventCode: text("event_code").notNull(),
+    note: jsonb("note"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "work_history_entries_event_code_check",
+      inListCheck(t.eventCode.name, WORK_HISTORY_EVENT_CODES),
+    ),
+    check("work_history_entries_company_json_check", jsonObjectCheck(t.company)),
+    check(
+      "work_history_entries_note_json_check",
+      sql`${t.note} is null or ${jsonObjectCheck(t.note)}`,
+    ),
+    check(
+      "work_history_entries_year_month_day_check",
+      yearMonthDayOneCheck(t.yearMonth),
+    ),
+    index("work_history_entries_user_timeline_idx").on(
+      t.userId,
+      t.yearMonth,
+      t.sortOrder,
+    ),
+  ],
+);
+
+export const licenses = pgTable(
+  "licenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: jsonb("name").notNull(),
+    acquiredYm: date("acquired_ym", { mode: "date" }).notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    check("licenses_name_json_check", jsonObjectCheck(t.name)),
+    check("licenses_acquired_ym_day_check", yearMonthDayOneCheck(t.acquiredYm)),
+    index("licenses_user_acquired_idx").on(t.userId, t.acquiredYm),
+  ],
 );

@@ -110,4 +110,13 @@ describe("email + password auth", () => {
     });
     expect(await forged.json()).toBeNull();
   });
+
+  it("allows sign-up from 127.0.0.1 when AUTH_URL uses localhost", async () => {
+    const email = uniqueEmail("loopback");
+    const res = await callAuth("/sign-up/email", {
+      origin: "http://127.0.0.1:3000",
+      body: { email, password: PASSWORD, name: "Loopback" },
+    });
+    expect(res.status).toBe(200);
+  });
 });

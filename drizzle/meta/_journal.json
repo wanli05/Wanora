@@ -8,6 +8,20 @@
       "when": 1793630151454,
       "tag": "0000_init_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793635594364,
+      "tag": "0001_profile_and_resume_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793721909303,
+      "tag": "0002_drop_license_status_score",
+      "breakpoints": true
     }
   ]
 }

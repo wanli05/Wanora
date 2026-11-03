@@ -3,7 +3,8 @@
     "description": "日本で就職・転職活動をする人のための応募管理アプリ"
   },
   "Nav": {
-    "language": "表示言語"
+    "language": "表示言語",
+    "profile": "個人資料"
   },
   "Home": {
     "tagline": "日本で就職・転職活動をする人のための応募管理アプリ"
@@ -18,6 +19,9 @@
     "email": "メールアドレス",
     "password": "パスワード",
     "emailTaken": "このメールアドレスは既に登録されています",
+    "invalidEmail": "メールアドレスの形式が正しくありません（@ を含めてください）",
+    "passwordTooShort": "パスワードは8文字以上にしてください",
+    "invalidOrigin": "ブラウザのアドレスと AUTH_URL の設定が一致していません。http://localhost:3000 で開くか、127.0.0.1 でもアクセスできるよう設定を確認してください",
     "signIn": {
       "title": "ログイン",
       "submit": "ログイン",
@@ -31,6 +35,89 @@
       "switchText": "アカウントをお持ちの方",
       "switchLabel": "ログイン",
       "error": "登録できませんでした"
+    }
+  },
+  "Profile": {
+    "title": "個人資料",
+    "subtitle": "履歴書・職務経歴書の内容は日本語で入力します（画面表示言語は右上で切り替え）。",
+    "page": {
+      "edit": "編集",
+      "save": "保存",
+      "addRow": "行を追加",
+      "removeRow": "この行を削除",
+      "sections": {
+        "basic": "基本情報",
+        "education": "学歴",
+        "workHistory": "職歴（履歴書）",
+        "licenses": "免許・資格"
+      }
+    },
+    "japaneseField": {
+      "hint": "履歴書・職務経歴書用の日本語で入力してください。エクスポート時の中国語・英語は後から自動翻訳します（未実装）。"
+    },
+    "saveFeedback": {
+      "saved": "基本情報を保存しました。",
+      "savedAll": "個人資料を保存しました。",
+      "fullNameRequired": "氏名（日本語）を入力してください。",
+      "invalidEmail": "メールアドレスの形式が正しくありません。",
+      "invalidDateFormat": "日付表記の選択が不正です。",
+      "saveFailed": "保存に失敗しました。しばらくしてから再度お試しください。",
+      "unauthenticated": "ログインし直してから保存してください。"
+    },
+    "photo": {
+      "title": "証明写真",
+      "hint": "3:4 で自動トリミングし、印刷用サイズも保存します。",
+      "previewAlt": "証明写真プレビュー",
+      "uploadError": "アップロードに失敗しました",
+      "uploadSuccess": "写真を保存しました",
+      "storageDisabled": "オブジェクトストレージ未設定のため、写真は保存できません（.env.local に S3_* を設定）。"
+    },
+    "basic": {
+      "fullName": "氏名",
+      "fullNameKana": "ふりがな",
+      "birthDate": "生年月日",
+      "age": "満{age}歳",
+      "gender": "性別（任意）",
+      "postalCode": "郵便番号",
+      "dateFormat": "日付表記（日本語書類）",
+      "dateFormatWareki": "和暦",
+      "dateFormatSeireki": "西暦",
+      "address": "現住所",
+      "addressKana": "現住所（ふりがな）",
+      "phone": "電話",
+      "email": "メール",
+      "altContact": "連絡先（現住所と異なる場合）",
+      "save": "基本情報を保存"
+    },
+    "education": {
+      "empty": "まだ学歴がありません。",
+      "school": "学校名",
+      "event": "内容",
+      "yearMonth": "年月"
+    },
+    "workHistory": {
+      "empty": "まだ職歴がありません。",
+      "workContent": "職務内容",
+      "event": "内容",
+      "yearMonth": "年月"
+    },
+    "licenses": {
+      "empty": "まだ免許・資格がありません。",
+      "name": "名称",
+      "yearMonth": "取得年月"
+    },
+    "events": {
+      "education": {
+        "enrolled": "入学",
+        "graduated": "卒業",
+        "withdrawn": "中退",
+        "completed": "修了"
+      },
+      "workHistory": {
+        "joined": "入社",
+        "left": "退社",
+        "transferred": "異動"
+      }
     }
   }
 }

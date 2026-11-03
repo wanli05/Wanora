@@ -3,7 +3,8 @@
     "description": "Job application tracker for job seekers in Japan"
   },
   "Nav": {
-    "language": "Language"
+    "language": "Language",
+    "profile": "Profile"
   },
   "Home": {
     "tagline": "Job application tracker for job seekers in Japan"
@@ -18,6 +19,9 @@
     "email": "Email",
     "password": "Password",
     "emailTaken": "This email is already registered",
+    "invalidEmail": "Enter a valid email address (include @)",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "invalidOrigin": "Browser URL does not match AUTH_URL. Open the app at the same host as AUTH_URL (e.g. http://localhost:3000), or align both settings",
     "signIn": {
       "title": "Sign in",
       "submit": "Sign in",
@@ -31,6 +35,89 @@
       "switchText": "Already have an account?",
       "switchLabel": "Sign in",
       "error": "Could not create the account"
+    }
+  },
+  "Profile": {
+    "title": "Profile",
+    "subtitle": "Enter resume content in Japanese only (switch UI language in the header).",
+    "page": {
+      "edit": "Edit",
+      "save": "Save",
+      "addRow": "Add row",
+      "removeRow": "Remove row",
+      "sections": {
+        "basic": "Basics",
+        "education": "Education",
+        "workHistory": "Work (resume)",
+        "licenses": "Licenses"
+      }
+    },
+    "japaneseField": {
+      "hint": "Enter Japanese text for resumes. Chinese and English export will be auto-translated later (not wired yet)."
+    },
+    "saveFeedback": {
+      "saved": "Basics saved.",
+      "savedAll": "Profile saved.",
+      "fullNameRequired": "Enter your full name in Japanese.",
+      "invalidEmail": "Enter a valid email address.",
+      "invalidDateFormat": "Invalid date format preference.",
+      "saveFailed": "Could not save. Try again.",
+      "unauthenticated": "Sign in again to save."
+    },
+    "photo": {
+      "title": "ID photo",
+      "hint": "Crops to 3:4 and stores a print-ready JPEG.",
+      "previewAlt": "ID photo preview",
+      "uploadError": "Upload failed",
+      "uploadSuccess": "Photo saved",
+      "storageDisabled": "Object storage is not configured (set S3_* in .env.local)."
+    },
+    "basic": {
+      "fullName": "Full name",
+      "fullNameKana": "Furigana",
+      "birthDate": "Date of birth",
+      "age": "Age {age}",
+      "gender": "Gender (optional)",
+      "postalCode": "Postal code",
+      "dateFormat": "Date style (Japanese documents)",
+      "dateFormatWareki": "Japanese era",
+      "dateFormatSeireki": "Western calendar",
+      "address": "Address",
+      "addressKana": "Address (furigana)",
+      "phone": "Phone",
+      "email": "Email",
+      "altContact": "Alternate contact",
+      "save": "Save basics"
+    },
+    "education": {
+      "empty": "No education entries yet.",
+      "school": "School",
+      "event": "Event",
+      "yearMonth": "Year / month"
+    },
+    "workHistory": {
+      "empty": "No work history yet.",
+      "workContent": "Work content",
+      "event": "Event",
+      "yearMonth": "Year / month"
+    },
+    "licenses": {
+      "empty": "No licenses yet.",
+      "name": "Name",
+      "yearMonth": "Acquired (year / month)"
+    },
+    "events": {
+      "education": {
+        "enrolled": "Enrolled",
+        "graduated": "Graduated",
+        "withdrawn": "Withdrawn",
+        "completed": "Completed"
+      },
+      "workHistory": {
+        "joined": "Joined",
+        "left": "Left",
+        "transferred": "Transferred"
+      }
     }
   }
 }

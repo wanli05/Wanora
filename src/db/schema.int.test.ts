@@ -19,7 +19,16 @@ describe("database schema (migrations applied)", () => {
       select table_name from information_schema.tables
       where table_schema = 'public' order by table_name`);
     expect(result.rows.map((r) => r.table_name)).toEqual(
-      expect.arrayContaining(["accounts", "sessions", "users", "verifications"]),
+      expect.arrayContaining([
+        "accounts",
+        "education_entries",
+        "licenses",
+        "profiles",
+        "sessions",
+        "users",
+        "verifications",
+        "work_history_entries",
+      ]),
     );
   });
 

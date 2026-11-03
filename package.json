@@ -18,6 +18,7 @@
     "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.mts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
     "better-auth": "^1.7.15",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.4",
