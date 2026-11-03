@@ -24,7 +24,7 @@ import {
   listWorkHistoryEntries,
   updateWorkHistoryEntry,
 } from "@/lib/data/work-history-entries";
-import { parseDateInput, yearMonthFromInputValue } from "@/lib/domain/dates";
+import { parseDateInput, yearMonthFromInputValue, compareYearMonthDates } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 import {
   japaneseTextFromForm,
@@ -151,6 +151,16 @@ function yearMonthFromIndexedForm(
   return yearMonthFromInputValue(raw);
 }
 
+function sortIndexedRowsByYearMonth<T extends { formIndex: number; yearMonth: Date }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    const byDate = compareYearMonthDates(a.yearMonth, b.yearMonth);
+    if (byDate !== 0) return byDate;
+    return a.formIndex - b.formIndex;
+  });
+}
+
 async function syncEducationFromForm(
   db: ReturnType<typeof getDb>,
   userId: string,
@@ -160,6 +170,7 @@ async function syncEducationFromForm(
   const existingIds = new Set(existing.map((e) => e.id));
   const keptIds = new Set<string>();
 
+  const parsed = [];
   for (const i of indexedFormKeys(formData, "education")) {
     const id = formData.get(`education.${i}.id`)?.toString() || undefined;
     const schoolJa = jaFromIndexedField(formData, "education", i, "school");
@@ -167,16 +178,26 @@ async function syncEducationFromForm(
     const eventCode = z.enum(EDUCATION_EVENT_CODES).parse(
       formData.get(`education.${i}.eventCode`)?.toString(),
     );
-    const input = {
+    parsed.push({
+      formIndex: i,
+      id,
       yearMonth: yearMonthFromIndexedForm(formData, "education", i),
-      school: { ja: schoolJa },
+      schoolJa,
       eventCode,
+    });
+  }
+
+  for (const [sortOrder, row] of sortIndexedRowsByYearMonth(parsed).entries()) {
+    const input = {
+      yearMonth: row.yearMonth,
+      school: { ja: row.schoolJa },
+      eventCode: row.eventCode,
       note: null,
-      sortOrder: i,
+      sortOrder,
     };
-    if (id && existingIds.has(id)) {
-      await updateEducationEntry(db, userId, id, input);
-      keptIds.add(id);
+    if (row.id && existingIds.has(row.id)) {
+      await updateEducationEntry(db, userId, row.id, input);
+      keptIds.add(row.id);
     } else {
       const created = await createEducationEntry(db, userId, input);
       keptIds.add(created.id);
@@ -199,6 +220,7 @@ async function syncWorkHistoryFromForm(
   const existingIds = new Set(existing.map((e) => e.id));
   const keptIds = new Set<string>();
 
+  const parsed = [];
   for (const i of indexedFormKeys(formData, "workHistory")) {
     const id = formData.get(`workHistory.${i}.id`)?.toString() || undefined;
     const companyJa = jaFromIndexedField(formData, "workHistory", i, "company");
@@ -206,16 +228,26 @@ async function syncWorkHistoryFromForm(
     const eventCode = z.enum(WORK_HISTORY_EVENT_CODES).parse(
       formData.get(`workHistory.${i}.eventCode`)?.toString(),
     );
-    const input = {
+    parsed.push({
+      formIndex: i,
+      id,
       yearMonth: yearMonthFromIndexedForm(formData, "workHistory", i),
-      company: { ja: companyJa },
+      companyJa,
       eventCode,
+    });
+  }
+
+  for (const [sortOrder, row] of sortIndexedRowsByYearMonth(parsed).entries()) {
+    const input = {
+      yearMonth: row.yearMonth,
+      company: { ja: row.companyJa },
+      eventCode: row.eventCode,
       note: null,
-      sortOrder: i,
+      sortOrder,
     };
-    if (id && existingIds.has(id)) {
-      await updateWorkHistoryEntry(db, userId, id, input);
-      keptIds.add(id);
+    if (row.id && existingIds.has(row.id)) {
+      await updateWorkHistoryEntry(db, userId, row.id, input);
+      keptIds.add(row.id);
     } else {
       const created = await createWorkHistoryEntry(db, userId, input);
       keptIds.add(created.id);
@@ -238,18 +270,28 @@ async function syncLicensesFromForm(
   const existingIds = new Set(existing.map((e) => e.id));
   const keptIds = new Set<string>();
 
+  const parsed = [];
   for (const i of indexedFormKeys(formData, "licenses")) {
     const id = formData.get(`licenses.${i}.id`)?.toString() || undefined;
     const nameJa = jaFromIndexedField(formData, "licenses", i, "name");
     if (!nameJa) continue;
+    parsed.push({
+      formIndex: i,
+      id,
+      yearMonth: yearMonthFromIndexedForm(formData, "licenses", i),
+      nameJa,
+    });
+  }
+
+  for (const [sortOrder, row] of sortIndexedRowsByYearMonth(parsed).entries()) {
     const input = {
-      acquiredYm: yearMonthFromIndexedForm(formData, "licenses", i),
-      name: { ja: nameJa },
-      sortOrder: i,
+      acquiredYm: row.yearMonth,
+      name: { ja: row.nameJa },
+      sortOrder,
     };
-    if (id && existingIds.has(id)) {
-      await updateLicense(db, userId, id, input);
-      keptIds.add(id);
+    if (row.id && existingIds.has(row.id)) {
+      await updateLicense(db, userId, row.id, input);
+      keptIds.add(row.id);
     } else {
       const created = await createLicense(db, userId, input);
       keptIds.add(created.id);

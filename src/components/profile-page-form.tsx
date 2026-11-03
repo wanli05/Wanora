@@ -18,6 +18,7 @@ import {
 import {
   formatYearMonthInputValue,
   parseYearMonthInputValue,
+  sortByYearMonthInput,
 } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 import {
@@ -120,10 +121,10 @@ export type ProfilePageInitial = {
   storageReady: boolean;
 };
 
-function withClientKeys<T extends { id?: string }>(
+function withClientKeys<T extends { id?: string; yearMonth: string }>(
   rows: T[],
 ): (T & { clientKey: string })[] {
-  return rows.map((row, index) => ({
+  return sortByYearMonthInput(rows).map((row, index) => ({
     ...row,
     clientKey: row.id ?? `new-${index}`,
   }));
@@ -405,8 +406,12 @@ export function ProfilePageForm({
                     value={row.yearMonth}
                     onChange={(yearMonth) =>
                       setEducationRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                        sortByYearMonthInput(
+                          rows.map((r) =>
+                            r.clientKey === row.clientKey
+                              ? { ...r, yearMonth }
+                              : r,
+                          ),
                         ),
                       )
                     }
@@ -476,15 +481,17 @@ export function ProfilePageForm({
               type="button"
               className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
               onClick={() =>
-                setEducationRows((rows) => [
-                  ...rows,
-                  {
-                    clientKey: `new-${crypto.randomUUID()}`,
-                    yearMonth: defaultYearMonth(),
-                    schoolJa: "",
-                    eventCode: "enrolled",
-                  },
-                ])
+                setEducationRows((rows) =>
+                  sortByYearMonthInput([
+                    ...rows,
+                    {
+                      clientKey: `new-${crypto.randomUUID()}`,
+                      yearMonth: defaultYearMonth(),
+                      schoolJa: "",
+                      eventCode: "enrolled",
+                    },
+                  ]),
+                )
               }
             >
               {labels.addRow}
@@ -547,8 +554,12 @@ export function ProfilePageForm({
                     value={row.yearMonth}
                     onChange={(yearMonth) =>
                       setWorkRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                        sortByYearMonthInput(
+                          rows.map((r) =>
+                            r.clientKey === row.clientKey
+                              ? { ...r, yearMonth }
+                              : r,
+                          ),
                         ),
                       )
                     }
@@ -620,15 +631,17 @@ export function ProfilePageForm({
               type="button"
               className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
               onClick={() =>
-                setWorkRows((rows) => [
-                  ...rows,
-                  {
-                    clientKey: `new-${crypto.randomUUID()}`,
-                    yearMonth: defaultYearMonth(),
-                    workContentJa: "",
-                    eventCode: "joined",
-                  },
-                ])
+                setWorkRows((rows) =>
+                  sortByYearMonthInput([
+                    ...rows,
+                    {
+                      clientKey: `new-${crypto.randomUUID()}`,
+                      yearMonth: defaultYearMonth(),
+                      workContentJa: "",
+                      eventCode: "joined",
+                    },
+                  ]),
+                )
               }
             >
               {labels.addRow}
@@ -688,8 +701,10 @@ export function ProfilePageForm({
                   value={row.yearMonth}
                   onChange={(yearMonth) =>
                     setLicenseRows((rows) =>
-                      rows.map((r) =>
-                        r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                      sortByYearMonthInput(
+                        rows.map((r) =>
+                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
+                        ),
                       ),
                     )
                   }
@@ -729,14 +744,16 @@ export function ProfilePageForm({
               type="button"
               className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
               onClick={() =>
-                setLicenseRows((rows) => [
-                  ...rows,
-                  {
-                    clientKey: `new-${crypto.randomUUID()}`,
-                    yearMonth: defaultYearMonth(12),
-                    nameJa: "",
-                  },
-                ])
+                setLicenseRows((rows) =>
+                  sortByYearMonthInput([
+                    ...rows,
+                    {
+                      clientKey: `new-${crypto.randomUUID()}`,
+                      yearMonth: defaultYearMonth(12),
+                      nameJa: "",
+                    },
+                  ]),
+                )
               }
             >
               {labels.addRow}

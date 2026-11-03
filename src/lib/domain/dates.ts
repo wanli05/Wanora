@@ -77,6 +77,45 @@ export function yearMonthFromInput(year: number, month: number): Date {
   return new Date(Date.UTC(year, month - 1, 1));
 }
 
+/** Ascending by calendar year then month (UTC parts). */
+export function compareYearMonthDates(a: Date, b: Date): number {
+  const ay = a.getUTCFullYear();
+  const by = b.getUTCFullYear();
+  if (ay !== by) return ay - by;
+  return a.getUTCMonth() - b.getUTCMonth();
+}
+
+function yearMonthRankFromInput(value: string | null | undefined): number | null {
+  if (!value?.trim()) return null;
+  try {
+    const { year, month } = parseYearMonthInputValue(value);
+    return year * 12 + (month - 1);
+  } catch {
+    return null;
+  }
+}
+
+/** Ascending by year then month; invalid or empty values sort last. */
+export function compareYearMonthInputValues(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): number {
+  const ra = yearMonthRankFromInput(a);
+  const rb = yearMonthRankFromInput(b);
+  if (ra === null && rb === null) return 0;
+  if (ra === null) return 1;
+  if (rb === null) return -1;
+  return ra - rb;
+}
+
+export function sortByYearMonthInput<T extends { yearMonth: string }>(
+  rows: readonly T[],
+): T[] {
+  return [...rows].sort((left, right) =>
+    compareYearMonthInputValues(left.yearMonth, right.yearMonth),
+  );
+}
+
 /** HTML `<input type="month">` value from year and month. */
 export function formatYearMonthInputValue(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;

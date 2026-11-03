@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareYearMonthDates,
+  compareYearMonthInputValues,
   formatJapaneseResumeDate,
   formatYearMonthInputValue,
   fullYearsOld,
   parseDateInput,
   parseYearMonthInputValue,
+  sortByYearMonthInput,
   yearMonthFromInputValue,
 } from "./dates";
 
@@ -39,5 +42,22 @@ describe("year month input", () => {
       month: 12,
     });
     expect(yearMonthFromInputValue("2020-04").getUTCDate()).toBe(1);
+  });
+
+  it("sorts by year then month with empty values last", () => {
+    expect(compareYearMonthInputValues("2020-04", "2021-01")).toBeLessThan(0);
+    expect(compareYearMonthInputValues("", "2020-04")).toBeGreaterThan(0);
+    expect(
+      sortByYearMonthInput([
+        { yearMonth: "2022-04", label: "b" },
+        { yearMonth: "2018-04", label: "a" },
+      ]).map((row) => row.label),
+    ).toEqual(["a", "b"]);
+  });
+
+  it("compares stored dates by calendar year and month", () => {
+    const earlier = parseDateInput("2018-04-01");
+    const later = parseDateInput("2020-10-01");
+    expect(compareYearMonthDates(earlier, later)).toBeLessThan(0);
   });
 });

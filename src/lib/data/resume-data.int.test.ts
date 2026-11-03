@@ -10,7 +10,7 @@ import {
 } from "@/lib/data/education-entries";
 import { createLicense, listLicenses } from "@/lib/data/licenses";
 import { getProfileByUserId, upsertProfile } from "@/lib/data/profiles";
-import { createWorkHistoryEntry } from "@/lib/data/work-history-entries";
+import { createWorkHistoryEntry, listWorkHistoryEntries } from "@/lib/data/work-history-entries";
 import { yearMonthFromInput } from "@/lib/domain/dates";
 
 function newUser() {
@@ -79,5 +79,61 @@ describe("resume data access", () => {
 
     await db.delete(educationEntries).where(eq(educationEntries.userId, user.id));
     expect(await listEducationEntries(db, user.id)).toHaveLength(0);
+  });
+
+  it("lists timeline rows in chronological order regardless of sort_order", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+
+    await createEducationEntry(db, user.id, {
+      yearMonth: yearMonthFromInput(2022, 4),
+      school: { ja: "後" },
+      eventCode: "enrolled",
+      sortOrder: 0,
+    });
+    await createEducationEntry(db, user.id, {
+      yearMonth: yearMonthFromInput(2018, 4),
+      school: { ja: "先" },
+      eventCode: "graduated",
+      sortOrder: 1,
+    });
+
+    const education = await listEducationEntries(db, user.id);
+    expect(education.map((row) => row.school)).toEqual([
+      { ja: "先" },
+      { ja: "後" },
+    ]);
+
+    await createWorkHistoryEntry(db, user.id, {
+      yearMonth: yearMonthFromInput(2024, 1),
+      company: { ja: "新" },
+      eventCode: "joined",
+      sortOrder: 0,
+    });
+    await createWorkHistoryEntry(db, user.id, {
+      yearMonth: yearMonthFromInput(2020, 6),
+      company: { ja: "旧" },
+      eventCode: "left",
+      sortOrder: 1,
+    });
+    expect(
+      (await listWorkHistoryEntries(db, user.id)).map((row) => row.company),
+    ).toEqual([{ ja: "旧" }, { ja: "新" }]);
+
+    await createLicense(db, user.id, {
+      name: { ja: "新" },
+      acquiredYm: yearMonthFromInput(2023, 12),
+      sortOrder: 0,
+    });
+    await createLicense(db, user.id, {
+      name: { ja: "旧" },
+      acquiredYm: yearMonthFromInput(2019, 3),
+      sortOrder: 1,
+    });
+    expect((await listLicenses(db, user.id)).map((row) => row.name)).toEqual([
+      { ja: "旧" },
+      { ja: "新" },
+    ]);
   });
 });

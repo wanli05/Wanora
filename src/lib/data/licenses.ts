@@ -2,6 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { licenses } from "@/db/schema";
 import type { LocalizedText } from "@/lib/domain/localized-text";
+import { compareTimelineRows } from "@/lib/domain/resume-events";
 
 export type LicenseRow = typeof licenses.$inferSelect;
 
@@ -12,11 +13,17 @@ export type LicenseInput = {
 };
 
 export async function listLicenses(db: Db, userId: string): Promise<LicenseRow[]> {
-  return db
+  const rows = await db
     .select()
     .from(licenses)
     .where(eq(licenses.userId, userId))
     .orderBy(asc(licenses.acquiredYm), asc(licenses.sortOrder));
+  return [...rows].sort((a, b) =>
+    compareTimelineRows(
+      { yearMonth: a.acquiredYm, sortOrder: a.sortOrder },
+      { yearMonth: b.acquiredYm, sortOrder: b.sortOrder },
+    ),
+  );
 }
 
 export async function getLicense(

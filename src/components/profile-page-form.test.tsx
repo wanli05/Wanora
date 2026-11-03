@@ -141,4 +141,33 @@ describe("ProfilePageForm edit mode", () => {
 
     await waitFor(() => expect(saveFullProfileAction).toHaveBeenCalledTimes(1));
   });
+
+  it("shows education rows in chronological order in view mode", () => {
+    render(
+      <ProfilePageForm
+        initial={{
+          ...initial,
+          education: [
+            {
+              yearMonth: "2022-04",
+              schoolJa: "後",
+              eventCode: "enrolled",
+            },
+            {
+              yearMonth: "2018-04",
+              schoolJa: "先",
+              eventCode: "graduated",
+            },
+          ],
+        }}
+        labels={labels}
+      />,
+    );
+
+    const earlier = screen.getByText("先");
+    const later = screen.getByText("後");
+    expect(
+      earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

@@ -154,5 +154,17 @@ export default async function ProfilePage() {
     },
   };
 
-  return <ProfilePageForm initial={initial} labels={labels} />;
+  const timelineKey = [
+    ...educationEntries.map(
+      (e) => `${e.id}:${e.yearMonth.toISOString()}:${e.sortOrder}`,
+    ),
+    ...workEntries.map(
+      (e) => `${e.id}:${e.yearMonth.toISOString()}:${e.sortOrder}`,
+    ),
+    ...licenseEntries.map(
+      (e) => `${e.id}:${e.acquiredYm.toISOString()}:${e.sortOrder}`,
+    ),
+  ].join("|");
+
+  return <ProfilePageForm key={timelineKey} initial={initial} labels={labels} />;
 }

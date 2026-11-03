@@ -1,4 +1,5 @@
 import type { Locale } from "@/lib/locale";
+import { compareYearMonthDates } from "@/lib/domain/dates";
 
 export const EDUCATION_EVENT_CODES = [
   "enrolled",
@@ -25,9 +26,8 @@ export type TimelineRow = {
 
 /** Chronological order for 履歴書 学歴・職歴 rows. */
 export function compareTimelineRows(a: TimelineRow, b: TimelineRow): number {
-  const ta = a.yearMonth.getTime();
-  const tb = b.yearMonth.getTime();
-  if (ta !== tb) return ta - tb;
+  const byDate = compareYearMonthDates(a.yearMonth, b.yearMonth);
+  if (byDate !== 0) return byDate;
   return a.sortOrder - b.sortOrder;
 }
 
