@@ -1,12 +1,22 @@
-import { useTranslations } from "next-intl";
-import { APP_NAME } from "@/lib/app";
+import { Suspense } from "react";
+import { headers } from "next/headers";
+import { ProgressBoard } from "@/components/progress-board/progress-board";
+import { getDb } from "@/db";
+import { loadBoard } from "@/lib/data/applications";
+import { getSessionUser } from "@/lib/session";
+import { Landing } from "./landing";
 
 export default function Home() {
-  const t = useTranslations("Home");
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-      <h1 className="text-4xl font-semibold tracking-tight">{APP_NAME}</h1>
-      <p className="text-zinc-600 dark:text-zinc-400">{t("tagline")}</p>
-    </main>
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
   );
+}
+
+async function HomeContent() {
+  const user = await getSessionUser(await headers());
+  if (!user) return <Landing />;
+  const board = await loadBoard(getDb(), user.id);
+  return <ProgressBoard initial={board} />;
 }
