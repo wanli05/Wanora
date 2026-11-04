@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { accounts, sessions, users } from "./schema";
+import {
+  accounts,
+  applicationStages,
+  applications,
+  companies,
+  interviews,
+  platforms,
+  sessions,
+  users,
+} from "./schema";
 
 function newUser(overrides: Partial<typeof users.$inferInsert> = {}) {
   return {
@@ -19,8 +28,75 @@ describe("database schema (migrations applied)", () => {
       select table_name from information_schema.tables
       where table_schema = 'public' order by table_name`);
     expect(result.rows.map((r) => r.table_name)).toEqual(
-      expect.arrayContaining(["accounts", "sessions", "users", "verifications"]),
+      expect.arrayContaining([
+        "accounts",
+        "sessions",
+        "users",
+        "verifications",
+        "platforms",
+        "recruiters",
+        "companies",
+        "applications",
+        "application_stages",
+        "interviews",
+        "slot_proposals",
+        "proposed_slots",
+        "busy_blocks",
+      ]),
     );
+  });
+
+  it("seeds preset platforms", async () => {
+    const rows = await getDb().select().from(platforms);
+    expect(rows.filter((row) => row.userId === null).map((row) => row.code)).toEqual(
+      expect.arrayContaining(["doda", "en_tenshoku", "mynavi_tenshoku"]),
+    );
+  });
+
+  it("rejects overlapping confirmed interviews for the same user", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const [platform] = await db.select().from(platforms).limit(1);
+    const [company] = await db
+      .insert(companies)
+      .values({ userId: user.id, name: "重複株式会社" })
+      .returning();
+    const [app] = await db
+      .insert(applications)
+      .values({
+        userId: user.id,
+        companyId: company.id,
+        platformId: platform.id,
+        appliedOn: "2026-11-04",
+      })
+      .returning();
+    const [stage] = await db
+      .insert(applicationStages)
+      .values({
+        userId: user.id,
+        applicationId: app.id,
+        kind: "interview_1",
+        position: 0,
+        status: "pending",
+      })
+      .returning();
+    await db.insert(interviews).values({
+      userId: user.id,
+      stageId: stage.id,
+      startsAt: new Date("2026-11-12T05:00:00Z"),
+      endsAt: new Date("2026-11-12T06:00:00Z"),
+      mode: "google_meet",
+    });
+    await expect(
+      db.insert(interviews).values({
+        userId: user.id,
+        stageId: stage.id,
+        startsAt: new Date("2026-11-12T05:30:00Z"),
+        endsAt: new Date("2026-11-12T06:30:00Z"),
+        mode: "teams",
+      }),
+    ).rejects.toThrow();
   });
 
   it("enforces the ui_locale check constraint", async () => {

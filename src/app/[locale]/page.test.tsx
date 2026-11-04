@@ -1,11 +1,11 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderWithIntl } from "@/test-utils/intl";
-import Home from "./page";
+import { Landing } from "./landing";
 
-describe("Home page", () => {
+describe("Home landing", () => {
   it("renders the app name", () => {
-    renderWithIntl(<Home />);
+    renderWithIntl(<Landing />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Wanora");
   });
 
@@ -14,7 +14,7 @@ describe("Home page", () => {
     ["zh-CN", "为在日本求职、跳槽的人打造的投递进度管理应用"],
     ["en", "Job application tracker for job seekers in Japan"],
   ] as const)("shows the tagline in %s", (locale, tagline) => {
-    renderWithIntl(<Home />, locale);
+    renderWithIntl(<Landing />, locale);
     expect(screen.getByText(tagline)).toBeInTheDocument();
   });
 });
