@@ -5,10 +5,13 @@ import { getSessionUser } from "@/lib/session";
 import { SignOutButton } from "./sign-out-button";
 
 export async function AccountStatus() {
-  const [user, t] = await Promise.all([
-    getSessionUser(await headers()),
-    getTranslations("Account"),
-  ]);
+  const t = await getTranslations("Account");
+  let user = null;
+  try {
+    user = await getSessionUser(await headers());
+  } catch {
+    user = null;
+  }
 
   if (!user) {
     return (
