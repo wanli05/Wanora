@@ -17,4 +17,12 @@ describe("Home page", () => {
     renderWithIntl(<Home />, locale);
     expect(screen.getByText(tagline)).toBeInTheDocument();
   });
+
+  it("links to the progress board demo", () => {
+    renderWithIntl(<Home />, "zh-CN");
+    expect(screen.getByRole("link", { name: "打开进度看板演示（无需登录）" })).toHaveAttribute(
+      "href",
+      "/progress-demo",
+    );
+  });
 });
