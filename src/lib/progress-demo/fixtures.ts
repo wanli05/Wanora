@@ -149,9 +149,58 @@ export const SAMPLE_APPLICATIONS: Application[] = [
           kind: "interview_2",
           status: "pending",
           interviews: [],
+          proposedSlots: [
+            {
+              id: "panasonic-s1",
+              start: "2026-11-14T10:00:00+09:00",
+              end: "2026-11-14T11:00:00+09:00",
+            },
+            {
+              id: "panasonic-s2",
+              start: "2026-11-15T14:00:00+09:00",
+              end: "2026-11-15T15:00:00+09:00",
+            },
+            {
+              id: "panasonic-s3",
+              start: "2026-11-19T11:00:00+09:00",
+              end: "2026-11-19T12:00:00+09:00",
+            },
+          ],
         },
       }),
       "interview_2",
+    ),
+  },
+  {
+    id: "nttdata",
+    company: "株式会社NTTデータ",
+    role: "クラウドエンジニア",
+    platform: "えん転職",
+    recruiter: "渡辺誠",
+    appliedAt: "2026-10-15T00:00:00+09:00",
+    outcome: "in_progress",
+    stages: withCurrent(
+      midCareerStages("nttdata", {
+        interview_1: {
+          id: "nttdata-interview_1",
+          kind: "interview_1",
+          status: "pending",
+          interviews: [],
+          proposedSlots: [
+            {
+              id: "nttdata-s1",
+              start: "2026-11-14T15:00:00+09:00",
+              end: "2026-11-14T16:00:00+09:00",
+            },
+            {
+              id: "nttdata-s2",
+              start: "2026-11-17T13:00:00+09:00",
+              end: "2026-11-17T14:00:00+09:00",
+            },
+          ],
+        },
+      }),
+      "interview_1",
     ),
   },
   {

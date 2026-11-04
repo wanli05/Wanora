@@ -38,6 +38,12 @@ export type Interview = {
   status: "scheduled" | "cancelled";
 };
 
+export type ProposedSlot = {
+  id: string;
+  start: string;
+  end: string;
+};
+
 export type Stage = {
   id: string;
   kind: StageKind;
@@ -45,6 +51,16 @@ export type Stage = {
   status: StageStatus;
   deadline?: string;
   interviews: Interview[];
+  proposedSlots?: ProposedSlot[];
+};
+
+export type SlotConflictKind = "confirmed" | "proposed";
+
+export type SlotConflict = {
+  kind: SlotConflictKind;
+  otherCompany: string;
+  otherStart: string;
+  otherEnd: string;
 };
 
 export type Application = {

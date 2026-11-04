@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderWithIntl } from "@/test-utils/intl";
 import { ProgressBoard } from "./progress-board";
@@ -28,5 +28,30 @@ describe("ProgressBoard", () => {
     renderWithIntl(<ProgressBoard />, "zh-CN");
     fireEvent.click(screen.getByRole("button", { name: "显示空状态" }));
     expect(screen.getByTestId("board-empty")).toHaveTextContent("还没有投递");
+  });
+
+  it("opens the in-place month calendar with confirmed and proposed times", () => {
+    renderWithIntl(<ProgressBoard />, "zh-CN");
+    fireEvent.click(screen.getByTestId("calendar-toggle"));
+    expect(screen.getByTestId("month-calendar")).toBeInTheDocument();
+    expect(screen.getByTestId("cal-day-2026-11-12")).toHaveTextContent("メルカリ");
+    expect(screen.getByTestId("cal-day-2026-11-14")).toHaveTextContent("パナソニック");
+  });
+
+  it("blocks proposing a slot that another company already offered", () => {
+    renderWithIntl(<ProgressBoard />, "zh-CN");
+    fireEvent.click(
+      within(screen.getByTestId("card-nttdata")).getByRole("button", {
+        name: "候选时段",
+      }),
+    );
+    const starts = screen.getAllByLabelText("开始（东京）");
+    const ends = screen.getAllByLabelText("结束（东京）");
+    fireEvent.change(starts[0]!, { target: { value: "2026-11-14T10:00" } });
+    fireEvent.change(ends[0]!, { target: { value: "2026-11-14T11:00" } });
+    fireEvent.change(starts[1]!, { target: { value: "" } });
+    fireEvent.change(ends[1]!, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存候选" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("已经答应过另一家公司");
   });
 });

@@ -3,6 +3,8 @@ import {
   type Application,
   type ConflictHit,
   type Interview,
+  type ProposedSlot,
+  type SlotConflict,
   type Stage,
 } from "./types";
 
@@ -60,6 +62,25 @@ export function toTokyoInputValue(iso: string): string {
 
 export function fromTokyoInputValue(value: string): string {
   return new Date(`${value}:00+09:00`).toISOString();
+}
+
+export function tokyoDateKey(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TOKYO,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+export function rawOverlap(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
+): boolean {
+  return new Date(aStart).getTime() < new Date(bEnd).getTime() &&
+    new Date(bStart).getTime() < new Date(aEnd).getTime();
 }
 
 export function currentStage(app: Application): Stage | undefined {
@@ -192,6 +213,154 @@ export function passCurrentStage(app: Application): Application {
     return { ...app, stages, outcome: "offer", offerDecision: "pending" };
   }
   return { ...app, stages };
+}
+
+export function stageSlots(stage: Stage | undefined): ProposedSlot[] {
+  return stage?.proposedSlots ?? [];
+}
+
+export function allProposedSlots(apps: Application[]) {
+  return apps.flatMap((app) =>
+    app.stages.flatMap((stage) =>
+      stageSlots(stage).map((slot) => ({ app, stage, slot })),
+    ),
+  );
+}
+
+export function occupiedWindows(apps: Application[]) {
+  const confirmed = scheduledInterviews(apps).map((item) => ({
+    kind: "confirmed" as const,
+    company: item.app.company,
+    start: item.interview.start,
+    end: item.interview.end,
+  }));
+  const proposed = allProposedSlots(apps).map((item) => ({
+    kind: "proposed" as const,
+    company: item.app.company,
+    start: item.slot.start,
+    end: item.slot.end,
+  }));
+  return [...confirmed, ...proposed].sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
+  );
+}
+
+export function detectSlotConflict(
+  apps: Application[],
+  startIso: string,
+  endIso: string,
+  options: { ignoreAppId?: string; ignoreSlotId?: string } = {},
+): SlotConflict | null {
+  const confirmed = detectHardConflict(apps, startIso, endIso);
+  if (confirmed) {
+    const match = scheduledInterviews(apps).find(
+      (item) =>
+        item.app.company === confirmed.otherCompany &&
+        item.interview.start === confirmed.otherStart,
+    );
+    return {
+      kind: "confirmed",
+      otherCompany: confirmed.otherCompany,
+      otherStart: confirmed.otherStart,
+      otherEnd: match?.interview.end ?? confirmed.otherStart,
+    };
+  }
+  for (const item of allProposedSlots(apps)) {
+    if (item.app.id === options.ignoreAppId) continue;
+    if (item.slot.id === options.ignoreSlotId) continue;
+    if (rawOverlap(startIso, endIso, item.slot.start, item.slot.end)) {
+      return {
+        kind: "proposed",
+        otherCompany: item.app.company,
+        otherStart: item.slot.start,
+        otherEnd: item.slot.end,
+      };
+    }
+  }
+  return null;
+}
+
+export function detectOwnSlotOverlap(
+  existing: ProposedSlot[],
+  startIso: string,
+  endIso: string,
+  ignoreSlotId?: string,
+): boolean {
+  return existing.some(
+    (slot) =>
+      slot.id !== ignoreSlotId && rawOverlap(startIso, endIso, slot.start, slot.end),
+  );
+}
+
+export function addProposedSlots(
+  app: Application,
+  slots: ProposedSlot[],
+): Application {
+  const stage = currentStage(app);
+  if (!stage) return app;
+  return {
+    ...app,
+    stages: app.stages.map((item) =>
+      item.id === stage.id
+        ? { ...item, proposedSlots: [...stageSlots(item), ...slots] }
+        : item,
+    ),
+  };
+}
+
+export function confirmProposedSlot(app: Application, slotId: string): Application {
+  const stage = currentStage(app);
+  const slot = stageSlots(stage).find((item) => item.id === slotId);
+  if (!stage || !slot) return app;
+  const interview: Interview = {
+    id: `iv-from-${slot.id}`,
+    start: slot.start,
+    end: slot.end,
+    mode: "google_meet",
+    status: "scheduled",
+  };
+  return {
+    ...app,
+    stages: app.stages.map((item) =>
+      item.id === stage.id
+        ? {
+            ...item,
+            status: "scheduled",
+            interviews: [...item.interviews, interview],
+            proposedSlots: stageSlots(item).filter((entry) => entry.id !== slotId),
+          }
+        : item,
+    ),
+  };
+}
+
+export type MonthCell = {
+  key: string;
+  inMonth: boolean;
+  day: number;
+};
+
+export function monthCells(year: number, monthIndex: number): MonthCell[] {
+  const pad = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01T12:00:00+09:00`;
+  const start = new Date(pad);
+  const mondayOffset = (start.getUTCDay() + 6) % 7;
+  const cursor = new Date(start);
+  cursor.setUTCDate(cursor.getUTCDate() - mondayOffset);
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  const total = Math.ceil((mondayOffset + daysInMonth) / 7) * 7;
+  const cells: MonthCell[] = [];
+  for (let i = 0; i < total; i += 1) {
+    const y = cursor.getUTCFullYear();
+    const m = cursor.getUTCMonth();
+    const d = cursor.getUTCDate();
+    cells.push({
+      key: `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
+      inMonth: y === year && m === monthIndex,
+      day: d,
+    });
+    cursor.setUTCDate(d + 1);
+  }
+  return cells;
 }
 
 export function addInterviewToCurrent(

@@ -5,18 +5,25 @@ import { useTranslations } from "next-intl";
 import { SAMPLE_APPLICATIONS } from "@/lib/progress-demo/fixtures";
 import {
   addInterviewToCurrent,
+  addProposedSlots,
   applicationHasConflict,
+  confirmProposedSlot,
   currentInterview,
   currentStage,
   detectHardConflict,
+  detectOwnSlotOverlap,
+  detectSlotConflict,
   formatTokyoShort,
   fromTokyoInputValue,
   isClosed,
   midCareerStages,
   nextPrepLine,
+  occupiedWindows,
   passCurrentStage,
+  rawOverlap,
   rejectCurrent,
   scheduledInterviews,
+  stageSlots,
   toTokyoInputValue,
 } from "@/lib/progress-demo/logic";
 import {
@@ -25,6 +32,7 @@ import {
   type InterviewMode,
   type StageKind,
 } from "@/lib/progress-demo/types";
+import { MonthCalendar } from "./month-calendar";
 
 /** Frozen demo "now" so prerender does not read the real clock. */
 const DEMO_NOW = new Date("2026-11-04T12:00:00+09:00");
@@ -62,7 +70,19 @@ export function ProgressBoard() {
   const [empty, setEmpty] = useState(false);
   const [addingApp, setAddingApp] = useState(false);
   const [interviewFor, setInterviewFor] = useState<string | null>(null);
+  const [scheduleKind, setScheduleKind] = useState<"confirm" | "propose">("confirm");
+  const [draftSlots, setDraftSlots] = useState([
+    {
+      start: toTokyoInputValue("2026-11-20T10:00:00+09:00"),
+      end: toTokyoInputValue("2026-11-20T11:00:00+09:00"),
+    },
+    {
+      start: toTokyoInputValue("2026-11-21T14:00:00+09:00"),
+      end: toTokyoInputValue("2026-11-21T15:00:00+09:00"),
+    },
+  ]);
   const [conflictMsg, setConflictMsg] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const platforms = useMemo(
     () => [...new Set(apps.map((app) => app.platform))],
@@ -160,16 +180,116 @@ export function ProgressBoard() {
     setConflictMsg(null);
   }
 
+  function openSchedule(appId: string, kind: "confirm" | "propose") {
+    setConflictMsg(null);
+    setScheduleKind(kind);
+    setInterviewFor(appId);
+  }
+
+  function onAddSlots(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!interviewFor) return;
+    const parsed = draftSlots
+      .map((row) => ({
+        start: row.start ? fromTokyoInputValue(row.start) : "",
+        end: row.end ? fromTokyoInputValue(row.end) : "",
+      }))
+      .filter((row) => row.start && row.end);
+    if (parsed.length === 0) {
+      setConflictMsg(t("slotNeedOne"));
+      return;
+    }
+    const target = apps.find((app) => app.id === interviewFor);
+    if (!target) return;
+    const existing = stageSlots(currentStage(target));
+    for (let i = 0; i < parsed.length; i += 1) {
+      const row = parsed[i];
+      if (
+        detectOwnSlotOverlap(existing, row.start, row.end) ||
+        parsed.some(
+          (other, index) =>
+            index !== i && rawOverlap(row.start, row.end, other.start, other.end),
+        )
+      ) {
+        setConflictMsg(t("slotSelfOverlap"));
+        return;
+      }
+      const hit = detectSlotConflict(apps, row.start, row.end, {
+        ignoreAppId: interviewFor,
+      });
+      if (hit) {
+        setConflictMsg(
+          `${hit.kind === "confirmed" ? t("slotConflictConfirmed") : t("slotConflictProposed")} ${t(
+            "conflictWith",
+            {
+              company: hit.otherCompany,
+              when: formatTokyoShort(hit.otherStart),
+            },
+          )}`,
+        );
+        return;
+      }
+    }
+    setApps((prev) =>
+      prev.map((app) =>
+        app.id === interviewFor
+          ? addProposedSlots(
+              app,
+              parsed.map((row, index) => ({
+                id: `slot-${Date.now()}-${index}`,
+                start: row.start,
+                end: row.end,
+              })),
+            )
+          : app,
+      ),
+    );
+    setInterviewFor(null);
+    setConflictMsg(null);
+  }
+
+  function onConfirmSlot(appId: string, slotId: string) {
+    const app = apps.find((item) => item.id === appId);
+    if (!app) return;
+    const slot = stageSlots(currentStage(app)).find((item) => item.id === slotId);
+    if (!slot) return;
+    const hit = detectHardConflict(apps, slot.start, slot.end);
+    if (hit) {
+      setConflictMsg(
+        t("conflictWith", {
+          company: hit.otherCompany,
+          when: formatTokyoShort(hit.otherStart),
+        }),
+      );
+      return;
+    }
+    setApps((prev) =>
+      prev.map((item) =>
+        item.id === appId ? confirmProposedSlot(item, slotId) : item,
+      ),
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="relative z-20 flex flex-wrap items-start justify-between gap-3 bg-[var(--background)]">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
           <p className="mt-1 max-w-3xl text-sm text-amber-800 dark:text-amber-200">
             {t("demoBanner")}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="calendar-toggle"
+            aria-label={t("calendar")}
+            aria-expanded={calendarOpen}
+            className="inline-flex h-9 w-9 items-center justify-center rounded border border-zinc-300 dark:border-zinc-700"
+            onClick={() => setCalendarOpen((open) => !open)}
+          >
+            <CalendarIcon />
+          </button>
           <button
             type="button"
             className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -322,10 +442,9 @@ export function ProgressBoard() {
                           ),
                         )
                       }
-                      onAddInterview={() => {
-                        setConflictMsg(null);
-                        setInterviewFor(app.id);
-                      }}
+                      onAddInterview={() => openSchedule(app.id, "confirm")}
+                      onProposeSlots={() => openSchedule(app.id, "propose")}
+                      onConfirmSlot={(slotId) => onConfirmSlot(app.id, slotId)}
                     />
                   ))}
                 </div>
@@ -372,69 +491,199 @@ export function ProgressBoard() {
         </Modal>
       ) : null}
 
+      {calendarOpen ? (
+        <>
+          <button
+            type="button"
+            data-testid="calendar-backdrop"
+            aria-label={t("calendarClose")}
+            className="fixed inset-0 z-10 bg-black/30"
+            onClick={() => setCalendarOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("calendar")}
+            className="relative z-20 rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">
+                {t("calendarTitle", { year: 2026, month: 11 })}
+              </h2>
+              <button
+                type="button"
+                className="text-sm text-zinc-500"
+                onClick={() => setCalendarOpen(false)}
+              >
+                {t("calendarClose")}
+              </button>
+            </div>
+            <MonthCalendar apps={apps} year={2026} monthIndex={10} />
+          </div>
+        </>
+      ) : null}
+
       {interviewFor ? (
         <Modal
-          title={t("addInterview")}
+          title={scheduleKind === "propose" ? t("proposeSlots") : t("addInterview")}
           closeLabel={t("cancel")}
+          wide
           onClose={() => {
             setInterviewFor(null);
             setConflictMsg(null);
           }}
         >
-          <form className="flex flex-col gap-3" onSubmit={onAddInterview}>
-            <label className="flex flex-col gap-1 text-sm">
-              {t("mode")}
-              <select
-                name="mode"
-                defaultValue="google_meet"
-                className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-              >
-                <option value="google_meet">{t("modeMeet")}</option>
-                <option value="teams">{t("modeTeams")}</option>
-                <option value="other_online">{t("modeOther")}</option>
-                <option value="onsite">{t("modeOnsite")}</option>
-                <option value="phone">{t("modePhone")}</option>
-              </select>
-            </label>
-            <Field name="url" label={t("meetingUrl")} type="url" />
-            <Field
-              name="start"
-              label={t("start")}
-              type="datetime-local"
-              required
-              defaultValue={toTokyoInputValue("2026-11-13T15:00:00+09:00")}
-            />
-            <Field
-              name="end"
-              label={t("end")}
-              type="datetime-local"
-              required
-              defaultValue={toTokyoInputValue("2026-11-13T16:00:00+09:00")}
-            />
-            {conflictMsg ? (
-              <p role="alert" className="text-sm text-red-700">
-                {`${t("conflictBlock")} ${conflictMsg}`}
-              </p>
-            ) : null}
-            <div className="flex justify-end gap-2">
+          <div className="mb-3 flex rounded border border-zinc-300 dark:border-zinc-700">
+            <button
+              type="button"
+              className={`flex-1 px-3 py-1 text-sm ${scheduleKind === "confirm" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`}
+              onClick={() => setScheduleKind("confirm")}
+            >
+              {t("tabConfirm")}
+            </button>
+            <button
+              type="button"
+              className={`flex-1 px-3 py-1 text-sm ${scheduleKind === "propose" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`}
+              onClick={() => setScheduleKind("propose")}
+            >
+              {t("tabPropose")}
+            </button>
+          </div>
+          <OccupiedList apps={apps} t={t} />
+          {scheduleKind === "confirm" ? (
+            <form className="mt-3 flex flex-col gap-3" onSubmit={onAddInterview}>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("mode")}
+                <select
+                  name="mode"
+                  defaultValue="google_meet"
+                  className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  <option value="google_meet">{t("modeMeet")}</option>
+                  <option value="teams">{t("modeTeams")}</option>
+                  <option value="other_online">{t("modeOther")}</option>
+                  <option value="onsite">{t("modeOnsite")}</option>
+                  <option value="phone">{t("modePhone")}</option>
+                </select>
+              </label>
+              <Field name="url" label={t("meetingUrl")} type="url" />
+              <Field
+                name="start"
+                label={t("start")}
+                type="datetime-local"
+                required
+                defaultValue={toTokyoInputValue("2026-11-13T15:00:00+09:00")}
+              />
+              <Field
+                name="end"
+                label={t("end")}
+                type="datetime-local"
+                required
+                defaultValue={toTokyoInputValue("2026-11-13T16:00:00+09:00")}
+              />
+              {conflictMsg ? (
+                <p role="alert" className="text-sm text-red-700">
+                  {`${t("conflictBlock")} ${conflictMsg}`}
+                </p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded px-3 py-1.5 text-sm"
+                  onClick={() => {
+                    setInterviewFor(null);
+                    setConflictMsg(null);
+                  }}
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  {t("saveInterview")}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form className="mt-3 flex flex-col gap-3" onSubmit={onAddSlots}>
+              {draftSlots.map((row, index) => (
+                <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                  <Field
+                    label={t("start")}
+                    type="datetime-local"
+                    value={row.start}
+                    onChange={(event) =>
+                      setDraftSlots((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, start: event.target.value } : item,
+                        ),
+                      )
+                    }
+                  />
+                  <Field
+                    label={t("end")}
+                    type="datetime-local"
+                    value={row.end}
+                    onChange={(event) =>
+                      setDraftSlots((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, end: event.target.value } : item,
+                        ),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="self-end rounded px-2 py-2 text-xs text-zinc-500"
+                    onClick={() =>
+                      setDraftSlots((prev) => prev.filter((_, i) => i !== index))
+                    }
+                  >
+                    {t("removeSlotRow")}
+                  </button>
+                </div>
+              ))}
               <button
                 type="button"
-                className="rounded px-3 py-1.5 text-sm"
-                onClick={() => {
-                  setInterviewFor(null);
-                  setConflictMsg(null);
-                }}
+                className="self-start text-sm underline"
+                onClick={() =>
+                  setDraftSlots((prev) => [
+                    ...prev,
+                    {
+                      start: toTokyoInputValue("2026-11-22T10:00:00+09:00"),
+                      end: toTokyoInputValue("2026-11-22T11:00:00+09:00"),
+                    },
+                  ])
+                }
               >
-                {t("cancel")}
+                {t("addSlotRow")}
               </button>
-              <button
-                type="submit"
-                className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                {t("saveInterview")}
-              </button>
-            </div>
-          </form>
+              {conflictMsg ? (
+                <p role="alert" className="text-sm text-red-700">
+                  {conflictMsg}
+                </p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded px-3 py-1.5 text-sm"
+                  onClick={() => {
+                    setInterviewFor(null);
+                    setConflictMsg(null);
+                  }}
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  {t("saveSlots")}
+                </button>
+              </div>
+            </form>
+          )}
         </Modal>
       ) : null}
     </div>
@@ -448,6 +697,8 @@ function ApplicationCard({
   onPass,
   onReject,
   onAddInterview,
+  onProposeSlots,
+  onConfirmSlot,
 }: {
   app: Application;
   apps: Application[];
@@ -455,10 +706,13 @@ function ApplicationCard({
   onPass: () => void;
   onReject: () => void;
   onAddInterview: () => void;
+  onProposeSlots: () => void;
+  onConfirmSlot: (slotId: string) => void;
 }) {
   const interview = currentInterview(app);
   const conflict = applicationHasConflict(app, apps);
   const stage = currentStage(app);
+  const slots = stageSlots(stage);
   const canAddInterview = Boolean(stage && INTERVIEW_KINDS.has(stage.kind) && !interview);
 
   return (
@@ -520,7 +774,30 @@ function ApplicationCard({
             {t("offerPending")}
           </span>
         ) : null}
+        {slots.length > 0 ? (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-950">
+            {t("slotCount", { count: slots.length })}
+          </span>
+        ) : null}
       </div>
+      {slots.length > 0 ? (
+        <ul className="mt-2 space-y-1 text-xs" lang="ja">
+          {slots.map((slot) => (
+            <li key={slot.id} className="flex items-center justify-between gap-1">
+              <span>{`${formatTokyoShort(slot.start)}–${formatTokyoShort(slot.end).split(" ")[1] ?? ""}`}</span>
+              {interview ? null : (
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => onConfirmSlot(slot.id)}
+                >
+                  {t("confirmSlot")}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {app.outcome === "in_progress" ||
       (app.outcome === "offer" && app.offerDecision === "pending") ? (
         <div className="mt-3 flex flex-wrap gap-1">
@@ -539,13 +816,22 @@ function ApplicationCard({
             {t("reject")}
           </button>
           {canAddInterview ? (
-            <button
-              type="button"
-              className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-              onClick={onAddInterview}
-            >
-              {t("addInterview")}
-            </button>
+            <>
+              <button
+                type="button"
+                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                onClick={onAddInterview}
+              >
+                {t("addInterview")}
+              </button>
+              <button
+                type="button"
+                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                onClick={onProposeSlots}
+              >
+                {t("proposeSlots")}
+              </button>
+            </>
           ) : null}
         </div>
       ) : null}
@@ -662,16 +948,55 @@ function EmptyState({
   );
 }
 
+function OccupiedList({ apps, t }: { apps: Application[]; t: TBoard }) {
+  const items = occupiedWindows(apps);
+  return (
+    <div className="max-h-40 overflow-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+      <p className="mb-1 font-medium">{t("occupiedTitle")}</p>
+      <ul className="space-y-1">
+        {items.map((item) => (
+          <li key={`${item.kind}-${item.company}-${item.start}`} lang="ja">
+            <span className={item.kind === "confirmed" ? "text-emerald-800" : "text-amber-800"}>
+              {item.kind === "confirmed" ? t("occupiedConfirmed") : t("occupiedProposed")}
+            </span>
+            {` ${item.company} ${formatTokyoShort(item.start)}–${formatTokyoShort(item.end).split(" ")[1] ?? ""}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <rect
+        x="3"
+        y="5"
+        width="18"
+        height="16"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path d="M3 9h18M8 3v4M16 3v4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 function Modal({
   title,
   closeLabel,
   onClose,
   children,
+  wide,
 }: {
   title: string;
   closeLabel: string;
   onClose: () => void;
   children: ReactNode;
+  wide?: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
@@ -679,7 +1004,7 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-950"
+        className={`w-full rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-950 ${wide ? "max-w-xl" : "max-w-md"}`}
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
