@@ -26,6 +26,9 @@ import {
   type StageKind,
 } from "@/lib/progress-demo/types";
 
+/** Frozen demo "now" so prerender does not read the real clock. */
+const DEMO_NOW = new Date("2026-11-04T12:00:00+09:00");
+
 type View = "kanban" | "list";
 type Filter = "in_progress" | "closed" | "all";
 type TBoard = ReturnType<typeof useTranslations<"Board">>;
@@ -82,7 +85,7 @@ export function ProgressBoard() {
       });
 
   const upcoming = scheduledInterviews(visible)
-    .filter((item) => new Date(item.interview.start) > new Date())
+    .filter((item) => new Date(item.interview.start) > DEMO_NOW)
     .sort(
       (a, b) =>
         new Date(a.interview.start).getTime() -
@@ -290,8 +293,8 @@ export function ProgressBoard() {
                 data-testid={`column-${kind}`}
                 className={`flex shrink-0 flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
                   vacant
-                    ? "w-48 border-zinc-200 opacity-60 dark:border-zinc-800"
-                    : "w-64 border-zinc-200 dark:border-zinc-800"
+                    ? "w-40 border-zinc-200 opacity-60 dark:border-zinc-800"
+                    : "w-52 border-zinc-200 dark:border-zinc-800"
                 }`}
               >
                 <header className="flex items-baseline justify-between px-1 py-2">
@@ -489,7 +492,7 @@ function ApplicationCard({
         {app.recruiter ?? t("noRecruiter")}
       </p>
       <p className="mt-2 text-sm" lang="ja">
-        {nextPrepLine(app)}
+        {nextPrepLine(app, DEMO_NOW)}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
         {interview ? (
@@ -599,7 +602,7 @@ function ApplicationTable({
                 </td>
                 <td className="px-3 py-2">{stage ? t(columnKey(stage.kind)) : t("dash")}</td>
                 <td className="px-3 py-2" lang="ja">
-                  {nextPrepLine(app)}
+                  {nextPrepLine(app, DEMO_NOW)}
                 </td>
                 <td className="px-3 py-2">
                   {interview ? formatTokyoShort(interview.start) : t("unscheduled")}
