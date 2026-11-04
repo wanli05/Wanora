@@ -38,20 +38,23 @@ describe("ProgressBoard", () => {
     expect(screen.getByTestId("cal-day-2026-11-14")).toHaveTextContent("パナソニック");
   });
 
-  it("blocks proposing a slot that another company already offered", () => {
+  it("opens a week grid with occupied cells painted and blocks overlap", () => {
     renderWithIntl(<ProgressBoard />, "zh-CN");
     fireEvent.click(
       within(screen.getByTestId("card-nttdata")).getByRole("button", {
         name: "候选时段",
       }),
     );
-    const starts = screen.getAllByLabelText("开始（东京）");
-    const ends = screen.getAllByLabelText("结束（东京）");
-    fireEvent.change(starts[0]!, { target: { value: "2026-11-14T10:00" } });
-    fireEvent.change(ends[0]!, { target: { value: "2026-11-14T11:00" } });
-    fireEvent.change(starts[1]!, { target: { value: "" } });
-    fireEvent.change(ends[1]!, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "保存候选" }));
+    expect(screen.getByTestId("slot-grid")).toBeInTheDocument();
+    expect(screen.getByTestId("slot-cell-2026-11-12-14")).toHaveAttribute(
+      "data-occupancy",
+      "confirmed",
+    );
+    expect(screen.getByTestId("slot-cell-2026-11-14-10")).toHaveAttribute(
+      "data-occupancy",
+      "proposed",
+    );
+    fireEvent.pointerDown(screen.getByTestId("slot-cell-2026-11-14-10"));
     expect(screen.getByRole("alert")).toHaveTextContent("已经答应过另一家公司");
   });
 });

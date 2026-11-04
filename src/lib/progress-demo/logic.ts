@@ -83,6 +83,83 @@ export function rawOverlap(
     new Date(bStart).getTime() < new Date(aEnd).getTime();
 }
 
+export const SLOT_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
+
+export function hourCellRange(dateKey: string, hour: number) {
+  const pad = String(hour).padStart(2, "0");
+  const next = String(hour + 1).padStart(2, "0");
+  return {
+    start: `${dateKey}T${pad}:00:00+09:00`,
+    end: `${dateKey}T${next}:00:00+09:00`,
+  };
+}
+
+export function addDays(dateKey: string, days: number): string {
+  const noon = new Date(`${dateKey}T12:00:00+09:00`);
+  noon.setUTCDate(noon.getUTCDate() + days);
+  const y = noon.getUTCFullYear();
+  const m = String(noon.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(noon.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export function mondayContaining(dateKey: string): string {
+  const noon = new Date(`${dateKey}T12:00:00+09:00`);
+  const offset = (noon.getUTCDay() + 6) % 7;
+  return addDays(dateKey, -offset);
+}
+
+export function weekDateKeys(mondayKey: string): string[] {
+  return Array.from({ length: 7 }, (_, index) => addDays(mondayKey, index));
+}
+
+export function formatDateKeyShort(dateKey: string): string {
+  const parts = dateKey.split("-");
+  return `${Number(parts[1])}/${Number(parts[2])}`;
+}
+
+export type CellOccupancy = "confirmed" | "proposed" | "own" | null;
+
+export function cellOccupancy(
+  apps: Application[],
+  dateKey: string,
+  hour: number,
+  ignoreAppId?: string,
+): CellOccupancy {
+  const { start, end } = hourCellRange(dateKey, hour);
+  for (const item of scheduledInterviews(apps)) {
+    if (rawOverlap(start, end, item.interview.start, item.interview.end)) {
+      return "confirmed";
+    }
+  }
+  for (const item of allProposedSlots(apps)) {
+    if (!rawOverlap(start, end, item.slot.start, item.slot.end)) continue;
+    if (item.app.id === ignoreAppId) return "own";
+    return "proposed";
+  }
+  return null;
+}
+
+export function defaultFreeSlots(
+  apps: Application[],
+  ignoreAppId: string,
+  count = 3,
+): { start: string; end: string }[] {
+  const days = weekDateKeys("2026-11-09");
+  const picks: { start: string; end: string }[] = [];
+  const preferredHours = [10, 14, 16, 11, 13, 15, 9, 17];
+  for (const hour of preferredHours) {
+    for (const day of days) {
+      const weekday = new Date(`${day}T12:00:00+09:00`).getUTCDay();
+      if (weekday === 0 || weekday === 6) continue;
+      if (cellOccupancy(apps, day, hour, ignoreAppId)) continue;
+      picks.push(hourCellRange(day, hour));
+      if (picks.length >= count) return picks;
+    }
+  }
+  return picks;
+}
+
 export function currentStage(app: Application): Stage | undefined {
   if (app.outcome !== "in_progress" && app.outcome !== "offer") {
     return app.stages.find((stage) => stage.status === "failed");

@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { SAMPLE_APPLICATIONS } from "./fixtures";
 import {
   applicationHasConflict,
+  cellOccupancy,
   currentStage,
+  defaultFreeSlots,
   detectHardConflict,
   detectSlotConflict,
   formatTokyoShort,
+  mondayContaining,
   monthCells,
   nextPrepLine,
   passCurrentStage,
@@ -87,5 +90,19 @@ describe("progress demo logic", () => {
     expect(cells[0]?.key).toBe("2026-10-26");
     expect(cells.find((cell) => cell.key === "2026-11-01")?.inMonth).toBe(true);
     expect(tokyoDateKey("2026-11-14T10:00:00+09:00")).toBe("2026-11-14");
+  });
+
+  it("paints confirmed and other proposed hours on the week grid", () => {
+    expect(cellOccupancy(SAMPLE_APPLICATIONS, "2026-11-12", 14, "nttdata")).toBe(
+      "confirmed",
+    );
+    expect(cellOccupancy(SAMPLE_APPLICATIONS, "2026-11-14", 10, "nttdata")).toBe(
+      "proposed",
+    );
+    expect(cellOccupancy(SAMPLE_APPLICATIONS, "2026-11-14", 15, "nttdata")).toBe(
+      "own",
+    );
+    expect(mondayContaining("2026-11-12")).toBe("2026-11-09");
+    expect(defaultFreeSlots(SAMPLE_APPLICATIONS, "nttdata", 3)).toHaveLength(3);
   });
 });
