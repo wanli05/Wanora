@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
+import { authErrorMessageKey } from "@/lib/auth-errors";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth-constants";
 import { applyAccountLocale } from "@/lib/locale-actions";
 import { loadPage } from "@/lib/reload";
@@ -52,11 +53,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         : await authClient.signIn.email({ email, password });
     if (error) {
       setPending(false);
-      setError(
-        mode === "sign-up" && error.code?.startsWith("USER_ALREADY_EXISTS")
-          ? t("emailTaken")
-          : t(`${copy}.error`),
-      );
+      setError(t(authErrorMessageKey(mode, error)));
       return;
     }
     if (mode === "sign-in" && (await applyAccountLocale())) {

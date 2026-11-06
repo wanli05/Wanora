@@ -11,6 +11,8 @@ pnpm db:migrate
 pnpm dev            # http://localhost:3000
 ```
 
+履历正文（氏名・住所・学歴等）请用**日语**填写；顶部语言切换只改界面文案。导出时的中/英翻译将在后续由 `src/lib/domain/export-translation.ts` 从日语自动生成（当前为 stub）。
+
 本地 Postgres 可以用 `docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=wanora -p 5432:5432 postgres:17-alpine`，或：
 
 ```bash
