@@ -9,6 +9,7 @@ import {
   outcomeAfterStages,
   passStages,
   skipStages,
+  visibleBoardColumns,
   type StageSnapshot,
 } from "./stages";
 
@@ -90,6 +91,37 @@ describe("mid-career stages", () => {
     ]);
     expect(isAdvanceActionAllowed("interview_final", "pass")).toBe(false);
     expect(isAdvanceActionAllowed("interview_final", "withdraw")).toBe(false);
+  });
+
+  it("hides the info-session column until an in-progress card is there", () => {
+    expect(visibleBoardColumns([])).not.toContain("info_session");
+    expect(
+      visibleBoardColumns([
+        {
+          currentStageKind: "document_screening",
+          outcome: "in_progress",
+          offerDecision: null,
+        },
+      ]),
+    ).not.toContain("info_session");
+    expect(
+      visibleBoardColumns([
+        {
+          currentStageKind: "info_session",
+          outcome: "rejected",
+          offerDecision: null,
+        },
+      ]),
+    ).not.toContain("info_session");
+    expect(
+      visibleBoardColumns([
+        {
+          currentStageKind: "info_session",
+          outcome: "in_progress",
+          offerDecision: null,
+        },
+      ]),
+    ).toContain("info_session");
   });
 
   it("treats accepted/declined offers as closed", () => {

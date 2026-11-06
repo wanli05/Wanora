@@ -72,6 +72,36 @@ describe("ProgressBoard", () => {
     expect(screen.queryByRole("button", { name: "辞退応募" })).not.toBeInTheDocument();
   });
 
+  it("hides the info-session column until an in-progress card is in it", () => {
+    const { unmount } = renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    expect(screen.queryByTestId("column-info_session")).not.toBeInTheDocument();
+    expect(screen.getByTestId("column-document_screening")).toHaveAttribute(
+      "data-occupied",
+      "true",
+    );
+    expect(screen.getByTestId("column-aptitude_test")).toHaveAttribute(
+      "data-occupied",
+      "false",
+    );
+    unmount();
+
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "info_session" }))}
+      />,
+      "zh-CN",
+    );
+    expect(screen.getByTestId("column-info_session")).toHaveAttribute(
+      "data-occupied",
+      "true",
+    );
+  });
+
   it("hides offer on document screening but keeps pass and reject", () => {
     renderWithIntl(
       <ProgressBoard

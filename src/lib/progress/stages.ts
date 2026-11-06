@@ -1,7 +1,9 @@
 import {
+  BOARD_COLUMN_KINDS,
   DEFAULT_STAGE_ORDER,
   INTERVIEW_STAGE_KINDS,
   MID_CAREER_SKIPPED,
+  type BoardColumnKind,
   type OfferDecision,
   type Outcome,
   type StageKind,
@@ -103,6 +105,24 @@ export function isAdvanceActionAllowed(
 ): boolean {
   if (!kind) return false;
   return allowedAdvanceActions(kind).includes(action);
+}
+
+/** 説明会 stays hidden until an in-progress application is actually in that stage. */
+export function visibleBoardColumns(
+  apps: {
+    currentStageKind: StageKind | null;
+    outcome: Outcome;
+    offerDecision: OfferDecision | null;
+  }[],
+): readonly BoardColumnKind[] {
+  const hasOpenInfoSession = apps.some(
+    (app) =>
+      app.currentStageKind === "info_session" &&
+      !isClosed(app.outcome, app.offerDecision),
+  );
+  return BOARD_COLUMN_KINDS.filter(
+    (kind) => kind !== "info_session" || hasOpenInfoSession,
+  );
 }
 
 export function passStages<T extends StageSnapshot>(stages: T[]): T[] {

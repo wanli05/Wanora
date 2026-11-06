@@ -10,7 +10,11 @@ import {
 import { useTranslations } from "next-intl";
 import { BOARD_COLUMN_KINDS, INTERVIEW_STAGE_KINDS } from "@/lib/progress/enums";
 import type { BoardApplication, BoardPayload } from "@/lib/progress/dto";
-import { allowedAdvanceActions, isClosed } from "@/lib/progress/stages";
+import {
+  allowedAdvanceActions,
+  isClosed,
+  visibleBoardColumns,
+} from "@/lib/progress/stages";
 import { defaultFreeSlots, type DraftSlot } from "@/lib/progress/slots";
 import {
   formatTokyoShort,
@@ -539,17 +543,18 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         />
       ) : view === "kanban" ? (
         <div className="flex min-h-[28rem] gap-3 overflow-x-auto pb-4">
-          {BOARD_COLUMN_KINDS.map((kind) => {
+          {visibleBoardColumns(visible).map((kind) => {
             const cards = visible.filter((app) => app.currentStageKind === kind);
             const vacant = cards.length === 0;
             return (
               <section
                 key={kind}
                 data-testid={`column-${kind}`}
-                className={`flex shrink-0 flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
+                data-occupied={vacant ? "false" : "true"}
+                className={`flex flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
                   vacant
-                    ? "w-40 border-zinc-200 opacity-60 dark:border-zinc-800"
-                    : "w-52 border-zinc-200 dark:border-zinc-800"
+                    ? "w-24 shrink-0 border-zinc-200 opacity-60 dark:border-zinc-800"
+                    : "min-w-72 flex-1 border-zinc-200 dark:border-zinc-800"
                 }`}
               >
                 <header className="flex items-baseline justify-between px-1 py-2">
