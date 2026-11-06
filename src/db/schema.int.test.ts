@@ -30,9 +30,13 @@ describe("database schema (migrations applied)", () => {
     expect(result.rows.map((r) => r.table_name)).toEqual(
       expect.arrayContaining([
         "accounts",
+        "education_entries",
+        "licenses",
+        "profiles",
         "sessions",
         "users",
         "verifications",
+        "work_history_entries",
         "platforms",
         "recruiters",
         "companies",

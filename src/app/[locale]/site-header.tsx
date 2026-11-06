@@ -37,6 +37,9 @@ async function SignedInNav() {
       <Link href="/" className="underline">
         {t("progress")}
       </Link>
+      <Link href="/profile" className="underline">
+        {t("profile")}
+      </Link>
     </nav>
   );
 }

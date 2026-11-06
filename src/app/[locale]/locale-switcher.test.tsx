@@ -8,8 +8,10 @@ vi.mock("@/lib/locale-actions", () => ({
   changeLocale: (l: string) => changeLocale(l),
 }));
 
-const reloadPage = vi.fn();
-vi.mock("@/lib/reload", () => ({ reloadPage: () => reloadPage() }));
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh }),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -30,12 +32,13 @@ describe("LocaleSwitcher", () => {
     ]);
   });
 
-  it("saves the new language and reloads the page", async () => {
+  it("saves the new language and refreshes the router", async () => {
     renderWithIntl(<LocaleSwitcher />, "ja");
-    fireEvent.change(screen.getByRole("combobox", { name: "表示言語" }), {
+    const select = screen.getByRole("combobox", { name: "表示言語" });
+    fireEvent.change(select, {
       target: { value: "en" },
     });
-    await waitFor(() => expect(reloadPage).toHaveBeenCalled());
-    expect(changeLocale).toHaveBeenCalledWith("en");
+    await waitFor(() => expect(changeLocale).toHaveBeenCalledWith("en"));
+    expect(refresh).toHaveBeenCalled();
   });
 });

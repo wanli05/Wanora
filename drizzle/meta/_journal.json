@@ -12,8 +12,22 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1793813620125,
-      "tag": "0001_progress_board",
+      "when": 1793635594364,
+      "tag": "0001_profile_and_resume_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793721909303,
+      "tag": "0002_drop_license_status_score",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793964220436,
+      "tag": "0003_progress_board",
       "breakpoints": true
     }
   ]

@@ -61,7 +61,7 @@ describe("AuthForm", () => {
     fill("姓名", "张三");
     fill("邮箱", "zhang@example.test");
     fill("密码", "password123");
-    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
 
     await waitFor(() =>
       expect(signUpEmail).toHaveBeenCalledWith(
@@ -134,6 +134,30 @@ describe("AuthForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "このメールアドレスは既に登録されています",
     );
+  });
+
+  it("shows password length errors from Better Auth", async () => {
+    signUpEmail.mockResolvedValue({ error: { code: "PASSWORD_TOO_SHORT" } });
+    renderWithIntl(<AuthForm mode="sign-up" />);
+    fill("氏名", "山田 太郎");
+    fill("メールアドレス", "taro@example.test");
+    fill("パスワード", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "登録する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "パスワードは8文字以上",
+    );
+  });
+
+  it("shows invalid origin guidance", async () => {
+    signUpEmail.mockResolvedValue({ error: { code: "INVALID_ORIGIN" } });
+    renderWithIntl(<AuthForm mode="sign-up" />);
+    fill("氏名", "山田 太郎");
+    fill("メールアドレス", "taro@example.test");
+    fill("パスワード", "password123");
+    fireEvent.click(screen.getByRole("button", { name: "登録する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("AUTH_URL");
   });
 
   it("enforces the minimum password length in the input", () => {

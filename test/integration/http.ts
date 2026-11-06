@@ -9,9 +9,14 @@ export function uniqueEmail(label: string): string {
 
 export function authRequest(
   path: string,
-  init: { method?: string; body?: unknown; cookie?: string } = {},
+  init: {
+    method?: string;
+    body?: unknown;
+    cookie?: string;
+    origin?: string;
+  } = {},
 ): Request {
-  const headers = new Headers({ origin: BASE_URL });
+  const headers = new Headers({ origin: init.origin ?? BASE_URL });
   if (init.body !== undefined) headers.set("content-type", "application/json");
   if (init.cookie) headers.set("cookie", init.cookie);
   return new Request(`${BASE_URL}${path}`, {
