@@ -141,6 +141,7 @@ describe("application board isolation", () => {
     await updateApplication(db, userId, app.id, {
       company: "正式社名",
       notes: "URLは後から届いた",
+      recruiterName: "佐藤",
     });
     await updateInterview(db, userId, app.id, interview.interview.id, {
       start: "2026-11-12T16:00:00+09:00",
@@ -151,6 +152,7 @@ describe("application board isolation", () => {
     const board = await loadBoard(db, userId);
     expect(board.applications[0]?.company).toBe("正式社名");
     expect(board.applications[0]?.notes).toBe("URLは後から届いた");
+    expect(board.applications[0]?.recruiterName).toBe("佐藤");
     expect(board.applications[0]?.interview?.meetingUrl).toBe(
       "https://teams.microsoft.com/l/meetup-join/later",
     );

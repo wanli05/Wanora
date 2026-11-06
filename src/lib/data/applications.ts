@@ -32,7 +32,7 @@ import { detectHardInterviewConflict } from "@/lib/progress/conflicts";
 import { findOrCreateCompany } from "./companies";
 import { loadOccupancyWindows } from "./occupancy";
 import { getAccessiblePlatform } from "./platforms";
-import { getOwnedRecruiter } from "./recruiters";
+import { findOrCreateRecruiter, getOwnedRecruiter } from "./recruiters";
 
 export async function createApplication(
   db: Db,
@@ -42,6 +42,7 @@ export async function createApplication(
     role?: string;
     platformId: string;
     recruiterId?: string | null;
+    recruiterName?: string | null;
     appliedOn?: string;
     includeInfoSession?: boolean;
     includeSecondInterview?: boolean;
@@ -49,7 +50,13 @@ export async function createApplication(
   },
 ) {
   const platform = await getAccessiblePlatform(db, userId, input.platformId);
-  const recruiterId = input.recruiterId ?? null;
+  let recruiterId = input.recruiterId ?? null;
+  if (input.recruiterName !== undefined) {
+    const name = input.recruiterName?.trim() ?? "";
+    recruiterId = name
+      ? (await findOrCreateRecruiter(db, userId, { platformId: platform.id, name })).id
+      : null;
+  }
   if (recruiterId) {
     const recruiter = await getOwnedRecruiter(db, userId, recruiterId);
     if (recruiter.platformId !== platform.id) {
@@ -303,6 +310,7 @@ export async function updateApplication(
     role?: string | null;
     platformId?: string;
     recruiterId?: string | null;
+    recruiterName?: string | null;
     notes?: string | null;
     appliedOn?: string;
     nextPrepNote?: string | null;
@@ -342,7 +350,12 @@ export async function updateApplication(
     patch.platformId = platform.id;
   }
 
-  if (input.recruiterId !== undefined) {
+  if (input.recruiterName !== undefined) {
+    const name = input.recruiterName?.trim() ?? "";
+    patch.recruiterId = name
+      ? (await findOrCreateRecruiter(db, userId, { platformId, name })).id
+      : null;
+  } else if (input.recruiterId !== undefined) {
     const recruiterId = input.recruiterId;
     if (recruiterId) {
       const recruiter = await getOwnedRecruiter(db, userId, recruiterId);

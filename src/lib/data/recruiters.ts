@@ -29,6 +29,29 @@ export async function createRecruiter(
   return row;
 }
 
+export async function findOrCreateRecruiter(
+  db: Db,
+  userId: string,
+  input: { platformId: string; name: string },
+) {
+  const name = input.name.trim();
+  if (!name) throw new ProgressError("invalid", "recruiter name required");
+  await getAccessiblePlatform(db, userId, input.platformId);
+  const [existing] = await db
+    .select()
+    .from(recruiters)
+    .where(
+      and(
+        eq(recruiters.userId, userId),
+        eq(recruiters.platformId, input.platformId),
+        eq(recruiters.name, name),
+        eq(recruiters.isActive, true),
+      ),
+    );
+  if (existing) return existing;
+  return createRecruiter(db, userId, input);
+}
+
 export async function getOwnedRecruiter(db: Db, userId: string, id: string) {
   const [row] = await db
     .select()

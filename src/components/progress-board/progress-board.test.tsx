@@ -134,11 +134,13 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    screen.getByRole("button", { name: "编辑投递" }).click();
+    expect(screen.getByTestId("card-app-1")).toHaveTextContent("Doda");
+    screen.getByRole("button", { name: "编辑" }).click();
     await waitFor(() => {
       expect(screen.getByRole("dialog", { name: "编辑投递" })).toBeInTheDocument();
     });
     expect(screen.getByDisplayValue("テスト株式会社")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "エージェント担当者" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存修改" })).toBeInTheDocument();
   });
 });

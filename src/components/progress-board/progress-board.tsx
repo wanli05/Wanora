@@ -143,21 +143,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     const form = new FormData(event.currentTarget);
     const company = String(form.get("company")).trim();
     if (!company) return;
-    let recruiterId = String(form.get("recruiterId") || "") || null;
-    const newRecruiter = String(form.get("newRecruiter") || "").trim();
     const platformId = String(form.get("platformId"));
+    const recruiterName = String(form.get("recruiterName") || "").trim() || null;
     try {
-      if (newRecruiter) {
-        const created = await readJson(
-          await fetch("/api/board/recruiters", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ platformId, name: newRecruiter }),
-          }),
-        );
-        recruiterId = created.recruiter.id;
-        await refreshFrom(created);
-      }
       const payload = await readJson(
         await fetch("/api/board/applications", {
           method: "POST",
@@ -166,7 +154,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             company,
             role: String(form.get("role") || "").trim() || undefined,
             platformId,
-            recruiterId,
+            recruiterName,
             appliedOn: String(form.get("appliedOn") || "") || undefined,
             includeInfoSession: form.get("includeInfoSession") === "on",
             includeSecondInterview: form.get("includeSecondInterview") === "on",
@@ -187,21 +175,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     const form = new FormData(event.currentTarget);
     const company = String(form.get("company")).trim();
     if (!company) return;
-    let recruiterId = String(form.get("recruiterId") || "") || null;
-    const newRecruiter = String(form.get("newRecruiter") || "").trim();
     const platformId = String(form.get("platformId"));
+    const recruiterName = String(form.get("recruiterName") || "").trim() || null;
     try {
-      if (newRecruiter) {
-        const created = await readJson(
-          await fetch("/api/board/recruiters", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ platformId, name: newRecruiter }),
-          }),
-        );
-        recruiterId = created.recruiter.id;
-        await refreshFrom(created);
-      }
       const payload = await readJson(
         await fetch(`/api/board/applications/${editingApp.id}`, {
           method: "PATCH",
@@ -210,7 +186,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             company,
             role: String(form.get("role") || "").trim() || null,
             platformId,
-            recruiterId,
+            recruiterName,
             notes: String(form.get("notes") || "").trim() || null,
             appliedOn: String(form.get("appliedOn") || "") || undefined,
           }),
@@ -606,7 +582,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           <AddApplicationForm
             t={t}
             platforms={board.platforms}
-            recruiters={board.recruiters}
             platformLabel={platformLabel}
             onSubmit={onAddApplication}
             onCancel={() => setAddingApp(false)}
@@ -626,7 +601,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           <AddApplicationForm
             t={t}
             platforms={board.platforms}
-            recruiters={board.recruiters}
             platformLabel={platformLabel}
             initial={editingApp}
             conflictMsg={conflictMsg}
@@ -878,7 +852,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
 function AddApplicationForm({
   t,
   platforms,
-  recruiters,
   platformLabel,
   initial,
   conflictMsg,
@@ -887,7 +860,6 @@ function AddApplicationForm({
 }: {
   t: TBoard;
   platforms: BoardPayload["platforms"];
-  recruiters: BoardPayload["recruiters"];
   platformLabel: (code: string | null, name: string | null) => string;
   initial?: BoardApplication;
   conflictMsg?: string | null;
@@ -896,9 +868,6 @@ function AddApplicationForm({
 }) {
   const [platformId, setPlatformId] = useState(
     initial?.platformId ?? platforms[0]?.id ?? "",
-  );
-  const filtered = recruiters.filter(
-    (item) => item.platformId === platformId && item.isActive,
   );
   const canEditInterview = Boolean(
     initial &&
@@ -932,25 +901,12 @@ function AddApplicationForm({
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-sm">
-        {t("recruiter")}
-        <select
-          key={platformId}
-          name="recruiterId"
-          defaultValue={
-            initial?.platformId === platformId ? (initial.recruiterId ?? "") : ""
-          }
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          <option value="">{t("noRecruiter")}</option>
-          {filtered.map((item) => (
-            <option key={item.id} value={item.id} lang="ja">
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Field name="newRecruiter" label={t("newRecruiterName")} lang="ja" />
+      <Field
+        name="recruiterName"
+        label={t("recruiter")}
+        lang="ja"
+        defaultValue={initial?.recruiterName ?? ""}
+      />
       <Field
         name="appliedOn"
         label={t("appliedOn")}
@@ -1107,15 +1063,23 @@ function ApplicationCard({
             </p>
           ) : null}
         </div>
+        <button
+          type="button"
+          data-testid={`edit-${app.id}`}
+          className="shrink-0 rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+          onClick={onEdit}
+        >
+          {t("editCard")}
+        </button>
+      </div>
+      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
         <span
-          className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] dark:bg-zinc-800"
+          className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
           lang="ja"
         >
           {platformLabel}
         </span>
-      </div>
-      <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400" lang="ja">
-        {app.recruiterName ?? t("noRecruiter")}
+        <span lang="ja">{app.recruiterName ?? t("noRecruiter")}</span>
       </p>
       <p className="mt-2 text-sm" lang="ja">
         {app.nextPrep}
@@ -1174,14 +1138,6 @@ function ApplicationCard({
         </ul>
       ) : null}
       <div className="mt-3 flex flex-wrap gap-1">
-        <button
-          type="button"
-          data-testid={`edit-${app.id}`}
-          className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-          onClick={onEdit}
-        >
-          {t("editApplication")}
-        </button>
         {inPlay ? (
           offerPending ? (
             <>
@@ -1305,7 +1261,7 @@ function ApplicationTable({
             <th className="px-3 py-2 font-medium">{t("nextPrep")}</th>
             <th className="px-3 py-2 font-medium">{t("nextInterview")}</th>
             <th className="px-3 py-2 font-medium">{t("link")}</th>
-            <th className="px-3 py-2 font-medium">{t("editApplication")}</th>
+            <th className="px-3 py-2 font-medium">{t("editCard")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1358,7 +1314,7 @@ function ApplicationTable({
                   className="underline"
                   onClick={() => onEdit(app)}
                 >
-                  {t("editApplication")}
+                  {t("editCard")}
                 </button>
               </td>
             </tr>

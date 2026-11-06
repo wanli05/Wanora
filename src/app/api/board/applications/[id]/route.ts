@@ -26,6 +26,7 @@ const schema = z
     role: z.string().trim().nullable().optional(),
     platformId: z.uuid().optional(),
     recruiterId: z.uuid().nullable().optional(),
+    recruiterName: z.string().trim().nullable().optional(),
     notes: z.string().nullable().optional(),
     appliedOn: z.string().optional(),
   })

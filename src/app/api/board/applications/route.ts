@@ -9,6 +9,7 @@ const schema = z
     role: z.string().trim().optional(),
     platformId: z.uuid(),
     recruiterId: z.uuid().nullable().optional(),
+    recruiterName: z.string().trim().nullable().optional(),
     appliedOn: z.string().optional(),
     includeInfoSession: z.boolean().optional(),
     includeSecondInterview: z.boolean().optional(),
