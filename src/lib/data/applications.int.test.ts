@@ -4,8 +4,13 @@ import { GET as getMe } from "@/app/api/me/route";
 import { getDb } from "@/db";
 import { platforms } from "@/db/schema";
 import { BASE_URL, signUp, uniqueEmail } from "../../../test/integration/http";
-import { createApplication, loadBoard } from "./applications";
-import { createInterview, saveSlotProposal } from "./schedule";
+import {
+  advanceApplication,
+  createApplication,
+  loadBoard,
+  updateApplication,
+} from "./applications";
+import { createInterview, saveSlotProposal, updateInterview } from "./schedule";
 
 async function sessionId(cookie: string): Promise<string> {
   const headers = new Headers({ cookie });
@@ -113,5 +118,59 @@ describe("application board isolation", () => {
         ],
       }),
     ).rejects.toMatchObject({ code: "conflict" });
+  });
+
+  it("lets the owner rewrite company, notes, and the interview URL after create", async () => {
+    const db = getDb();
+    const signed = await signUp(uniqueEmail("reedit"));
+    const userId = await sessionId(signed.cookie);
+    const [platform] = await db
+      .select()
+      .from(platforms)
+      .where(eq(platforms.code, "doda"));
+    const app = await createApplication(db, userId, {
+      company: "打ち間違え社",
+      platformId: platform.id,
+      includeInfoSession: true,
+    });
+    const interview = await createInterview(db, userId, app.id, {
+      start: "2026-11-12T14:00:00+09:00",
+      end: "2026-11-12T15:00:00+09:00",
+      mode: "google_meet",
+    });
+    await updateApplication(db, userId, app.id, {
+      company: "正式社名",
+      notes: "URLは後から届いた",
+    });
+    await updateInterview(db, userId, app.id, interview.interview.id, {
+      start: "2026-11-12T16:00:00+09:00",
+      end: "2026-11-12T17:00:00+09:00",
+      mode: "teams",
+      meetingUrl: "https://teams.microsoft.com/l/meetup-join/later",
+    });
+    const board = await loadBoard(db, userId);
+    expect(board.applications[0]?.company).toBe("正式社名");
+    expect(board.applications[0]?.notes).toBe("URLは後から届いた");
+    expect(board.applications[0]?.interview?.meetingUrl).toBe(
+      "https://teams.microsoft.com/l/meetup-join/later",
+    );
+    expect(board.applications[0]?.interview?.mode).toBe("teams");
+  });
+
+  it("refuses offer from document screening", async () => {
+    const db = getDb();
+    const signed = await signUp(uniqueEmail("no-offer"));
+    const userId = await sessionId(signed.cookie);
+    const [platform] = await db
+      .select()
+      .from(platforms)
+      .where(eq(platforms.code, "doda"));
+    const app = await createApplication(db, userId, {
+      company: "書類の会社",
+      platformId: platform.id,
+    });
+    await expect(
+      advanceApplication(db, userId, app.id, "offer"),
+    ).rejects.toMatchObject({ code: "forbidden_stage" });
   });
 });

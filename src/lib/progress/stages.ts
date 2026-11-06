@@ -79,6 +79,32 @@ export function canScheduleInterview(kind: StageKind): boolean {
   return INTERVIEW_STAGE_KINDS.has(kind);
 }
 
+export const ADVANCE_ACTIONS = [
+  "pass",
+  "skip",
+  "reject",
+  "withdraw",
+  "offer",
+] as const;
+
+export type AdvanceAction = (typeof ADVANCE_ACTIONS)[number];
+
+/** Which stage-outcome buttons exist for the current stage. */
+export function allowedAdvanceActions(kind: StageKind): readonly AdvanceAction[] {
+  if (kind === "info_session") return ["pass", "skip"];
+  if (kind === "interview_final") return ["skip", "reject", "offer"];
+  if (kind === "offer") return [];
+  return ["pass", "skip", "reject", "withdraw"];
+}
+
+export function isAdvanceActionAllowed(
+  kind: StageKind | null | undefined,
+  action: AdvanceAction,
+): boolean {
+  if (!kind) return false;
+  return allowedAdvanceActions(kind).includes(action);
+}
+
 export function passStages<T extends StageSnapshot>(stages: T[]): T[] {
   const current = currentStage(stages, "in_progress", null);
   if (!current) return stages;

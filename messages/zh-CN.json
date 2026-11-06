@@ -115,7 +115,12 @@
     "replyDeadline": "回复期限",
     "saveRecruiter": "保存猎头",
     "recruiterName": "猎头姓名",
-    "errorGeneric": "保存失败，请再试一次。"
+    "errorGeneric": "保存失败，请再试一次。",
+    "editApplication": "编辑投递",
+    "editInterview": "编辑面试",
+    "saveEdits": "保存修改",
+    "notes": "备注",
+    "advanceNext": "进入下一阶段"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { getDb } from "@/db";
 import { loadBoard } from "@/lib/data/applications";
-import { createInterview } from "@/lib/data/schedule";
+import { createInterview, updateInterview } from "@/lib/data/schedule";
 import { INTERVIEW_MODES } from "@/lib/progress/enums";
 import { progressResponse, requireUser, unauthorized } from "../../../http";
 
 const schema = z
   .object({
+    interviewId: z.uuid().optional(),
     start: z.string().min(1),
     end: z.string().min(1),
     mode: z.enum(INTERVIEW_MODES),
@@ -27,9 +28,14 @@ export async function POST(
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
   try {
-    const result = await createInterview(getDb(), user.id, id, parsed.data);
+    const result = parsed.data.interviewId
+      ? await updateInterview(getDb(), user.id, id, parsed.data.interviewId, parsed.data)
+      : await createInterview(getDb(), user.id, id, parsed.data);
     const board = await loadBoard(getDb(), user.id);
-    return Response.json({ ...board, released: result.released }, { status: 201 });
+    return Response.json(
+      { ...board, released: result.released },
+      { status: parsed.data.interviewId ? 200 : 201 },
+    );
   } catch (error) {
     return progressResponse(error);
   }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowedAdvanceActions,
   currentStage,
+  isAdvanceActionAllowed,
   isClosed,
   jumpToOffer,
   midCareerStages,
@@ -63,6 +65,31 @@ describe("mid-career stages", () => {
       outcome: "offer",
       offerDecision: "pending",
     });
+  });
+
+  it("hides screening/offer buttons that do not belong on the stage", () => {
+    expect(allowedAdvanceActions("info_session")).toEqual(["pass", "skip"]);
+    expect(isAdvanceActionAllowed("info_session", "reject")).toBe(false);
+    expect(isAdvanceActionAllowed("info_session", "offer")).toBe(false);
+    expect(isAdvanceActionAllowed("info_session", "withdraw")).toBe(false);
+
+    expect(allowedAdvanceActions("document_screening")).toEqual([
+      "pass",
+      "skip",
+      "reject",
+      "withdraw",
+    ]);
+    expect(isAdvanceActionAllowed("document_screening", "offer")).toBe(false);
+    expect(isAdvanceActionAllowed("interview_1", "offer")).toBe(false);
+    expect(isAdvanceActionAllowed("interview_2", "offer")).toBe(false);
+
+    expect(allowedAdvanceActions("interview_final")).toEqual([
+      "skip",
+      "reject",
+      "offer",
+    ]);
+    expect(isAdvanceActionAllowed("interview_final", "pass")).toBe(false);
+    expect(isAdvanceActionAllowed("interview_final", "withdraw")).toBe(false);
   });
 
   it("treats accepted/declined offers as closed", () => {

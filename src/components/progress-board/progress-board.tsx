@@ -10,7 +10,7 @@ import {
 import { useTranslations } from "next-intl";
 import { BOARD_COLUMN_KINDS, INTERVIEW_STAGE_KINDS } from "@/lib/progress/enums";
 import type { BoardApplication, BoardPayload } from "@/lib/progress/dto";
-import { isClosed } from "@/lib/progress/stages";
+import { allowedAdvanceActions, isClosed } from "@/lib/progress/stages";
 import { defaultFreeSlots, type DraftSlot } from "@/lib/progress/slots";
 import {
   formatTokyoShort,
@@ -48,6 +48,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [platform, setPlatform] = useState("all");
   const [recruiter, setRecruiter] = useState("all");
   const [addingApp, setAddingApp] = useState(false);
+  const [editingApp, setEditingApp] = useState<BoardApplication | null>(null);
   const [addingRecruiter, setAddingRecruiter] = useState(false);
   const [interviewFor, setInterviewFor] = useState<string | null>(null);
   const [scheduleKind, setScheduleKind] = useState<"confirm" | "propose">("confirm");
@@ -117,6 +118,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const inProgressExists = apps.some((app) => !isClosed(app.outcome, app.offerDecision));
   const showClosedEmpty =
     visible.length === 0 && filter === "in_progress" && inProgressExists === false && apps.length > 0;
+  const schedulingApp = interviewFor
+    ? apps.find((app) => app.id === interviewFor)
+    : undefined;
+  const schedulingInterview = schedulingApp?.interview;
   const monthCount = board.occupancy.filter((item) => {
     if (item.kind !== "confirmed") return false;
     const key = item.start;
@@ -172,6 +177,79 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     }
   }
 
+  async function onEditApplication(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingApp) return;
+    const form = new FormData(event.currentTarget);
+    const company = String(form.get("company")).trim();
+    if (!company) return;
+    let recruiterId = String(form.get("recruiterId") || "") || null;
+    const newRecruiter = String(form.get("newRecruiter") || "").trim();
+    const platformId = String(form.get("platformId"));
+    try {
+      if (newRecruiter) {
+        const created = await readJson(
+          await fetch("/api/board/recruiters", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ platformId, name: newRecruiter }),
+          }),
+        );
+        recruiterId = created.recruiter.id;
+        await refreshFrom(created);
+      }
+      const payload = await readJson(
+        await fetch(`/api/board/applications/${editingApp.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            company,
+            role: String(form.get("role") || "").trim() || null,
+            platformId,
+            recruiterId,
+            notes: String(form.get("notes") || "").trim() || null,
+            appliedOn: String(form.get("appliedOn") || "") || undefined,
+          }),
+        }),
+      );
+      const start = String(form.get("start") || "");
+      const end = String(form.get("end") || "");
+      const url = String(form.get("url") || "").trim();
+      const mode = String(form.get("mode") || "");
+      if (start && end && mode) {
+        const afterInterview = await readJson(
+          await fetch(`/api/board/applications/${editingApp.id}/interviews`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              interviewId: editingApp.interview?.id,
+              start: fromTokyoInputValue(start),
+              end: fromTokyoInputValue(end),
+              mode,
+              meetingUrl: url || undefined,
+            }),
+          }),
+        );
+        await refreshFrom(afterInterview);
+      } else {
+        await refreshFrom(payload);
+      }
+      setEditingApp(null);
+      setConflictMsg(null);
+    } catch (error) {
+      const details = (error as { body?: { details?: { otherCompany: string; otherStart: string } } })
+        .body?.details;
+      setConflictMsg(
+        details
+          ? `${t("conflictBlock")} ${t("conflictWith", {
+              company: details.otherCompany,
+              when: formatTokyoShort(details.otherStart),
+            })}`
+          : t("errorGeneric"),
+      );
+    }
+  }
+
   async function patchApp(id: string, body: unknown) {
     try {
       const payload = await readJson(
@@ -193,12 +271,14 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     const form = new FormData(event.currentTarget);
     const start = fromTokyoInputValue(String(form.get("start")));
     const end = fromTokyoInputValue(String(form.get("end")));
+    const existing = apps.find((app) => app.id === interviewFor)?.interview;
     try {
       const payload = await readJson(
         await fetch(`/api/board/applications/${interviewFor}/interviews`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            interviewId: existing?.id,
             start,
             end,
             mode: String(form.get("mode")),
@@ -483,6 +563,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                       app={app}
                       platformLabel={platformLabel(app.platformCode, app.platformName)}
                       t={t}
+                      onEdit={() => {
+                        setConflictMsg(null);
+                        setEditingApp(app);
+                      }}
                       onPass={() => patchApp(app.id, { action: "pass" })}
                       onSkip={() => patchApp(app.id, { action: "skip" })}
                       onReject={() => patchApp(app.id, { action: "reject" })}
@@ -505,6 +589,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           apps={visible}
           t={t}
           platformLabel={(app) => platformLabel(app.platformCode, app.platformName)}
+          onEdit={(app) => {
+            setConflictMsg(null);
+            setEditingApp(app);
+          }}
         />
       )}
 
@@ -517,6 +605,31 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             platformLabel={platformLabel}
             onSubmit={onAddApplication}
             onCancel={() => setAddingApp(false)}
+          />
+        </Modal>
+      ) : null}
+
+      {editingApp ? (
+        <Modal
+          title={t("editApplication")}
+          closeLabel={t("cancel")}
+          onClose={() => {
+            setEditingApp(null);
+            setConflictMsg(null);
+          }}
+        >
+          <AddApplicationForm
+            t={t}
+            platforms={board.platforms}
+            recruiters={board.recruiters}
+            platformLabel={platformLabel}
+            initial={editingApp}
+            conflictMsg={conflictMsg}
+            onSubmit={onEditApplication}
+            onCancel={() => {
+              setEditingApp(null);
+              setConflictMsg(null);
+            }}
           />
         </Modal>
       ) : null}
@@ -680,7 +793,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
 
       {interviewFor && scheduleKind === "confirm" ? (
         <Modal
-          title={t("addInterview")}
+          title={schedulingInterview ? t("editInterview") : t("addInterview")}
           closeLabel={t("cancel")}
           onClose={() => {
             setInterviewFor(null);
@@ -692,7 +805,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
               {t("mode")}
               <select
                 name="mode"
-                defaultValue="google_meet"
+                defaultValue={schedulingInterview?.mode ?? "google_meet"}
                 className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
               >
                 <option value="google_meet">{t("modeMeet")}</option>
@@ -702,13 +815,20 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                 <option value="phone">{t("modePhone")}</option>
               </select>
             </label>
-            <Field name="url" label={t("meetingUrl")} type="url" />
+            <Field
+              name="url"
+              label={t("meetingUrl")}
+              type="url"
+              defaultValue={schedulingInterview?.meetingUrl ?? ""}
+            />
             <Field
               name="start"
               label={t("start")}
               type="datetime-local"
               required
-              defaultValue={toTokyoInputValue(new Date(nowMs).toISOString())}
+              defaultValue={toTokyoInputValue(
+                schedulingInterview?.start ?? new Date(nowMs).toISOString(),
+              )}
             />
             <Field
               name="end"
@@ -716,7 +836,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
               type="datetime-local"
               required
               defaultValue={toTokyoInputValue(
-                new Date(nowMs + 60 * 60 * 1000).toISOString(),
+                schedulingInterview?.end ??
+                  new Date(nowMs + 60 * 60 * 1000).toISOString(),
               )}
             />
             {conflictMsg ? (
@@ -754,6 +875,8 @@ function AddApplicationForm({
   platforms,
   recruiters,
   platformLabel,
+  initial,
+  conflictMsg,
   onSubmit,
   onCancel,
 }: {
@@ -761,17 +884,33 @@ function AddApplicationForm({
   platforms: BoardPayload["platforms"];
   recruiters: BoardPayload["recruiters"];
   platformLabel: (code: string | null, name: string | null) => string;
+  initial?: BoardApplication;
+  conflictMsg?: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
 }) {
-  const [platformId, setPlatformId] = useState(platforms[0]?.id ?? "");
+  const [platformId, setPlatformId] = useState(
+    initial?.platformId ?? platforms[0]?.id ?? "",
+  );
   const filtered = recruiters.filter(
     (item) => item.platformId === platformId && item.isActive,
   );
+  const canEditInterview = Boolean(
+    initial &&
+      (initial.interview ||
+        (initial.currentStageKind &&
+          INTERVIEW_STAGE_KINDS.has(initial.currentStageKind))),
+  );
   return (
     <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-      <Field name="company" label={t("company")} required lang="ja" />
-      <Field name="role" label={t("role")} lang="ja" />
+      <Field
+        name="company"
+        label={t("company")}
+        required
+        lang="ja"
+        defaultValue={initial?.company ?? ""}
+      />
+      <Field name="role" label={t("role")} lang="ja" defaultValue={initial?.role ?? ""} />
       <label className="flex flex-col gap-1 text-sm">
         {t("platform")}
         <select
@@ -791,7 +930,11 @@ function AddApplicationForm({
       <label className="flex flex-col gap-1 text-sm">
         {t("recruiter")}
         <select
+          key={platformId}
           name="recruiterId"
+          defaultValue={
+            initial?.platformId === platformId ? (initial.recruiterId ?? "") : ""
+          }
           className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="">{t("noRecruiter")}</option>
@@ -803,19 +946,86 @@ function AddApplicationForm({
         </select>
       </label>
       <Field name="newRecruiter" label={t("newRecruiterName")} lang="ja" />
-      <Field name="appliedOn" label={t("appliedOn")} type="date" />
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="includeInfoSession" />
-        {t("includeInfoSession")}
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="includeSecondInterview" />
-        {t("includeSecondInterview")}
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="skipAptitude" />
-        {t("skipAptitude")}
-      </label>
+      <Field
+        name="appliedOn"
+        label={t("appliedOn")}
+        type="date"
+        defaultValue={initial?.appliedOn ?? ""}
+      />
+      {initial ? (
+        <label className="flex flex-col gap-1 text-sm">
+          {t("notes")}
+          <textarea
+            name="notes"
+            lang="ja"
+            defaultValue={initial.notes ?? ""}
+            rows={3}
+            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+      ) : (
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="includeInfoSession" />
+            {t("includeInfoSession")}
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="includeSecondInterview" />
+            {t("includeSecondInterview")}
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="skipAptitude" />
+            {t("skipAptitude")}
+          </label>
+        </>
+      )}
+      {canEditInterview ? (
+        <>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("mode")}
+            <select
+              name="mode"
+              defaultValue={initial?.interview?.mode ?? "google_meet"}
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <option value="google_meet">{t("modeMeet")}</option>
+              <option value="teams">{t("modeTeams")}</option>
+              <option value="other_online">{t("modeOther")}</option>
+              <option value="onsite">{t("modeOnsite")}</option>
+              <option value="phone">{t("modePhone")}</option>
+            </select>
+          </label>
+          <Field
+            name="url"
+            label={t("meetingUrl")}
+            type="url"
+            defaultValue={initial?.interview?.meetingUrl ?? ""}
+          />
+          <Field
+            name="start"
+            label={t("start")}
+            type="datetime-local"
+            defaultValue={
+              initial?.interview
+                ? toTokyoInputValue(initial.interview.start)
+                : ""
+            }
+          />
+          <Field
+            name="end"
+            label={t("end")}
+            type="datetime-local"
+            defaultValue={
+              initial?.interview ? toTokyoInputValue(initial.interview.end) : ""
+            }
+          />
+        </>
+      ) : null}
+      {conflictMsg ? (
+        <p role="alert" className="text-sm text-red-700">
+          {conflictMsg}
+        </p>
+      ) : null}
       <div className="flex justify-end gap-2">
         <button type="button" className="rounded px-3 py-1.5 text-sm" onClick={onCancel}>
           {t("cancel")}
@@ -824,7 +1034,7 @@ function AddApplicationForm({
           type="submit"
           className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
         >
-          {t("saveApplication")}
+          {initial ? t("saveEdits") : t("saveApplication")}
         </button>
       </div>
     </form>
@@ -835,6 +1045,7 @@ function ApplicationCard({
   app,
   platformLabel,
   t,
+  onEdit,
   onPass,
   onSkip,
   onReject,
@@ -849,6 +1060,7 @@ function ApplicationCard({
   app: BoardApplication;
   platformLabel: string;
   t: TBoard;
+  onEdit: () => void;
   onPass: () => void;
   onSkip: () => void;
   onReject: () => void;
@@ -861,9 +1073,12 @@ function ApplicationCard({
   onConfirmSlot: (slotId: string) => void;
 }) {
   const interview = app.interview;
-  const canSchedule =
-    Boolean(app.currentStageKind && INTERVIEW_STAGE_KINDS.has(app.currentStageKind)) &&
-    !interview;
+  const canSchedule = Boolean(
+    app.currentStageKind && INTERVIEW_STAGE_KINDS.has(app.currentStageKind),
+  );
+  const stageActions = app.currentStageKind
+    ? allowedAdvanceActions(app.currentStageKind)
+    : [];
   const offerPending = app.outcome === "offer" && app.offerDecision === "pending";
   const inPlay = app.outcome === "in_progress" || offerPending;
 
@@ -953,9 +1168,17 @@ function ApplicationCard({
           ))}
         </ul>
       ) : null}
-      {inPlay ? (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {offerPending ? (
+      <div className="mt-3 flex flex-wrap gap-1">
+        <button
+          type="button"
+          data-testid={`edit-${app.id}`}
+          className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+          onClick={onEdit}
+        >
+          {t("editApplication")}
+        </button>
+        {inPlay ? (
+          offerPending ? (
             <>
               <button
                 type="button"
@@ -974,45 +1197,62 @@ function ApplicationCard({
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onPass}
-              >
-                {t("pass")}
-              </button>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onSkip}
-              >
-                {t("skip")}
-              </button>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onReject}
-              >
-                {t("reject")}
-              </button>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onWithdraw}
-              >
-                {t("withdraw")}
-              </button>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onOffer}
-              >
-                {t("markOffer")}
-              </button>
+              {stageActions.includes("pass") ? (
+                <button
+                  type="button"
+                  data-testid="action-pass"
+                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                  onClick={onPass}
+                >
+                  {app.currentStageKind === "info_session" ? t("advanceNext") : t("pass")}
+                </button>
+              ) : null}
+              {stageActions.includes("skip") ? (
+                <button
+                  type="button"
+                  data-testid="action-skip"
+                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                  onClick={onSkip}
+                >
+                  {t("skip")}
+                </button>
+              ) : null}
+              {stageActions.includes("reject") ? (
+                <button
+                  type="button"
+                  data-testid="action-reject"
+                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                  onClick={onReject}
+                >
+                  {t("reject")}
+                </button>
+              ) : null}
+              {stageActions.includes("withdraw") ? (
+                <button
+                  type="button"
+                  data-testid="action-withdraw"
+                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                  onClick={onWithdraw}
+                >
+                  {t("withdraw")}
+                </button>
+              ) : null}
+              {stageActions.includes("offer") ? (
+                <button
+                  type="button"
+                  data-testid="action-offer"
+                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                  onClick={onOffer}
+                >
+                  {t("markOffer")}
+                </button>
+              ) : null}
             </>
-          )}
-          {canSchedule ? (
-            <>
+          )
+        ) : null}
+        {inPlay && canSchedule ? (
+          <>
+            {!interview ? (
               <button
                 type="button"
                 className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
@@ -1020,17 +1260,18 @@ function ApplicationCard({
               >
                 {t("proposeSlots")}
               </button>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onAddInterview}
-              >
-                {t("addInterview")}
-              </button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+            ) : null}
+            <button
+              type="button"
+              data-testid="action-interview"
+              className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+              onClick={onAddInterview}
+            >
+              {interview ? t("editInterview") : t("addInterview")}
+            </button>
+          </>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -1039,10 +1280,12 @@ function ApplicationTable({
   apps,
   t,
   platformLabel,
+  onEdit,
 }: {
   apps: BoardApplication[];
   t: TBoard;
   platformLabel: (app: BoardApplication) => string;
+  onEdit: (app: BoardApplication) => void;
 }) {
   const sorted = [...apps].sort((a, b) => a.company.localeCompare(b.company, "ja"));
   return (
@@ -1057,6 +1300,7 @@ function ApplicationTable({
             <th className="px-3 py-2 font-medium">{t("nextPrep")}</th>
             <th className="px-3 py-2 font-medium">{t("nextInterview")}</th>
             <th className="px-3 py-2 font-medium">{t("link")}</th>
+            <th className="px-3 py-2 font-medium">{t("editApplication")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1102,6 +1346,15 @@ function ApplicationTable({
                 ) : (
                   t("dash")
                 )}
+              </td>
+              <td className="px-3 py-2">
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => onEdit(app)}
+                >
+                  {t("editApplication")}
+                </button>
               </td>
             </tr>
           ))}
@@ -1183,7 +1436,7 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-950"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-950"
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>

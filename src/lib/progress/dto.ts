@@ -68,6 +68,7 @@ export type BoardApplication = {
   recruiterId: string | null;
   recruiterName: string | null;
   appliedOn: string;
+  notes: string | null;
   outcome: Outcome;
   offerDecision: OfferDecision | null;
   nextPrepNote: string | null;

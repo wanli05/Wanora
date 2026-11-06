@@ -115,7 +115,12 @@
     "replyDeadline": "返信期限",
     "saveRecruiter": "担当者を保存",
     "recruiterName": "担当者名",
-    "errorGeneric": "保存できませんでした。もう一度お試しください。"
+    "errorGeneric": "保存できませんでした。もう一度お試しください。",
+    "editApplication": "応募を編集",
+    "editInterview": "面接を編集",
+    "saveEdits": "変更を保存",
+    "notes": "メモ",
+    "advanceNext": "次の段階へ"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

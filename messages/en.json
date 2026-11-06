@@ -115,7 +115,12 @@
     "replyDeadline": "Reply deadline",
     "saveRecruiter": "Save recruiter",
     "recruiterName": "Recruiter name",
-    "errorGeneric": "Could not save. Please try again."
+    "errorGeneric": "Could not save. Please try again.",
+    "editApplication": "Edit application",
+    "editInterview": "Edit interview",
+    "saveEdits": "Save changes",
+    "notes": "Notes",
+    "advanceNext": "Next stage"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",
