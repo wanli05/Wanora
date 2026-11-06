@@ -527,10 +527,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                 key={kind}
                 data-testid={`column-${kind}`}
                 data-occupied={vacant ? "false" : "true"}
-                className={`flex flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
+                className={`flex shrink-0 flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
                   vacant
-                    ? "w-24 shrink-0 border-zinc-200 opacity-60 dark:border-zinc-800"
-                    : "min-w-72 flex-1 border-zinc-200 dark:border-zinc-800"
+                    ? "w-36 border-zinc-200 opacity-60 dark:border-zinc-800"
+                    : "w-56 border-zinc-200 dark:border-zinc-800"
                 }`}
               >
                 <header className="flex items-baseline justify-between px-1 py-2">
