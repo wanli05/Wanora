@@ -1,4 +1,9 @@
-import { TOKYO } from "./enums";
+import { SLOT_DURATION_MS, TOKYO } from "./enums";
+
+/** Default interview length when the form only collects a start time. */
+export function endOneHourAfter(startIso: string): string {
+  return new Date(new Date(startIso).getTime() + SLOT_DURATION_MS).toISOString();
+}
 
 export function formatTokyoShort(iso: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {

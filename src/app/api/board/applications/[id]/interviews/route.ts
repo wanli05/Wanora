@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { getDb } from "@/db";
 import { loadBoard } from "@/lib/data/applications";
-import { createInterview } from "@/lib/data/schedule";
+import { createInterview, updateInterview } from "@/lib/data/schedule";
 import { INTERVIEW_MODES } from "@/lib/progress/enums";
+import { endOneHourAfter } from "@/lib/progress/tokyo";
 import { progressResponse, requireUser, unauthorized } from "../../../http";
 
 const schema = z
   .object({
+    interviewId: z.uuid().optional(),
     start: z.string().min(1),
-    end: z.string().min(1),
+    end: z.string().min(1).optional(),
     mode: z.enum(INTERVIEW_MODES),
     meetingUrl: z.string().optional(),
     locationText: z.string().optional(),
@@ -27,9 +29,18 @@ export async function POST(
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
   try {
-    const result = await createInterview(getDb(), user.id, id, parsed.data);
+    const payload = {
+      ...parsed.data,
+      end: parsed.data.end ?? endOneHourAfter(parsed.data.start),
+    };
+    const result = parsed.data.interviewId
+      ? await updateInterview(getDb(), user.id, id, parsed.data.interviewId, payload)
+      : await createInterview(getDb(), user.id, id, payload);
     const board = await loadBoard(getDb(), user.id);
-    return Response.json({ ...board, released: result.released }, { status: 201 });
+    return Response.json(
+      { ...board, released: result.released },
+      { status: parsed.data.interviewId ? 200 : 201 },
+    );
   } catch (error) {
     return progressResponse(error);
   }

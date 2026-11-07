@@ -27,7 +27,7 @@ describe("deriveNextPrep", () => {
     expect(result.derived).toBe("書類の準備・提出");
   });
 
-  it("mentions a scheduled interview first", () => {
+  it("uses the stage name when an interview is scheduled", () => {
     const list = stages().map((stage) => {
       if (stage.kind === "document_screening" || stage.kind === "aptitude_test") {
         return { ...stage, status: "passed" as const };
@@ -53,7 +53,28 @@ describe("deriveNextPrep", () => {
       proposal: null,
       now: new Date("2026-11-04T12:00:00+09:00"),
     });
-    expect(result.display).toBe("一次面接の準備（11/12 14:00 Google Meet）");
+    expect(result.display).toBe("一次面接");
+  });
+
+  it("uses the stage name without の準備 when interview is not yet set", () => {
+    const list = stages().map((stage) => {
+      if (stage.kind === "document_screening" || stage.kind === "aptitude_test") {
+        return { ...stage, status: "passed" as const };
+      }
+      if (stage.kind === "interview_1") {
+        return { ...stage, status: "pending" as const };
+      }
+      return stage;
+    });
+    const result = deriveNextPrep({
+      nextPrepNote: null,
+      stages: list,
+      outcome: "in_progress",
+      offerDecision: null,
+      interviews: [],
+      proposal: null,
+    });
+    expect(result.display).toBe("一次面接");
   });
 
   it("waits for a sent proposal", () => {

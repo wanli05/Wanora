@@ -132,14 +132,14 @@ export const PRESET_PLATFORM_JA: Record<PresetPlatformCode, string> = {
 };
 
 export const DEFAULT_NEXT_PREP: Record<string, string> = {
-  info_session: "説明会の準備",
+  info_session: "説明会",
   document_screening: "書類の準備・提出",
-  aptitude_test: "適性検査の準備",
-  skill_test: "スキルテストの準備",
-  interview_1: "一次面接の準備",
-  interview_2: "二次面接の準備",
-  interview_final: "最終面接の準備",
-  casual_meeting: "カジュアル面談の準備",
+  aptitude_test: "適性検査",
+  skill_test: "スキルテスト",
+  interview_1: "一次面接",
+  interview_2: "二次面接",
+  interview_final: "最終面接",
+  casual_meeting: "カジュアル面談",
   offer: "内定条件の確認",
 };
 

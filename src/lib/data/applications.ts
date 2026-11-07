@@ -17,20 +17,22 @@ import { deriveNextPrep } from "@/lib/progress/next-prep";
 import {
   currentStage,
   failCurrent,
+  isAdvanceActionAllowed,
   isClosed,
   jumpToOffer,
   midCareerStages,
   outcomeAfterStages,
   passStages,
   skipStages,
+  type AdvanceAction,
   type StageSnapshot,
 } from "@/lib/progress/stages";
 import { tokyoTodayKey } from "@/lib/progress/tokyo";
 import { detectHardInterviewConflict } from "@/lib/progress/conflicts";
 import { findOrCreateCompany } from "./companies";
 import { loadOccupancyWindows } from "./occupancy";
-import { getAccessiblePlatform } from "./platforms";
-import { getOwnedRecruiter } from "./recruiters";
+import { resolvePlatformId } from "./platforms";
+import { findOrCreateRecruiter, getOwnedRecruiter } from "./recruiters";
 
 export async function createApplication(
   db: Db,
@@ -38,19 +40,30 @@ export async function createApplication(
   input: {
     company: string;
     role?: string;
-    platformId: string;
+    platformId?: string;
+    customPlatformName?: string | null;
     recruiterId?: string | null;
+    recruiterName?: string | null;
     appliedOn?: string;
     includeInfoSession?: boolean;
     includeSecondInterview?: boolean;
     skipAptitude?: boolean;
   },
 ) {
-  const platform = await getAccessiblePlatform(db, userId, input.platformId);
-  const recruiterId = input.recruiterId ?? null;
+  const platformId = await resolvePlatformId(db, userId, {
+    platformId: input.platformId,
+    customPlatformName: input.customPlatformName,
+  });
+  let recruiterId = input.recruiterId ?? null;
+  if (input.recruiterName !== undefined) {
+    const name = input.recruiterName?.trim() ?? "";
+    recruiterId = name
+      ? (await findOrCreateRecruiter(db, userId, { platformId, name })).id
+      : null;
+  }
   if (recruiterId) {
     const recruiter = await getOwnedRecruiter(db, userId, recruiterId);
-    if (recruiter.platformId !== platform.id) {
+    if (recruiter.platformId !== platformId) {
       throw new ProgressError("invalid", "recruiter does not belong to platform");
     }
     if (!recruiter.isActive) {
@@ -79,7 +92,7 @@ export async function createApplication(
       .values({
         userId,
         companyId: company.id,
-        platformId: platform.id,
+        platformId,
         recruiterId,
         jobTitle: input.role?.trim() || null,
         appliedOn,
@@ -238,6 +251,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       recruiterId: row.app.recruiterId,
       recruiterName: row.recruiterName,
       appliedOn: row.app.appliedOn,
+      notes: row.app.notes,
       outcome: row.app.outcome as Outcome,
       offerDecision: (row.app.offerDecision as OfferDecision | null) ?? null,
       nextPrepNote: row.app.nextPrepNote,
@@ -289,6 +303,91 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
     applications: mapped,
     occupancy,
   };
+}
+
+export async function updateApplication(
+  db: Db,
+  userId: string,
+  applicationId: string,
+  input: {
+    company?: string;
+    role?: string | null;
+    platformId?: string;
+    customPlatformName?: string | null;
+    recruiterId?: string | null;
+    recruiterName?: string | null;
+    notes?: string | null;
+    appliedOn?: string;
+    nextPrepNote?: string | null;
+  },
+) {
+  const app = await getOwnedApplication(db, userId, applicationId);
+  const patch: {
+    companyId?: string;
+    jobTitle?: string | null;
+    platformId?: string;
+    recruiterId?: string | null;
+    notes?: string | null;
+    appliedOn?: string;
+    nextPrepNote?: string | null;
+  } = {};
+
+  if (input.company !== undefined) {
+    const company = await findOrCreateCompany(db, userId, input.company);
+    patch.companyId = company.id;
+  }
+  if (input.role !== undefined) {
+    patch.jobTitle = input.role?.trim() || null;
+  }
+  if (input.notes !== undefined) {
+    patch.notes = input.notes?.trim() || null;
+  }
+  if (input.appliedOn !== undefined) {
+    patch.appliedOn = input.appliedOn;
+  }
+  if (input.nextPrepNote !== undefined) {
+    patch.nextPrepNote = input.nextPrepNote;
+  }
+
+  let platformId = app.platformId;
+  if (input.customPlatformName !== undefined || input.platformId !== undefined) {
+    platformId = await resolvePlatformId(db, userId, {
+      platformId: input.platformId ?? app.platformId,
+      customPlatformName: input.customPlatformName,
+    });
+    patch.platformId = platformId;
+  }
+
+  if (input.recruiterName !== undefined) {
+    const name = input.recruiterName?.trim() ?? "";
+    patch.recruiterId = name
+      ? (await findOrCreateRecruiter(db, userId, { platformId, name })).id
+      : null;
+  } else if (input.recruiterId !== undefined) {
+    const recruiterId = input.recruiterId;
+    if (recruiterId) {
+      const recruiter = await getOwnedRecruiter(db, userId, recruiterId);
+      if (recruiter.platformId !== platformId) {
+        throw new ProgressError("invalid", "recruiter does not belong to platform");
+      }
+      patch.recruiterId = recruiter.id;
+    } else {
+      patch.recruiterId = null;
+    }
+  } else if (input.platformId !== undefined && app.recruiterId) {
+    const recruiter = await getOwnedRecruiter(db, userId, app.recruiterId);
+    if (recruiter.platformId !== platformId) {
+      patch.recruiterId = null;
+    }
+  }
+
+  if (Object.keys(patch).length === 0) return app;
+  const [updated] = await db
+    .update(applications)
+    .set(patch)
+    .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)))
+    .returning();
+  return updated;
 }
 
 export async function getOwnedApplication(db: Db, userId: string, id: string) {
@@ -394,6 +493,18 @@ export async function advanceApplication(
 
   if (isClosed(app.outcome as Outcome, app.offerDecision as OfferDecision | null)) {
     throw new ProgressError("invalid", "application is closed");
+  }
+
+  if (
+    action === "pass" ||
+    action === "skip" ||
+    action === "reject" ||
+    action === "withdraw" ||
+    action === "offer"
+  ) {
+    if (!isAdvanceActionAllowed(current?.kind, action as AdvanceAction)) {
+      throw new ProgressError("forbidden_stage", "action is not allowed on this stage");
+    }
   }
 
   if (action === "accept_offer" || action === "decline_offer") {

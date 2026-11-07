@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import {
   advanceApplication,
   loadBoard,
-  updateApplicationNote,
+  updateApplication,
 } from "@/lib/data/applications";
 import { progressResponse, requireUser, unauthorized } from "../../http";
 
@@ -22,6 +22,14 @@ const schema = z
       ])
       .optional(),
     nextPrepNote: z.string().nullable().optional(),
+    company: z.string().trim().min(1).optional(),
+    role: z.string().trim().nullable().optional(),
+    platformId: z.uuid().optional(),
+    customPlatformName: z.string().trim().min(1).nullable().optional(),
+    recruiterId: z.uuid().nullable().optional(),
+    recruiterName: z.string().trim().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    appliedOn: z.string().optional(),
   })
   .strict();
 
@@ -37,11 +45,12 @@ export async function PATCH(
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
   try {
-    if (parsed.data.action) {
-      await advanceApplication(getDb(), user.id, id, parsed.data.action);
+    const { action, ...fields } = parsed.data;
+    if (action) {
+      await advanceApplication(getDb(), user.id, id, action);
     }
-    if (parsed.data.nextPrepNote !== undefined) {
-      await updateApplicationNote(getDb(), user.id, id, parsed.data.nextPrepNote);
+    if (Object.values(fields).some((value) => value !== undefined)) {
+      await updateApplication(getDb(), user.id, id, fields);
     }
     return Response.json(await loadBoard(getDb(), user.id));
   } catch (error) {

@@ -7,14 +7,20 @@ const schema = z
   .object({
     company: z.string().trim().min(1),
     role: z.string().trim().optional(),
-    platformId: z.uuid(),
+    platformId: z.uuid().optional(),
+    customPlatformName: z.string().trim().min(1).nullable().optional(),
     recruiterId: z.uuid().nullable().optional(),
+    recruiterName: z.string().trim().nullable().optional(),
     appliedOn: z.string().optional(),
     includeInfoSession: z.boolean().optional(),
     includeSecondInterview: z.boolean().optional(),
     skipAptitude: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => Boolean(value.platformId) || Boolean(value.customPlatformName?.trim()),
+    { message: "platform required" },
+  );
 
 export async function POST(request: Request) {
   const user = await requireUser(request);

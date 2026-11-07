@@ -180,6 +180,26 @@ function defaultYearMonth(month = 4): string {
   return formatYearMonthInputValue(new Date().getFullYear(), month);
 }
 
+const PROFILE_SAVED_FLASH_KEY = "wanora.profile.justSaved";
+
+function writeProfileSavedFlash() {
+  try {
+    sessionStorage.setItem(PROFILE_SAVED_FLASH_KEY, "1");
+  } catch {
+    // Private mode / blocked storage — banner may only last until remount.
+  }
+}
+
+function consumeProfileSavedFlash(): boolean {
+  try {
+    if (sessionStorage.getItem(PROFILE_SAVED_FLASH_KEY) !== "1") return false;
+    sessionStorage.removeItem(PROFILE_SAVED_FLASH_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ProfilePageForm({
   initial,
   labels,
@@ -188,6 +208,7 @@ export function ProfilePageForm({
   labels: ProfilePageFormLabels;
 }) {
   const [editing, setEditing] = useState(false);
+  const [justSaved, setJustSaved] = useState(() => consumeProfileSavedFlash());
   const [educationRows, setEducationRows] = useState(() =>
     withClientKeys(initial.education),
   );
@@ -203,6 +224,9 @@ export function ProfilePageForm({
     async (prev: ProfileSaveState, formData: FormData) => {
       const result = await saveFullProfileAction(prev, formData);
       if (result.ok) {
+        // Survive router.refresh() remount wiping useActionState.
+        writeProfileSavedFlash();
+        setJustSaved(true);
         setEditing(false);
         router.refresh();
       }
@@ -797,7 +821,13 @@ export function ProfilePageForm({
         {!editing ? (
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setJustSaved(false);
+              setEducationRows(withClientKeys(initial.education));
+              setWorkRows(withClientKeys(initial.workHistory));
+              setLicenseRows(withClientKeys(initial.licenses));
+              setEditing(true);
+            }}
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
           >
             {labels.edit}
@@ -805,7 +835,7 @@ export function ProfilePageForm({
         ) : null}
       </div>
 
-      {state.ok && !editing ? (
+      {(state.ok || justSaved) && !editing ? (
         <p
           className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
           role="status"

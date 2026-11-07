@@ -1,6 +1,6 @@
 import { DEFAULT_NEXT_PREP, type InterviewMode } from "./enums";
 import { currentStage, stageDisplayName, type StageSnapshot } from "./stages";
-import { formatTokyoDate, formatTokyoShort } from "./tokyo";
+import { formatTokyoDate } from "./tokyo";
 import type { OfferDecision, Outcome } from "./enums";
 
 export type NextPrepInterview = {
@@ -16,7 +16,8 @@ export type NextPrepProposal = {
   slotCount: number;
 };
 
-function modeLabel(mode: InterviewMode): string {
+/** Short mode label for the join row (Meet/Teams); empty for other modes. */
+export function interviewModeLabel(mode: InterviewMode): string {
   if (mode === "google_meet") return "Google Meet";
   if (mode === "teams") return "Microsoft Teams";
   return "";
@@ -53,9 +54,8 @@ function derivedSentence(input: {
       interview.status === "scheduled" && new Date(interview.start) > now,
   );
   if (upcoming) {
-    const kindName = stageDisplayName(stage);
-    const mode = modeLabel(upcoming.mode);
-    return `${kindName}の準備（${formatTokyoShort(upcoming.start)}${mode ? ` ${mode}` : ""}）`;
+    // Time/mode live on the join row — prep line is only the stage name.
+    return stageDisplayName(stage);
   }
 
   if (input.proposal?.status === "sent") {
@@ -75,7 +75,7 @@ function derivedSentence(input: {
     if (stage.kind === "offer") {
       return `内定への回答（期限 ${formatTokyoDate(stage.deadlineAt)}）`;
     }
-    const base = DEFAULT_NEXT_PREP[stage.kind] ?? `${stageDisplayName(stage)}の準備`;
+    const base = DEFAULT_NEXT_PREP[stage.kind] ?? stageDisplayName(stage);
     return `${base}（期限 ${formatTokyoDate(stage.deadlineAt)}）`;
   }
 
@@ -84,7 +84,7 @@ function derivedSentence(input: {
   }
 
   if (stage.kind === "custom") {
-    return `${stageDisplayName(stage)}の準備`;
+    return stageDisplayName(stage);
   }
-  return DEFAULT_NEXT_PREP[stage.kind] ?? `${stageDisplayName(stage)}の準備`;
+  return DEFAULT_NEXT_PREP[stage.kind] ?? stageDisplayName(stage);
 }

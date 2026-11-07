@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowedAdvanceActions,
   currentStage,
+  isAdvanceActionAllowed,
   isClosed,
   jumpToOffer,
   midCareerStages,
   outcomeAfterStages,
   passStages,
   skipStages,
+  visibleBoardColumns,
   type StageSnapshot,
 } from "./stages";
 
@@ -63,6 +66,63 @@ describe("mid-career stages", () => {
       outcome: "offer",
       offerDecision: "pending",
     });
+  });
+
+  it("hides screening/offer buttons that do not belong on the stage", () => {
+    expect(allowedAdvanceActions("info_session")).toEqual(["pass"]);
+    expect(isAdvanceActionAllowed("info_session", "skip")).toBe(false);
+    expect(isAdvanceActionAllowed("info_session", "reject")).toBe(false);
+    expect(isAdvanceActionAllowed("info_session", "offer")).toBe(false);
+    expect(isAdvanceActionAllowed("info_session", "withdraw")).toBe(false);
+
+    expect(allowedAdvanceActions("document_screening")).toEqual([
+      "pass",
+      "reject",
+      "withdraw",
+    ]);
+    expect(isAdvanceActionAllowed("document_screening", "skip")).toBe(false);
+    expect(isAdvanceActionAllowed("document_screening", "offer")).toBe(false);
+    expect(isAdvanceActionAllowed("interview_1", "offer")).toBe(false);
+    expect(isAdvanceActionAllowed("interview_2", "offer")).toBe(false);
+
+    expect(allowedAdvanceActions("interview_final")).toEqual([
+      "pass",
+      "reject",
+      "offer",
+    ]);
+    expect(isAdvanceActionAllowed("interview_final", "skip")).toBe(false);
+    expect(isAdvanceActionAllowed("interview_final", "withdraw")).toBe(false);
+  });
+
+  it("hides the info-session column until an in-progress card is there", () => {
+    expect(visibleBoardColumns([])).not.toContain("info_session");
+    expect(
+      visibleBoardColumns([
+        {
+          currentStageKind: "document_screening",
+          outcome: "in_progress",
+          offerDecision: null,
+        },
+      ]),
+    ).not.toContain("info_session");
+    expect(
+      visibleBoardColumns([
+        {
+          currentStageKind: "info_session",
+          outcome: "rejected",
+          offerDecision: null,
+        },
+      ]),
+    ).not.toContain("info_session");
+    expect(
+      visibleBoardColumns([
+        {
+          currentStageKind: "info_session",
+          outcome: "in_progress",
+          offerDecision: null,
+        },
+      ]),
+    ).toContain("info_session");
   });
 
   it("treats accepted/declined offers as closed", () => {

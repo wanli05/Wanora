@@ -43,6 +43,37 @@ export async function createCustomPlatform(
   return row;
 }
 
+export async function findOrCreateCustomPlatform(
+  db: Db,
+  userId: string,
+  name: string,
+) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new ProgressError("invalid", "platform name required");
+  const [existing] = await db
+    .select()
+    .from(platforms)
+    .where(and(eq(platforms.userId, userId), eq(platforms.name, trimmed)));
+  if (existing) return existing;
+  return createCustomPlatform(db, userId, trimmed);
+}
+
+/** Prefer a typed niche name; otherwise require an accessible platform id. */
+export async function resolvePlatformId(
+  db: Db,
+  userId: string,
+  input: { platformId?: string; customPlatformName?: string | null },
+): Promise<string> {
+  const custom = input.customPlatformName?.trim();
+  if (custom) {
+    return (await findOrCreateCustomPlatform(db, userId, custom)).id;
+  }
+  if (!input.platformId) {
+    throw new ProgressError("invalid", "platform required");
+  }
+  return (await getAccessiblePlatform(db, userId, input.platformId)).id;
+}
+
 export function platformLabel(
   row: { code: string | null; name: string | null },
   translate: (code: PresetPlatformCode) => string,

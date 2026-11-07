@@ -142,6 +142,20 @@ describe("ProfilePageForm edit mode", () => {
     await waitFor(() => expect(saveFullProfileAction).toHaveBeenCalledTimes(1));
   });
 
+  it("keeps the saved banner after a successful submit", async () => {
+    render(<ProfilePageForm initial={initial} labels={labels} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("个人资料已保存。");
+    });
+  });
+
   it("shows education rows in chronological order in view mode", () => {
     render(
       <ProfilePageForm

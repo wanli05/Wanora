@@ -1,7 +1,9 @@
 import {
+  BOARD_COLUMN_KINDS,
   DEFAULT_STAGE_ORDER,
   INTERVIEW_STAGE_KINDS,
   MID_CAREER_SKIPPED,
+  type BoardColumnKind,
   type OfferDecision,
   type Outcome,
   type StageKind,
@@ -77,6 +79,51 @@ export function stageDisplayName(stage: StageSnapshot): string {
 
 export function canScheduleInterview(kind: StageKind): boolean {
   return INTERVIEW_STAGE_KINDS.has(kind);
+}
+
+export const ADVANCE_ACTIONS = [
+  "pass",
+  "skip",
+  "reject",
+  "withdraw",
+  "offer",
+] as const;
+
+export type AdvanceAction = (typeof ADVANCE_ACTIONS)[number];
+
+/** Which stage-outcome buttons exist for the current stage. */
+export function allowedAdvanceActions(kind: StageKind): readonly AdvanceAction[] {
+  // Skip is not offered in the UI (same board effect as pass).
+  if (kind === "info_session") return ["pass"];
+  if (kind === "interview_final") return ["pass", "reject", "offer"];
+  if (kind === "offer") return [];
+  return ["pass", "reject", "withdraw"];
+}
+
+export function isAdvanceActionAllowed(
+  kind: StageKind | null | undefined,
+  action: AdvanceAction,
+): boolean {
+  if (!kind) return false;
+  return allowedAdvanceActions(kind).includes(action);
+}
+
+/** 説明会 stays hidden until an in-progress application is actually in that stage. */
+export function visibleBoardColumns(
+  apps: {
+    currentStageKind: StageKind | null;
+    outcome: Outcome;
+    offerDecision: OfferDecision | null;
+  }[],
+): readonly BoardColumnKind[] {
+  const hasOpenInfoSession = apps.some(
+    (app) =>
+      app.currentStageKind === "info_session" &&
+      !isClosed(app.outcome, app.offerDecision),
+  );
+  return BOARD_COLUMN_KINDS.filter(
+    (kind) => kind !== "info_session" || hasOpenInfoSession,
+  );
 }
 
 export function passStages<T extends StageSnapshot>(stages: T[]): T[] {

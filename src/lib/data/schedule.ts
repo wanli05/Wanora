@@ -122,6 +122,73 @@ export async function createInterview(
   return { interview: row, released };
 }
 
+export async function updateInterview(
+  db: Db,
+  userId: string,
+  applicationId: string,
+  interviewId: string,
+  input: {
+    start: string;
+    end: string;
+    mode: InterviewMode;
+    meetingUrl?: string | null;
+    locationText?: string | null;
+  },
+) {
+  if (!INTERVIEW_MODES.includes(input.mode)) {
+    throw new ProgressError("invalid", "invalid mode");
+  }
+  const app = await getOwnedApplication(db, userId, applicationId);
+  const [interview] = await db
+    .select()
+    .from(interviews)
+    .where(and(eq(interviews.id, interviewId), eq(interviews.userId, userId)));
+  if (!interview) throw new ProgressError("not_found", "interview not found");
+  const [stage] = await db
+    .select()
+    .from(applicationStages)
+    .where(
+      and(
+        eq(applicationStages.id, interview.stageId),
+        eq(applicationStages.applicationId, app.id),
+        eq(applicationStages.userId, userId),
+      ),
+    );
+  if (!stage) throw new ProgressError("not_found", "interview not on this application");
+  const { startsAt, endsAt } = isoRange(input.start, input.end);
+  if (input.meetingUrl && !/^https?:\/\//i.test(input.meetingUrl)) {
+    throw new ProgressError("invalid", "meeting url must be http(s)");
+  }
+  const occupancy = await loadOccupancyWindows(db, userId);
+  const hit = detectHardInterviewConflict(
+    occupancy,
+    startsAt.toISOString(),
+    endsAt.toISOString(),
+    input.mode,
+    new Set([interview.id]),
+  );
+  if (hit) {
+    throw new ProgressError("conflict", "interview overlaps another confirmed time", hit);
+  }
+  const [row] = await db
+    .update(interviews)
+    .set({
+      startsAt,
+      endsAt,
+      mode: input.mode,
+      meetingUrl: input.meetingUrl?.trim() || null,
+      locationText: input.locationText?.trim() || null,
+    })
+    .where(and(eq(interviews.id, interview.id), eq(interviews.userId, userId)))
+    .returning();
+  const released = await releaseOverlappingProposed(db, userId, {
+    start: startsAt.toISOString(),
+    end: endsAt.toISOString(),
+    mode: input.mode,
+  });
+  return { interview: row, released };
+}
+
 export async function saveSlotProposal(
   db: Db,
   userId: string,
