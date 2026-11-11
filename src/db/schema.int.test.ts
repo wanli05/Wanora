@@ -43,6 +43,7 @@ describe("database schema (migrations applied)", () => {
         "applications",
         "application_stages",
         "interviews",
+        "interview_feedbacks",
         "slot_proposals",
         "proposed_slots",
         "busy_blocks",

@@ -4,6 +4,7 @@ import {
   applicationStages,
   applications,
   companies,
+  interviewFeedbacks,
   interviews,
   platforms,
   proposedSlots,
@@ -11,8 +12,20 @@ import {
   slotProposals,
 } from "@/db/schema";
 import type { BoardApplication, BoardPayload } from "@/lib/progress/dto";
-import type { InterviewMode, OfferDecision, Outcome, StageKind } from "@/lib/progress/enums";
+import type {
+  FeedbackSource,
+  InterviewMode,
+  InterviewStatus,
+  OfferDecision,
+  Outcome,
+  StageKind,
+} from "@/lib/progress/enums";
 import { ProgressError } from "@/lib/progress/errors";
+import { canCreateFeedback, feedbackSummary } from "@/lib/progress/feedback";
+import {
+  hasJobPostingContent,
+  normalizeOptionalText,
+} from "@/lib/progress/job-posting";
 import { deriveNextPrep } from "@/lib/progress/next-prep";
 import {
   currentStage,
@@ -29,7 +42,7 @@ import {
 } from "@/lib/progress/stages";
 import { tokyoTodayKey } from "@/lib/progress/tokyo";
 import { detectHardInterviewConflict } from "@/lib/progress/conflicts";
-import { findOrCreateCompany } from "./companies";
+import { findOrCreateCompany, updateCompanyProfile } from "./companies";
 import { loadOccupancyWindows } from "./occupancy";
 import { resolvePlatformId } from "./platforms";
 import { findOrCreateRecruiter, getOwnedRecruiter } from "./recruiters";
@@ -118,6 +131,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
     appRows,
     stageRows,
     interviewRows,
+    feedbackRows,
     proposalRows,
     slotRows,
     occupancy,
@@ -133,6 +147,8 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       .select({
         app: applications,
         companyName: companies.name,
+        companyUrl: companies.url,
+        companyNotes: companies.notes,
         platformCode: platforms.code,
         platformName: platforms.name,
         recruiterName: recruiters.name,
@@ -144,6 +160,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       .where(eq(applications.userId, userId)),
     db.select().from(applicationStages).where(eq(applicationStages.userId, userId)),
     db.select().from(interviews).where(eq(interviews.userId, userId)),
+    db.select().from(interviewFeedbacks).where(eq(interviewFeedbacks.userId, userId)),
     db.select().from(slotProposals).where(eq(slotProposals.userId, userId)),
     db.select().from(proposedSlots).where(eq(proposedSlots.userId, userId)),
     loadOccupancyWindows(db, userId),
@@ -165,6 +182,11 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
     const list = interviewsByStage.get(interview.stageId) ?? [];
     list.push(interview);
     interviewsByStage.set(interview.stageId, list);
+  }
+
+  const feedbackByInterview = new Map<string, (typeof feedbackRows)[number]>();
+  for (const feedback of feedbackRows) {
+    feedbackByInterview.set(feedback.interviewId, feedback);
   }
 
   const proposalsByStage = new Map<string, typeof proposalRows>();
@@ -195,12 +217,12 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       row.app.outcome as Outcome,
       (row.app.offerDecision as OfferDecision | null) ?? null,
     );
-    const stageInterviews = current
+    const currentStageInterviews = current
       ? (interviewsByStage.get(current.id) ?? []).filter(
           (item) => item.status === "scheduled",
         )
       : [];
-    const interview = stageInterviews[0];
+    const interview = currentStageInterviews[0];
     const openProposal = current
       ? (proposalsByStage.get(current.id) ?? []).find(
           (item) => item.status === "draft" || item.status === "sent",
@@ -216,7 +238,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       stages,
       outcome: row.app.outcome as Outcome,
       offerDecision: (row.app.offerDecision as OfferDecision | null) ?? null,
-      interviews: stageInterviews.map((item) => ({
+      interviews: currentStageInterviews.map((item) => ({
         start: item.startsAt.toISOString(),
         end: item.endsAt.toISOString(),
         mode: item.mode as InterviewMode,
@@ -240,10 +262,61 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
           new Set([interview.id]),
         ),
     );
+    const jobPosting = {
+      jobUrl: row.app.jobUrl,
+      salaryBandText: row.app.salaryBandText,
+      benefitsText: row.app.benefitsText,
+      jdText: row.app.jdText,
+      processNotes: row.app.processNotes,
+      workLocationText: row.app.location,
+      jobNotes: row.app.jobNotes,
+    };
+    const stageInterviews = stages
+      .flatMap((stage) => {
+        const items = interviewsByStage.get(stage.id) ?? [];
+        return items.map((item) => {
+          const feedback = feedbackByInterview.get(item.id) ?? null;
+          const mappedFeedback = feedback
+            ? {
+                id: feedback.id,
+                interviewId: feedback.interviewId,
+                source: feedback.source as FeedbackSource,
+                body: feedback.body,
+                rating: feedback.rating,
+                recordedOn: feedback.recordedOn,
+                summary: feedbackSummary({
+                  source: feedback.source as FeedbackSource,
+                  body: feedback.body,
+                }),
+              }
+            : null;
+          return {
+            id: item.id,
+            stageId: stage.id,
+            stageKind: stage.kind,
+            start: item.startsAt.toISOString(),
+            end: item.endsAt.toISOString(),
+            mode: item.mode as InterviewMode,
+            meetingUrl: item.meetingUrl,
+            locationText: item.locationText,
+            status: item.status as InterviewStatus,
+            canWriteFeedback: canCreateFeedback({
+              interviewStatus: item.status,
+              startsAt: item.startsAt,
+            }),
+            feedback: mappedFeedback,
+          };
+        });
+      })
+      .sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
+      );
     return {
       id: row.app.id,
       company: row.companyName,
       companyId: row.app.companyId,
+      companyUrl: row.companyUrl,
+      companyNotes: row.companyNotes,
       role: row.app.jobTitle,
       platformId: row.app.platformId,
       platformCode: row.platformCode as BoardApplication["platformCode"],
@@ -252,6 +325,9 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       recruiterName: row.recruiterName,
       appliedOn: row.app.appliedOn,
       notes: row.app.notes,
+      jobPosting,
+      hasJobPosting: hasJobPostingContent(jobPosting),
+      hasFeedback: stageInterviews.some((item) => item.feedback !== null),
       outcome: row.app.outcome as Outcome,
       offerDecision: (row.app.offerDecision as OfferDecision | null) ?? null,
       nextPrepNote: row.app.nextPrepNote,
@@ -271,6 +347,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
             status: "scheduled",
           }
         : null,
+      stageInterviews,
       proposal: openProposal
         ? {
             id: openProposal.id,
@@ -319,6 +396,15 @@ export async function updateApplication(
     notes?: string | null;
     appliedOn?: string;
     nextPrepNote?: string | null;
+    companyUrl?: string | null;
+    companyNotes?: string | null;
+    jobUrl?: string | null;
+    salaryBandText?: string | null;
+    benefitsText?: string | null;
+    jdText?: string | null;
+    processNotes?: string | null;
+    workLocationText?: string | null;
+    jobNotes?: string | null;
   },
 ) {
   const app = await getOwnedApplication(db, userId, applicationId);
@@ -330,6 +416,13 @@ export async function updateApplication(
     notes?: string | null;
     appliedOn?: string;
     nextPrepNote?: string | null;
+    jobUrl?: string | null;
+    salaryBandText?: string | null;
+    benefitsText?: string | null;
+    jdText?: string | null;
+    processNotes?: string | null;
+    location?: string | null;
+    jobNotes?: string | null;
   } = {};
 
   if (input.company !== undefined) {
@@ -347,6 +440,27 @@ export async function updateApplication(
   }
   if (input.nextPrepNote !== undefined) {
     patch.nextPrepNote = input.nextPrepNote;
+  }
+  if (input.jobUrl !== undefined) {
+    patch.jobUrl = normalizeOptionalText(input.jobUrl);
+  }
+  if (input.salaryBandText !== undefined) {
+    patch.salaryBandText = normalizeOptionalText(input.salaryBandText);
+  }
+  if (input.benefitsText !== undefined) {
+    patch.benefitsText = normalizeOptionalText(input.benefitsText);
+  }
+  if (input.jdText !== undefined) {
+    patch.jdText = normalizeOptionalText(input.jdText);
+  }
+  if (input.processNotes !== undefined) {
+    patch.processNotes = normalizeOptionalText(input.processNotes);
+  }
+  if (input.workLocationText !== undefined) {
+    patch.location = normalizeOptionalText(input.workLocationText);
+  }
+  if (input.jobNotes !== undefined) {
+    patch.jobNotes = normalizeOptionalText(input.jobNotes);
   }
 
   let platformId = app.platformId;
@@ -381,12 +495,23 @@ export async function updateApplication(
     }
   }
 
-  if (Object.keys(patch).length === 0) return app;
-  const [updated] = await db
-    .update(applications)
-    .set(patch)
-    .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)))
-    .returning();
+  let updated = app;
+  if (Object.keys(patch).length > 0) {
+    const [row] = await db
+      .update(applications)
+      .set(patch)
+      .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)))
+      .returning();
+    updated = row;
+  }
+
+  if (input.companyUrl !== undefined || input.companyNotes !== undefined) {
+    await updateCompanyProfile(db, userId, updated.companyId, {
+      url: input.companyUrl,
+      notes: input.companyNotes,
+    });
+  }
+
   return updated;
 }
 

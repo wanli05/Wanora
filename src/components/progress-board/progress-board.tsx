@@ -9,7 +9,11 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import { BOARD_COLUMN_KINDS, INTERVIEW_STAGE_KINDS } from "@/lib/progress/enums";
-import type { BoardApplication, BoardPayload } from "@/lib/progress/dto";
+import type {
+  BoardApplication,
+  BoardPayload,
+  BoardStageInterview,
+} from "@/lib/progress/dto";
 import { interviewModeLabel } from "@/lib/progress/next-prep";
 import {
   allowedAdvanceActions,
@@ -23,6 +27,7 @@ import {
   fromTokyoInputValue,
   toTokyoInputValue,
   tokyoNowParts,
+  tokyoTodayKey,
 } from "@/lib/progress/tokyo";
 import { MonthCalendar } from "./month-calendar";
 import { SlotGrid } from "./slot-grid";
@@ -30,9 +35,21 @@ import { SlotGrid } from "./slot-grid";
 type View = "kanban" | "list";
 type Filter = "in_progress" | "closed" | "all";
 type TBoard = ReturnType<typeof useTranslations<"Board">>;
+type FeedbackTarget = {
+  appId: string;
+  company: string;
+  interview: BoardStageInterview;
+};
 
 function columnKey(kind: (typeof BOARD_COLUMN_KINDS)[number]) {
   return `col_${kind}` as const;
+}
+
+function stageLabel(t: TBoard, kind: string) {
+  if ((BOARD_COLUMN_KINDS as readonly string[]).includes(kind)) {
+    return t(columnKey(kind as (typeof BOARD_COLUMN_KINDS)[number]));
+  }
+  return kind;
 }
 
 async function readJson(res: Response) {
@@ -67,6 +84,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [editingApp, setEditingApp] = useState<BoardApplication | null>(null);
   const [addingRecruiter, setAddingRecruiter] = useState(false);
   const [interviewFor, setInterviewFor] = useState<string | null>(null);
+  const [feedbackFor, setFeedbackFor] = useState<FeedbackTarget | null>(null);
   const [draftSlots, setDraftSlots] = useState<DraftSlot[]>([]);
   const [conflictMsg, setConflictMsg] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -74,6 +92,25 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const nowParts = tokyoNowParts(new Date(nowMs));
   const [calYear, setCalYear] = useState(nowParts.year);
   const [calMonth, setCalMonth] = useState(nowParts.month);
+
+  function closePagePanels() {
+    setCalendarOpen(false);
+    setInterviewFor(null);
+    setFeedbackFor(null);
+  }
+
+  function openCalendar() {
+    setInterviewFor(null);
+    setFeedbackFor(null);
+    setCalendarOpen((open) => !open);
+  }
+
+  function openFeedback(target: FeedbackTarget) {
+    setCalendarOpen(false);
+    setInterviewFor(null);
+    setConflictMsg(null);
+    setFeedbackFor(target);
+  }
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -87,8 +124,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setCalendarOpen(false);
-        setInterviewFor(null);
+        closePagePanels();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -143,6 +179,19 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
 
   async function refreshFrom(payload: BoardPayload) {
     setBoard(payload);
+    setEditingApp((current) => {
+      if (!current) return current;
+      return payload.applications.find((app) => app.id === current.id) ?? null;
+    });
+    setFeedbackFor((current) => {
+      if (!current) return current;
+      const app = payload.applications.find((item) => item.id === current.appId);
+      const interview = app?.stageInterviews.find(
+        (item) => item.id === current.interview.id,
+      );
+      if (!app || !interview) return null;
+      return { appId: app.id, company: app.company, interview };
+    });
   }
 
   async function onAddApplication(event: FormEvent<HTMLFormElement>) {
@@ -194,6 +243,17 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             recruiterName,
             notes: String(form.get("notes") || "").trim() || null,
             appliedOn: String(form.get("appliedOn") || "") || undefined,
+            companyUrl: String(form.get("companyUrl") || "").trim() || null,
+            companyNotes: String(form.get("companyNotes") || "").trim() || null,
+            jobUrl: String(form.get("jobUrl") || "").trim() || null,
+            salaryBandText: String(form.get("salaryBandText") || "").trim() || null,
+            benefitsText: String(form.get("benefitsText") || "").trim() || null,
+            jdText: String(form.get("jdText") || "").trim() || null,
+            processNotes: String(form.get("processNotes") || "").trim() || null,
+            workLocationText:
+              String(form.get("workLocationText") || "").trim() || null,
+            jobNotes: String(form.get("jobNotes") || "").trim() || null,
+            nextPrepNote: String(form.get("nextPrepNote") || "").trim() || null,
           }),
         }),
       );
@@ -251,6 +311,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
 
   function openProposeSlots(appId: string) {
     setConflictMsg(null);
+    setCalendarOpen(false);
+    setFeedbackFor(null);
     setInterviewFor(appId);
     const existing = apps.find((app) => app.id === appId)?.proposal?.slots ?? [];
     setDraftSlots(
@@ -258,6 +320,50 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         ? existing.map((slot) => ({ start: slot.start, end: slot.end }))
         : defaultFreeSlots(board.occupancy, appId),
     );
+  }
+
+  async function onSaveFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!feedbackFor) return;
+    const form = new FormData(event.currentTarget);
+    const ratingRaw = String(form.get("rating") || "");
+    try {
+      const payload = await readJson(
+        await fetch(`/api/board/applications/${feedbackFor.appId}/feedback`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            interviewId: feedbackFor.interview.id,
+            source: String(form.get("source")),
+            body: String(form.get("body") || "").trim() || null,
+            rating: ratingRaw ? Number(ratingRaw) : null,
+            recordedOn: String(form.get("recordedOn") || tokyoTodayKey()),
+          }),
+        }),
+      );
+      await refreshFrom(payload);
+      setFeedbackFor(null);
+      setConflictMsg(null);
+    } catch {
+      setConflictMsg(t("errorGeneric"));
+    }
+  }
+
+  async function onDeleteFeedback() {
+    if (!feedbackFor?.interview.feedback) return;
+    try {
+      const payload = await readJson(
+        await fetch(`/api/board/applications/${feedbackFor.appId}/feedback`, {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ interviewId: feedbackFor.interview.id }),
+        }),
+      );
+      await refreshFrom(payload);
+      setFeedbackFor(null);
+    } catch {
+      setConflictMsg(t("errorGeneric"));
+    }
   }
 
   async function onAddSlots(status: "draft" | "sent") {
@@ -364,7 +470,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             aria-label={t("calendar")}
             aria-expanded={calendarOpen}
             className="relative inline-flex h-9 w-9 items-center justify-center rounded border border-zinc-300 dark:border-zinc-700"
-            onClick={() => setCalendarOpen((open) => !open)}
+            onClick={openCalendar}
           >
             <CalendarIcon />
             {monthCount > 0 ? (
@@ -570,6 +676,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       {editingApp ? (
         <Modal
           title={t("editApplication")}
+          wide
           headerAction={{
             label: t("deleteApplication"),
             onClick: onDeleteApplication,
@@ -584,6 +691,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             initial={editingApp}
             conflictMsg={conflictMsg}
             onSubmit={onEditApplication}
+            onOpenFeedback={(interview) =>
+              openFeedback({
+                appId: editingApp.id,
+                company: editingApp.company,
+                interview,
+              })
+            }
             onCancel={() => {
               setEditingApp(null);
               setConflictMsg(null);
@@ -748,6 +862,61 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           </div>
         </>
       ) : null}
+
+      {feedbackFor ? (
+        <>
+          <button
+            type="button"
+            data-testid="feedback-backdrop"
+            aria-label={t("cancel")}
+            className="fixed inset-0 z-30 bg-black/30"
+            onClick={() => {
+              setFeedbackFor(null);
+              setConflictMsg(null);
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("feedbackTitle")}
+            data-testid="feedback-panel"
+            className="fixed inset-x-4 top-16 z-40 mx-auto max-h-[85vh] max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:inset-x-auto md:right-8"
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{t("feedbackTitle")}</h2>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400" lang="ja">
+                  {`${feedbackFor.company} · ${stageLabel(
+                    t,
+                    feedbackFor.interview.stageKind,
+                  )} · ${formatTokyoShort(feedbackFor.interview.start)} · ${interviewModeLabel(
+                    feedbackFor.interview.mode,
+                  )}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-sm text-zinc-500"
+                onClick={() => {
+                  setFeedbackFor(null);
+                  setConflictMsg(null);
+                }}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+            <FeedbackForm
+              t={t}
+              interview={feedbackFor.interview}
+              conflictMsg={conflictMsg}
+              onSubmit={onSaveFeedback}
+              onDelete={
+                feedbackFor.interview.feedback ? onDeleteFeedback : undefined
+              }
+            />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -760,6 +929,7 @@ function AddApplicationForm({
   conflictMsg,
   onSubmit,
   onCancel,
+  onOpenFeedback,
 }: {
   t: TBoard;
   platforms: BoardPayload["platforms"];
@@ -768,6 +938,7 @@ function AddApplicationForm({
   conflictMsg?: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
+  onOpenFeedback?: (interview: BoardStageInterview) => void;
 }) {
   const [platformId, setPlatformId] = useState(
     initial?.platformId ?? platforms[0]?.id ?? "",
@@ -831,16 +1002,160 @@ function AddApplicationForm({
         defaultValue={initial?.appliedOn ?? ""}
       />
       {initial ? (
-        <label className="flex flex-col gap-1 text-sm">
-          {t("notes")}
-          <textarea
-            name="notes"
-            lang="ja"
-            defaultValue={initial.notes ?? ""}
-            rows={3}
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-          />
-        </label>
+        <>
+          <section
+            data-testid="company-section"
+            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+          >
+            <h3 className="text-sm font-medium">{t("companySection")}</h3>
+            <Field
+              name="companyUrl"
+              label={t("companyUrl")}
+              type="url"
+              defaultValue={initial.companyUrl ?? ""}
+            />
+            <label className="flex flex-col gap-1 text-sm">
+              {t("companyNotes")}
+              <textarea
+                name="companyNotes"
+                lang="ja"
+                defaultValue={initial.companyNotes ?? ""}
+                rows={2}
+                className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+          </section>
+          <section
+            data-testid="job-posting-section"
+            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+          >
+            <h3 className="text-sm font-medium">{t("jobPostingSection")}</h3>
+            <Field
+              name="jobUrl"
+              label={t("jobUrl")}
+              type="url"
+              defaultValue={initial.jobPosting.jobUrl ?? ""}
+            />
+            <Field
+              name="salaryBandText"
+              label={t("salaryBand")}
+              lang="ja"
+              defaultValue={initial.jobPosting.salaryBandText ?? ""}
+            />
+            <Field
+              name="workLocationText"
+              label={t("workLocation")}
+              lang="ja"
+              defaultValue={initial.jobPosting.workLocationText ?? ""}
+            />
+            <label className="flex flex-col gap-1 text-sm">
+              {t("benefits")}
+              <textarea
+                name="benefitsText"
+                lang="ja"
+                defaultValue={initial.jobPosting.benefitsText ?? ""}
+                rows={2}
+                className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              {t("jdText")}
+              <textarea
+                name="jdText"
+                lang="ja"
+                defaultValue={initial.jobPosting.jdText ?? ""}
+                rows={3}
+                className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              {t("processNotes")}
+              <textarea
+                name="processNotes"
+                lang="ja"
+                defaultValue={initial.jobPosting.processNotes ?? ""}
+                rows={2}
+                className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              {t("jobNotes")}
+              <textarea
+                name="jobNotes"
+                lang="ja"
+                defaultValue={initial.jobPosting.jobNotes ?? ""}
+                rows={2}
+                className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+          </section>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("nextPrep")}
+            <textarea
+              name="nextPrepNote"
+              lang="ja"
+              defaultValue={initial.nextPrepNote ?? ""}
+              rows={2}
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {t("notes")}
+            <textarea
+              name="notes"
+              lang="ja"
+              defaultValue={initial.notes ?? ""}
+              rows={2}
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+          <section
+            data-testid="stage-interviews-section"
+            className="space-y-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+          >
+            <h3 className="text-sm font-medium">{t("stageInterviews")}</h3>
+            {initial.stageInterviews.length === 0 ? (
+              <p className="text-sm text-zinc-500">{t("noStageInterviews")}</p>
+            ) : (
+              <ul className="space-y-2">
+                {initial.stageInterviews.map((interview) => (
+                  <li
+                    key={interview.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-100 px-2 py-2 text-sm dark:border-zinc-800"
+                  >
+                    <div lang="ja">
+                      <p>
+                        {`${stageLabel(t, interview.stageKind)} · ${formatTokyoShort(
+                          interview.start,
+                        )}`}
+                      </p>
+                      {interview.feedback ? (
+                        <p className="text-xs text-zinc-500">
+                          {interview.feedback.summary}
+                        </p>
+                      ) : null}
+                    </div>
+                    {interview.feedback || interview.canWriteFeedback ? (
+                      <button
+                        type="button"
+                        className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                        onClick={() => onOpenFeedback?.(interview)}
+                      >
+                        {interview.feedback
+                          ? t("editFeedback")
+                          : t("writeFeedback")}
+                      </button>
+                    ) : interview.status === "scheduled" ? (
+                      <span className="text-xs text-zinc-500">
+                        {t("feedbackTooEarly")}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
       ) : (
         <>
           <label className="flex items-center gap-2 text-sm">
@@ -905,6 +1220,95 @@ function AddApplicationForm({
           className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
         >
           {initial ? t("saveEdits") : t("saveApplication")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function FeedbackForm({
+  t,
+  interview,
+  conflictMsg,
+  onSubmit,
+  onDelete,
+}: {
+  t: TBoard;
+  interview: BoardStageInterview;
+  conflictMsg?: string | null;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onDelete?: () => void;
+}) {
+  const existing = interview.feedback;
+  return (
+    <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackSource")}
+        <select
+          name="source"
+          required
+          defaultValue={existing?.source ?? "company"}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          <option value="company">{t("feedbackSourceCompany")}</option>
+          <option value="recruiter">{t("feedbackSourceRecruiter")}</option>
+          <option value="self">{t("feedbackSourceSelf")}</option>
+        </select>
+      </label>
+      <Field
+        name="recordedOn"
+        label={t("feedbackRecordedOn")}
+        type="date"
+        required
+        defaultValue={existing?.recordedOn ?? tokyoTodayKey()}
+      />
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackRating")}
+        <select
+          name="rating"
+          defaultValue={existing?.rating?.toString() ?? ""}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          <option value="">{t("feedbackEmptyRating")}</option>
+          {[1, 2, 3, 4, 5].map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackBody")}
+        <textarea
+          name="body"
+          lang="ja"
+          rows={5}
+          defaultValue={existing?.body ?? ""}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      {conflictMsg ? (
+        <p role="alert" className="text-sm text-red-700">
+          {conflictMsg}
+        </p>
+      ) : null}
+      <div className="flex justify-between gap-2">
+        {onDelete ? (
+          <button
+            type="button"
+            className="rounded px-3 py-1.5 text-sm text-red-700"
+            onClick={onDelete}
+          >
+            {t("feedbackDelete")}
+          </button>
+        ) : (
+          <span />
+        )}
+        <button
+          type="submit"
+          className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          {t("feedbackSave")}
         </button>
       </div>
     </form>
@@ -987,6 +1391,26 @@ function ApplicationCard({
         </span>
         <span lang="ja">{app.recruiterName ?? t("noRecruiter")}</span>
       </p>
+      {app.hasJobPosting || app.hasFeedback ? (
+        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+          {app.hasJobPosting ? (
+            <span
+              data-testid={`badge-job-${app.id}`}
+              className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
+            >
+              {t("badgeJobPosting")}
+            </span>
+          ) : null}
+          {app.hasFeedback ? (
+            <span
+              data-testid={`badge-feedback-${app.id}`}
+              className="rounded bg-violet-50 px-1.5 py-0.5 text-violet-900 dark:bg-violet-950 dark:text-violet-100"
+            >
+              {t("badgeFeedback")}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <p className="mt-2 text-sm" lang="ja">
         {app.nextPrep}
       </p>
@@ -1271,6 +1695,7 @@ function Modal({
   onClose,
   headerAction,
   children,
+  wide = false,
 }: {
   title: string;
   closeLabel?: string;
@@ -1282,6 +1707,7 @@ function Modal({
     testId?: string;
   };
   children: ReactNode;
+  wide?: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
@@ -1289,7 +1715,9 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-950"
+        className={`max-h-[90vh] w-full overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-950 ${
+          wide ? "max-w-2xl" : "max-w-md"
+        }`}
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>

@@ -8,6 +8,8 @@ import {
 } from "@/lib/data/applications";
 import { progressResponse, requireUser, unauthorized } from "../../http";
 
+const optionalText = z.string().nullable().optional();
+
 const schema = z
   .object({
     action: z
@@ -22,15 +24,24 @@ const schema = z
         "reopen",
       ])
       .optional(),
-    nextPrepNote: z.string().nullable().optional(),
+    nextPrepNote: optionalText,
     company: z.string().trim().min(1).optional(),
     role: z.string().trim().nullable().optional(),
     platformId: z.uuid().optional(),
     customPlatformName: z.string().trim().min(1).nullable().optional(),
     recruiterId: z.uuid().nullable().optional(),
     recruiterName: z.string().trim().nullable().optional(),
-    notes: z.string().nullable().optional(),
+    notes: optionalText,
     appliedOn: z.string().optional(),
+    companyUrl: optionalText,
+    companyNotes: optionalText,
+    jobUrl: optionalText,
+    salaryBandText: optionalText,
+    benefitsText: optionalText,
+    jdText: optionalText,
+    processNotes: optionalText,
+    workLocationText: optionalText,
+    jobNotes: optionalText,
   })
   .strict();
 

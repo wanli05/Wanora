@@ -23,6 +23,8 @@ function sampleApp(
     id: "app-1",
     company: "テスト株式会社",
     companyId: "co-1",
+    companyUrl: null,
+    companyNotes: null,
     role: "エンジニア",
     platformId: "p-1",
     platformCode: "doda",
@@ -31,6 +33,17 @@ function sampleApp(
     recruiterName: null,
     appliedOn: "2026-11-06",
     notes: null,
+    jobPosting: {
+      jobUrl: null,
+      salaryBandText: null,
+      benefitsText: null,
+      jdText: null,
+      processNotes: null,
+      workLocationText: null,
+      jobNotes: null,
+    },
+    hasJobPosting: false,
+    hasFeedback: false,
     outcome: "in_progress",
     offerDecision: null,
     nextPrepNote: null,
@@ -39,6 +52,7 @@ function sampleApp(
     currentStageId: "st-1",
     conflict: false,
     interview: null,
+    stageInterviews: [],
     proposal: null,
     stages: [],
     ...overrides,
@@ -158,6 +172,8 @@ describe("ProgressBoard", () => {
     });
     expect(screen.getByDisplayValue("テスト株式会社")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "エージェント担当者" })).toBeInTheDocument();
+    expect(screen.getByTestId("job-posting-section")).toBeInTheDocument();
+    expect(screen.getByTestId("company-section")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存修改" })).toBeInTheDocument();
     expect(screen.getByTestId("delete-application")).toHaveTextContent("删除");
     expect(screen.getAllByRole("button", { name: "取消" }).length).toBeGreaterThan(0);
@@ -186,6 +202,32 @@ describe("ProgressBoard", () => {
     );
     confirmSpy.mockRestore();
     fetchSpy.mockRestore();
+  });
+
+  it("shows job posting and feedback badges on the card", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(
+          sampleApp({
+            currentStageKind: "document_screening",
+            hasJobPosting: true,
+            hasFeedback: true,
+            jobPosting: {
+              jobUrl: "https://example.com/job",
+              salaryBandText: "500〜650万",
+              benefitsText: null,
+              jdText: null,
+              processNotes: null,
+              workLocationText: null,
+              jobNotes: null,
+            },
+          }),
+        )}
+      />,
+      "zh-CN",
+    );
+    expect(screen.getByTestId("badge-job-app-1")).toHaveTextContent("有求人");
+    expect(screen.getByTestId("badge-feedback-app-1")).toHaveTextContent("有反馈");
   });
 
   it("hides interview end time and shows custom platform when その他 is selected", async () => {

@@ -21,6 +21,7 @@ import {
 } from "@/lib/domain/resume-events";
 import { DEFAULT_LOCALE, LOCALES } from "@/lib/locale";
 import {
+  FEEDBACK_SOURCES,
   INTERVIEW_MODES,
   INTERVIEW_STATUSES,
   OFFER_DECISIONS,
@@ -346,7 +347,12 @@ export const applications = pgTable(
     jobUrl: text("job_url"),
     salaryMin: integer("salary_min"),
     salaryMax: integer("salary_max"),
+    salaryBandText: text("salary_band_text"),
+    benefitsText: text("benefits_text"),
+    jdText: text("jd_text"),
+    processNotes: text("process_notes"),
     location: text("location"),
+    jobNotes: text("job_notes"),
     appliedOn: date("applied_on").notNull(),
     outcome: text("outcome").notNull().default("in_progress"),
     offerDecision: text("offer_decision"),
@@ -525,5 +531,38 @@ export const busyBlocks = pgTable(
   (t) => [
     check("busy_blocks_range_check", sql`${t.startsAt} < ${t.endsAt}`),
     index("busy_blocks_user_idx").on(t.userId),
+  ],
+);
+
+export const interviewFeedbacks = pgTable(
+  "interview_feedbacks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: userId(),
+    interviewId: uuid("interview_id").notNull(),
+    source: text("source").notNull(),
+    body: text("body"),
+    rating: integer("rating"),
+    recordedOn: date("recorded_on").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    check("interview_feedbacks_source_check", inList("source", FEEDBACK_SOURCES)),
+    check(
+      "interview_feedbacks_rating_check",
+      sql`${t.rating} is null or (${t.rating} >= 1 and ${t.rating} <= 5)`,
+    ),
+    check(
+      "interview_feedbacks_body_or_rating_check",
+      sql`${t.body} is not null or ${t.rating} is not null`,
+    ),
+    unique("interview_feedbacks_interview_uidx").on(t.interviewId),
+    unique("interview_feedbacks_id_user_uidx").on(t.id, t.userId),
+    index("interview_feedbacks_user_idx").on(t.userId),
+    foreignKey({
+      columns: [t.interviewId, t.userId],
+      foreignColumns: [interviews.id, interviews.userId],
+      name: "interview_feedbacks_interview_user_fk",
+    }).onDelete("cascade"),
   ],
 );

@@ -99,6 +99,10 @@ export const SLOT_STATUSES = ["proposed", "confirmed", "released"] as const;
 
 export type SlotStatus = (typeof SLOT_STATUSES)[number];
 
+export const FEEDBACK_SOURCES = ["company", "recruiter", "self"] as const;
+
+export type FeedbackSource = (typeof FEEDBACK_SOURCES)[number];
+
 export const PRESET_PLATFORM_CODES = [
   "mynavi_tenshoku",
   "mynavi_shinsotsu",

@@ -1,5 +1,6 @@
 import type { OccupancyWindow } from "./conflicts";
 import type {
+  FeedbackSource,
   InterviewMode,
   InterviewStatus,
   OfferDecision,
@@ -43,6 +44,33 @@ export type BoardInterview = {
   status: InterviewStatus;
 };
 
+export type BoardFeedback = {
+  id: string;
+  interviewId: string;
+  source: FeedbackSource;
+  body: string | null;
+  rating: number | null;
+  recordedOn: string;
+  summary: string;
+};
+
+export type BoardStageInterview = BoardInterview & {
+  stageId: string;
+  stageKind: StageKind;
+  canWriteFeedback: boolean;
+  feedback: BoardFeedback | null;
+};
+
+export type BoardJobPosting = {
+  jobUrl: string | null;
+  salaryBandText: string | null;
+  benefitsText: string | null;
+  jdText: string | null;
+  processNotes: string | null;
+  workLocationText: string | null;
+  jobNotes: string | null;
+};
+
 export type BoardSlot = {
   id: string;
   start: string;
@@ -61,6 +89,8 @@ export type BoardApplication = {
   id: string;
   company: string;
   companyId: string;
+  companyUrl: string | null;
+  companyNotes: string | null;
   role: string | null;
   platformId: string;
   platformCode: PresetPlatformCode | null;
@@ -69,6 +99,9 @@ export type BoardApplication = {
   recruiterName: string | null;
   appliedOn: string;
   notes: string | null;
+  jobPosting: BoardJobPosting;
+  hasJobPosting: boolean;
+  hasFeedback: boolean;
   outcome: Outcome;
   offerDecision: OfferDecision | null;
   nextPrepNote: string | null;
@@ -78,6 +111,7 @@ export type BoardApplication = {
   currentStageId: string | null;
   conflict: boolean;
   interview: BoardInterview | null;
+  stageInterviews: BoardStageInterview[];
   proposal: BoardProposal | null;
   stages: BoardStage[];
 };
