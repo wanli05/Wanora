@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderWithIntl } from "@/test-utils/intl";
 import type { BoardApplication, BoardPayload } from "@/lib/progress/dto";
 import { ProgressBoard } from "./progress-board";
@@ -159,6 +159,33 @@ describe("ProgressBoard", () => {
     expect(screen.getByDisplayValue("テスト株式会社")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "エージェント担当者" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存修改" })).toBeInTheDocument();
+    expect(screen.getByTestId("delete-application")).toHaveTextContent("删除");
+    expect(screen.getAllByRole("button", { name: "取消" }).length).toBeGreaterThan(0);
+  });
+
+  it("asks for confirmation before deleting an application", async () => {
+    const confirmSpy = vi
+      .spyOn(window, "confirm")
+      .mockReturnValue(false);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    screen.getByRole("button", { name: "编辑" }).click();
+    await waitFor(() => {
+      expect(screen.getByTestId("delete-application")).toBeInTheDocument();
+    });
+    screen.getByTestId("delete-application").click();
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("/api/board/applications/app-1"),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    confirmSpy.mockRestore();
+    fetchSpy.mockRestore();
   });
 
   it("hides interview end time and shows custom platform when その他 is selected", async () => {

@@ -118,7 +118,9 @@
     "editCard": "编辑",
     "saveEdits": "保存修改",
     "notes": "备注",
-    "advanceNext": "进入下一阶段"
+    "advanceNext": "进入下一阶段",
+    "deleteApplication": "删除",
+    "deleteApplicationConfirm": "确定删除这条投递吗？相关阶段和面试也会一并删除。"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

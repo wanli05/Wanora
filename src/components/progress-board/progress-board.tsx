@@ -336,6 +336,23 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     }
   }
 
+  async function onDeleteApplication() {
+    if (!editingApp) return;
+    if (!window.confirm(t("deleteApplicationConfirm"))) return;
+    try {
+      const payload = await readJson(
+        await fetch(`/api/board/applications/${editingApp.id}`, {
+          method: "DELETE",
+        }),
+      );
+      await refreshFrom(payload);
+      setEditingApp(null);
+      setConflictMsg(null);
+    } catch {
+      setConflictMsg(t("errorGeneric"));
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
       <div className="relative z-20 flex flex-wrap items-start justify-between gap-3 bg-[var(--background)]">
@@ -553,10 +570,11 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       {editingApp ? (
         <Modal
           title={t("editApplication")}
-          closeLabel={t("cancel")}
-          onClose={() => {
-            setEditingApp(null);
-            setConflictMsg(null);
+          headerAction={{
+            label: t("deleteApplication"),
+            onClick: onDeleteApplication,
+            className: "text-sm text-red-700 dark:text-red-400",
+            testId: "delete-application",
           }}
         >
           <AddApplicationForm
@@ -1251,11 +1269,18 @@ function Modal({
   title,
   closeLabel,
   onClose,
+  headerAction,
   children,
 }: {
   title: string;
-  closeLabel: string;
-  onClose: () => void;
+  closeLabel?: string;
+  onClose?: () => void;
+  headerAction?: {
+    label: string;
+    onClick: () => void;
+    className?: string;
+    testId?: string;
+  };
   children: ReactNode;
 }) {
   return (
@@ -1268,9 +1293,24 @@ function Modal({
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button type="button" className="text-sm text-zinc-500" onClick={onClose}>
-            {closeLabel}
-          </button>
+          {headerAction ? (
+            <button
+              type="button"
+              data-testid={headerAction.testId}
+              className={headerAction.className ?? "text-sm text-zinc-500"}
+              onClick={headerAction.onClick}
+            >
+              {headerAction.label}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="text-sm text-zinc-500"
+              onClick={onClose}
+            >
+              {closeLabel}
+            </button>
+          )}
         </div>
         {children}
       </div>

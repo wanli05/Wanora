@@ -118,7 +118,9 @@
     "editCard": "編集",
     "saveEdits": "変更を保存",
     "notes": "メモ",
-    "advanceNext": "次の段階へ"
+    "advanceNext": "次の段階へ",
+    "deleteApplication": "削除",
+    "deleteApplicationConfirm": "この応募を削除しますか？関連する選考段階と面接も消えます。"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

@@ -399,6 +399,35 @@ export async function getOwnedApplication(db: Db, userId: string, id: string) {
   return row;
 }
 
+export async function deleteApplication(
+  db: Db,
+  userId: string,
+  applicationId: string,
+) {
+  const app = await getOwnedApplication(db, userId, applicationId);
+  const companyId = app.companyId;
+
+  await db
+    .delete(applications)
+    .where(
+      and(eq(applications.id, applicationId), eq(applications.userId, userId)),
+    );
+
+  const [sibling] = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(
+      and(eq(applications.companyId, companyId), eq(applications.userId, userId)),
+    )
+    .limit(1);
+
+  if (!sibling) {
+    await db
+      .delete(companies)
+      .where(and(eq(companies.id, companyId), eq(companies.userId, userId)));
+  }
+}
+
 async function cancelOpenProposals(
   db: Db,
   userId: string,

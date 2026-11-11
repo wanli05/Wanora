@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import {
   advanceApplication,
+  deleteApplication,
   loadBoard,
   updateApplication,
 } from "@/lib/data/applications";
@@ -52,6 +53,21 @@ export async function PATCH(
     if (Object.values(fields).some((value) => value !== undefined)) {
       await updateApplication(getDb(), user.id, id, fields);
     }
+    return Response.json(await loadBoard(getDb(), user.id));
+  } catch (error) {
+    return progressResponse(error);
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const user = await requireUser(_request);
+  if (!user) return unauthorized();
+  const { id } = await context.params;
+  try {
+    await deleteApplication(getDb(), user.id, id);
     return Response.json(await loadBoard(getDb(), user.id));
   } catch (error) {
     return progressResponse(error);

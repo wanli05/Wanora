@@ -118,7 +118,9 @@
     "editCard": "Edit",
     "saveEdits": "Save changes",
     "notes": "Notes",
-    "advanceNext": "Next stage"
+    "advanceNext": "Next stage",
+    "deleteApplication": "Delete",
+    "deleteApplicationConfirm": "Delete this application? Its stages and interviews will also be removed."
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

@@ -4,9 +4,11 @@ import { GET as getMe } from "@/app/api/me/route";
 import { getDb } from "@/db";
 import { platforms } from "@/db/schema";
 import { BASE_URL, signUp, uniqueEmail } from "../../../test/integration/http";
+import { companies } from "@/db/schema";
 import {
   advanceApplication,
   createApplication,
+  deleteApplication,
   loadBoard,
   updateApplication,
 } from "./applications";
@@ -174,6 +176,46 @@ describe("application board isolation", () => {
     await expect(
       advanceApplication(db, userId, app.id, "offer"),
     ).rejects.toMatchObject({ code: "forbidden_stage" });
+  });
+
+  it("deletes an application and cleans up an orphan company only", async () => {
+    const db = getDb();
+    const signed = await signUp(uniqueEmail("delete-app"));
+    const userId = await sessionId(signed.cookie);
+    const [platform] = await db
+      .select()
+      .from(platforms)
+      .where(eq(platforms.code, "doda"));
+
+    const duplicate = await createApplication(db, userId, {
+      company: "重複株式会社",
+      platformId: platform.id,
+    });
+    const keep = await createApplication(db, userId, {
+      company: "重複株式会社",
+      role: "別ライン",
+      platformId: platform.id,
+    });
+    // Same company name reuses the same company row.
+    expect(keep.companyId).toBe(duplicate.companyId);
+
+    await deleteApplication(db, userId, duplicate.id);
+    const board = await loadBoard(db, userId);
+    expect(board.applications.map((app) => app.id)).toEqual([keep.id]);
+    const [company] = await db
+      .select()
+      .from(companies)
+      .where(eq(companies.id, keep.companyId));
+    expect(company?.name).toBe("重複株式会社");
+
+    await deleteApplication(db, userId, keep.id);
+    const emptyBoard = await loadBoard(db, userId);
+    expect(emptyBoard.applications).toHaveLength(0);
+    const leftover = await db
+      .select()
+      .from(companies)
+      .where(eq(companies.id, keep.companyId));
+    expect(leftover).toHaveLength(0);
   });
 
   it("persists a typed custom platform name and reuses it", async () => {
