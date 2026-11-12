@@ -136,7 +136,8 @@
     "jobNotes": "求人メモ",
     "stageInterviews": "面接とフィードバック",
     "writeFeedback": "フィードバックを記録",
-    "editFeedback": "フィードバックを編集",
+    "appendFeedback": "フィードバックを追加",
+    "editFeedback": "編集",
     "feedbackTooEarly": "面接開始後に記録できます",
     "feedbackTitle": "面接フィードバック",
     "feedbackSource": "出典",
@@ -144,12 +145,15 @@
     "feedbackSourceRecruiter": "エージェント",
     "feedbackSourceSelf": "自分",
     "feedbackBody": "内容（日本語）",
-    "feedbackRating": "評価（1〜5）",
+    "feedbackBodyRequired": "内容を入力してください",
     "feedbackRecordedOn": "記録日",
     "feedbackSave": "フィードバックを保存",
+    "feedbackAppend": "追加して保存",
     "feedbackDelete": "削除",
-    "feedbackEmptyRating": "なし",
-    "noStageInterviews": "確定した面接はまだありません"
+    "noFeedbackYet": "まだフィードバックはありません",
+    "noStageInterviews": "確定した面接はまだありません",
+    "interviewCancelled": "キャンセル済み",
+    "undoStage": "取り消し"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

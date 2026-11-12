@@ -37,6 +37,8 @@ import {
   outcomeAfterStages,
   passStages,
   skipStages,
+  undoJumpToOffer,
+  undoLastPass,
   type AdvanceAction,
   type StageSnapshot,
 } from "@/lib/progress/stages";
@@ -184,9 +186,11 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
     interviewsByStage.set(interview.stageId, list);
   }
 
-  const feedbackByInterview = new Map<string, (typeof feedbackRows)[number]>();
+  const feedbackByInterview = new Map<string, (typeof feedbackRows)[number][]>();
   for (const feedback of feedbackRows) {
-    feedbackByInterview.set(feedback.interviewId, feedback);
+    const list = feedbackByInterview.get(feedback.interviewId) ?? [];
+    list.push(feedback);
+    feedbackByInterview.set(feedback.interviewId, list);
   }
 
   const proposalsByStage = new Map<string, typeof proposalRows>();
@@ -275,21 +279,21 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       .flatMap((stage) => {
         const items = interviewsByStage.get(stage.id) ?? [];
         return items.map((item) => {
-          const feedback = feedbackByInterview.get(item.id) ?? null;
-          const mappedFeedback = feedback
-            ? {
-                id: feedback.id,
-                interviewId: feedback.interviewId,
+          const feedbackList = feedbackByInterview.get(item.id) ?? [];
+          const mappedFeedbacks = feedbackList
+            .slice()
+            .sort((a, b) => a.recordedOn.localeCompare(b.recordedOn) || a.createdAt.getTime() - b.createdAt.getTime())
+            .map((feedback) => ({
+              id: feedback.id,
+              interviewId: feedback.interviewId,
+              source: feedback.source as FeedbackSource,
+              body: feedback.body,
+              recordedOn: feedback.recordedOn,
+              summary: feedbackSummary({
                 source: feedback.source as FeedbackSource,
                 body: feedback.body,
-                rating: feedback.rating,
-                recordedOn: feedback.recordedOn,
-                summary: feedbackSummary({
-                  source: feedback.source as FeedbackSource,
-                  body: feedback.body,
-                }),
-              }
-            : null;
+              }),
+            }));
           return {
             id: item.id,
             stageId: stage.id,
@@ -304,7 +308,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
               interviewStatus: item.status,
               startsAt: item.startsAt,
             }),
-            feedback: mappedFeedback,
+            feedbacks: mappedFeedbacks,
           };
         });
       })
@@ -327,7 +331,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       notes: row.app.notes,
       jobPosting,
       hasJobPosting: hasJobPostingContent(jobPosting),
-      hasFeedback: stageInterviews.some((item) => item.feedback !== null),
+      hasFeedback: stageInterviews.some((item) => item.feedbacks.length > 0),
       outcome: row.app.outcome as Outcome,
       offerDecision: (row.app.offerDecision as OfferDecision | null) ?? null,
       nextPrepNote: row.app.nextPrepNote,
@@ -601,7 +605,8 @@ export async function advanceApplication(
     | "offer"
     | "accept_offer"
     | "decline_offer"
-    | "reopen",
+    | "reopen"
+    | "undo",
 ) {
   const app = await getOwnedApplication(db, userId, applicationId);
   const stageRows = await db
@@ -627,22 +632,51 @@ export async function advanceApplication(
     (app.offerDecision as OfferDecision | null) ?? null,
   );
 
-  if (action === "reopen") {
-    if (!isClosed(app.outcome as Outcome, app.offerDecision as OfferDecision | null)) {
+  if (action === "reopen" || action === "undo") {
+    const outcome = app.outcome as Outcome;
+    const offerDecision = (app.offerDecision as OfferDecision | null) ?? null;
+    const closed = isClosed(outcome, offerDecision);
+
+    if (action === "reopen" && !closed) {
       throw new ProgressError("invalid", "application is not closed");
     }
-    const nextStages =
-      app.outcome === "rejected"
-        ? snapshots.map((stage) =>
-            stage.status === "failed" ? { ...stage, status: "pending" as const } : stage,
-          )
-        : snapshots;
-    await persistStages(db, userId, nextStages);
-    await db
-      .update(applications)
-      .set({ outcome: "in_progress", offerDecision: null })
-      .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)));
-    return;
+
+    if (closed) {
+      const nextStages =
+        outcome === "rejected"
+          ? snapshots.map((stage) =>
+              stage.status === "failed"
+                ? { ...stage, status: "pending" as const }
+                : stage,
+            )
+          : snapshots;
+      await persistStages(db, userId, nextStages);
+      await db
+        .update(applications)
+        .set({ outcome: "in_progress", offerDecision: null })
+        .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)));
+      return;
+    }
+
+    // Undo pass / mark-offer while still open.
+    if (outcome === "offer" && offerDecision === "pending") {
+      const hasPassed = snapshots.some((stage) => stage.status === "passed");
+      const nextStages = hasPassed ? undoLastPass(snapshots) : undoJumpToOffer(snapshots);
+      await persistStages(db, userId, nextStages);
+      await db
+        .update(applications)
+        .set({ outcome: "in_progress", offerDecision: null })
+        .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)));
+      return;
+    }
+
+    if (outcome === "in_progress" && snapshots.some((stage) => stage.status === "passed")) {
+      const nextStages = undoLastPass(snapshots);
+      await persistStages(db, userId, nextStages);
+      return;
+    }
+
+    throw new ProgressError("invalid", "nothing to undo");
   }
 
   if (isClosed(app.outcome as Outcome, app.offerDecision as OfferDecision | null)) {
@@ -685,10 +719,10 @@ export async function advanceApplication(
           eq(interviews.status, "scheduled"),
         ),
       );
-    if (
-      (action === "skip" || action === "reject" || action === "withdraw") &&
-      scheduledOnCurrent.length > 0
-    ) {
+    // Skip still requires clearing the calendar first. Reject/withdraw keep the
+    // scheduled interview (it already happened / is history) so final-interview
+    // 「不合格」is not a no-op when a Meet is on the card (WN-38).
+    if (action === "skip" && scheduledOnCurrent.length > 0) {
       throw new ProgressError(
         "forbidden_stage",
         "cancel the scheduled interview before skipping or closing this stage",

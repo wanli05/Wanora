@@ -2,8 +2,9 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { loadBoard } from "@/lib/data/applications";
 import {
+  createInterviewFeedback,
   deleteInterviewFeedback,
-  upsertInterviewFeedback,
+  updateInterviewFeedback,
 } from "@/lib/data/interview-feedbacks";
 import { FEEDBACK_SOURCES } from "@/lib/progress/enums";
 import { progressResponse, requireUser, unauthorized } from "../../../http";
@@ -11,16 +12,16 @@ import { progressResponse, requireUser, unauthorized } from "../../../http";
 const upsertSchema = z
   .object({
     interviewId: z.uuid(),
+    feedbackId: z.uuid().optional(),
     source: z.enum(FEEDBACK_SOURCES),
-    body: z.string().nullable().optional(),
-    rating: z.number().int().min(1).max(5).nullable().optional(),
+    body: z.string().trim().min(1),
     recordedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   })
   .strict();
 
 const deleteSchema = z
   .object({
-    interviewId: z.uuid(),
+    feedbackId: z.uuid(),
   })
   .strict();
 
@@ -36,8 +37,12 @@ export async function PUT(
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
   try {
-    const { interviewId, ...input } = parsed.data;
-    await upsertInterviewFeedback(getDb(), user.id, interviewId, input);
+    const { interviewId, feedbackId, ...input } = parsed.data;
+    if (feedbackId) {
+      await updateInterviewFeedback(getDb(), user.id, feedbackId, input);
+    } else {
+      await createInterviewFeedback(getDb(), user.id, interviewId, input);
+    }
     return Response.json(await loadBoard(getDb(), user.id));
   } catch (error) {
     return progressResponse(error);
@@ -56,7 +61,7 @@ export async function DELETE(
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
   try {
-    await deleteInterviewFeedback(getDb(), user.id, parsed.data.interviewId);
+    await deleteInterviewFeedback(getDb(), user.id, parsed.data.feedbackId);
     return Response.json(await loadBoard(getDb(), user.id));
   } catch (error) {
     return progressResponse(error);

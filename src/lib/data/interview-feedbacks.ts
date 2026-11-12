@@ -19,61 +19,39 @@ async function getOwnedInterview(db: Db, userId: string, interviewId: string) {
   return row;
 }
 
-export async function upsertInterviewFeedback(
+async function getOwnedFeedback(db: Db, userId: string, feedbackId: string) {
+  const [row] = await db
+    .select()
+    .from(interviewFeedbacks)
+    .where(
+      and(eq(interviewFeedbacks.id, feedbackId), eq(interviewFeedbacks.userId, userId)),
+    );
+  if (!row) throw new ProgressError("not_found", "feedback not found");
+  return row;
+}
+
+export async function createInterviewFeedback(
   db: Db,
   userId: string,
   interviewId: string,
   input: FeedbackInput,
 ) {
   const interview = await getOwnedInterview(db, userId, interviewId);
-  const [existing] = await db
-    .select()
-    .from(interviewFeedbacks)
-    .where(
-      and(
-        eq(interviewFeedbacks.interviewId, interviewId),
-        eq(interviewFeedbacks.userId, userId),
-      ),
+  if (
+    !canCreateFeedback({
+      interviewStatus: interview.status,
+      startsAt: interview.startsAt,
+    })
+  ) {
+    throw new ProgressError(
+      "invalid",
+      "feedback can only be created after the interview starts",
     );
-
-  if (!existing) {
-    if (
-      !canCreateFeedback({
-        interviewStatus: interview.status,
-        startsAt: interview.startsAt,
-      })
-    ) {
-      throw new ProgressError(
-        "invalid",
-        "feedback can only be created after the interview starts",
-      );
-    }
-  } else if (interview.status === "cancelled") {
-    throw new ProgressError("invalid", "cancelled interview feedback is read-only");
   }
 
-  const { body, rating } = validateFeedbackContent(input);
+  const { body } = validateFeedbackContent(input);
   const recordedOn = input.recordedOn || tokyoTodayKey();
   const source = input.source as FeedbackSource;
-
-  if (existing) {
-    const [updated] = await db
-      .update(interviewFeedbacks)
-      .set({
-        source,
-        body,
-        rating,
-        recordedOn,
-      })
-      .where(
-        and(
-          eq(interviewFeedbacks.id, existing.id),
-          eq(interviewFeedbacks.userId, userId),
-        ),
-      )
-      .returning();
-    return updated;
-  }
 
   const [created] = await db
     .insert(interviewFeedbacks)
@@ -82,24 +60,56 @@ export async function upsertInterviewFeedback(
       interviewId,
       source,
       body,
-      rating,
       recordedOn,
     })
     .returning();
   return created;
 }
 
+export async function updateInterviewFeedback(
+  db: Db,
+  userId: string,
+  feedbackId: string,
+  input: FeedbackInput,
+) {
+  const existing = await getOwnedFeedback(db, userId, feedbackId);
+  const interview = await getOwnedInterview(db, userId, existing.interviewId);
+  if (interview.status === "cancelled") {
+    throw new ProgressError("invalid", "cancelled interview feedback is read-only");
+  }
+
+  const { body } = validateFeedbackContent(input);
+  const recordedOn = input.recordedOn || tokyoTodayKey();
+  const source = input.source as FeedbackSource;
+
+  const [updated] = await db
+    .update(interviewFeedbacks)
+    .set({
+      source,
+      body,
+      recordedOn,
+    })
+    .where(
+      and(
+        eq(interviewFeedbacks.id, existing.id),
+        eq(interviewFeedbacks.userId, userId),
+      ),
+    )
+    .returning();
+  return updated;
+}
+
 export async function deleteInterviewFeedback(
   db: Db,
   userId: string,
-  interviewId: string,
+  feedbackId: string,
 ) {
-  await getOwnedInterview(db, userId, interviewId);
+  await getOwnedFeedback(db, userId, feedbackId);
   await db
     .delete(interviewFeedbacks)
     .where(
       and(
-        eq(interviewFeedbacks.interviewId, interviewId),
+        eq(interviewFeedbacks.id, feedbackId),
         eq(interviewFeedbacks.userId, userId),
       ),
     );

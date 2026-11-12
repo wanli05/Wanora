@@ -218,6 +218,63 @@ describe("application board isolation", () => {
     expect(leftover).toHaveLength(0);
   });
 
+  it("rejects the final interview even when a scheduled interview exists", async () => {
+    const db = getDb();
+    const signed = await signUp(uniqueEmail("final-fail"));
+    const userId = await sessionId(signed.cookie);
+    const [platform] = await db
+      .select()
+      .from(platforms)
+      .where(eq(platforms.code, "doda"));
+    const app = await createApplication(db, userId, {
+      company: "最終不合格社",
+      platformId: platform.id,
+      skipAptitude: true,
+      includeSecondInterview: false,
+    });
+    // Advance: docs → interview_1 → interview_final
+    await advanceApplication(db, userId, app.id, "pass");
+    await advanceApplication(db, userId, app.id, "pass");
+    const beforeInterview = await loadBoard(db, userId);
+    expect(beforeInterview.applications[0]?.currentStageKind).toBe("interview_final");
+    await createInterview(db, userId, app.id, {
+      start: "2026-11-01T14:00:00+09:00",
+      end: "2026-11-01T15:00:00+09:00",
+      mode: "google_meet",
+    });
+    await advanceApplication(db, userId, app.id, "reject");
+    const board = await loadBoard(db, userId);
+    expect(board.applications[0]?.outcome).toBe("rejected");
+    // Interview stays scheduled (history); closed cards just leave the in-play column.
+    expect(board.applications[0]?.stageInterviews[0]?.status).toBe("scheduled");
+    await advanceApplication(db, userId, app.id, "undo");
+    const reopened = await loadBoard(db, userId);
+    expect(reopened.applications[0]?.outcome).toBe("in_progress");
+    expect(reopened.applications[0]?.currentStageKind).toBe("interview_final");
+  });
+
+  it("undoes a pass back to the previous stage", async () => {
+    const db = getDb();
+    const signed = await signUp(uniqueEmail("undo-pass"));
+    const userId = await sessionId(signed.cookie);
+    const [platform] = await db
+      .select()
+      .from(platforms)
+      .where(eq(platforms.code, "doda"));
+    const app = await createApplication(db, userId, {
+      company: "取り消し社",
+      platformId: platform.id,
+    });
+    await advanceApplication(db, userId, app.id, "pass");
+    expect((await loadBoard(db, userId)).applications[0]?.currentStageKind).toBe(
+      "aptitude_test",
+    );
+    await advanceApplication(db, userId, app.id, "undo");
+    expect((await loadBoard(db, userId)).applications[0]?.currentStageKind).toBe(
+      "document_screening",
+    );
+  });
+
   it("persists a typed custom platform name and reuses it", async () => {
     const db = getDb();
     const signed = await signUp(uniqueEmail("custom-plat"));

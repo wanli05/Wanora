@@ -136,7 +136,8 @@
     "jobNotes": "求人备注",
     "stageInterviews": "面试与反馈",
     "writeFeedback": "记反馈",
-    "editFeedback": "编辑反馈",
+    "appendFeedback": "追加反馈",
+    "editFeedback": "编辑",
     "feedbackTooEarly": "面试开始后才能记录",
     "feedbackTitle": "面试反馈",
     "feedbackSource": "来源",
@@ -144,12 +145,15 @@
     "feedbackSourceRecruiter": "猎头",
     "feedbackSourceSelf": "自己",
     "feedbackBody": "内容（日语）",
-    "feedbackRating": "评分（1–5）",
+    "feedbackBodyRequired": "请填写内容",
     "feedbackRecordedOn": "记录日",
     "feedbackSave": "保存反馈",
+    "feedbackAppend": "追加并保存",
     "feedbackDelete": "删除",
-    "feedbackEmptyRating": "无",
-    "noStageInterviews": "还没有已确定面试"
+    "noFeedbackYet": "还没有反馈",
+    "noStageInterviews": "还没有已确定面试",
+    "interviewCancelled": "已取消",
+    "undoStage": "撤销"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

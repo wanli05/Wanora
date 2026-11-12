@@ -11,12 +11,14 @@ import { useTranslations } from "next-intl";
 import { BOARD_COLUMN_KINDS, INTERVIEW_STAGE_KINDS } from "@/lib/progress/enums";
 import type {
   BoardApplication,
+  BoardFeedback,
   BoardPayload,
   BoardStageInterview,
 } from "@/lib/progress/dto";
 import { interviewModeLabel } from "@/lib/progress/next-prep";
 import {
   allowedAdvanceActions,
+  canUndoAdvance,
   isClosed,
   visibleBoardColumns,
 } from "@/lib/progress/stages";
@@ -39,6 +41,8 @@ type FeedbackTarget = {
   appId: string;
   company: string;
   interview: BoardStageInterview;
+  /** When set, the panel edits that feedback; otherwise it appends a new one. */
+  editing?: BoardFeedback | null;
 };
 
 function columnKey(kind: (typeof BOARD_COLUMN_KINDS)[number]) {
@@ -190,7 +194,15 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         (item) => item.id === current.interview.id,
       );
       if (!app || !interview) return null;
-      return { appId: app.id, company: app.company, interview };
+      const editing = current.editing
+        ? (interview.feedbacks.find((item) => item.id === current.editing?.id) ?? null)
+        : null;
+      return {
+        appId: app.id,
+        company: app.company,
+        interview,
+        editing,
+      };
     });
   }
 
@@ -326,7 +338,11 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     event.preventDefault();
     if (!feedbackFor) return;
     const form = new FormData(event.currentTarget);
-    const ratingRaw = String(form.get("rating") || "");
+    const body = String(form.get("body") || "").trim();
+    if (!body) {
+      setConflictMsg(t("feedbackBodyRequired"));
+      return;
+    }
     try {
       const payload = await readJson(
         await fetch(`/api/board/applications/${feedbackFor.appId}/feedback`, {
@@ -334,9 +350,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             interviewId: feedbackFor.interview.id,
+            feedbackId: feedbackFor.editing?.id,
             source: String(form.get("source")),
-            body: String(form.get("body") || "").trim() || null,
-            rating: ratingRaw ? Number(ratingRaw) : null,
+            body,
             recordedOn: String(form.get("recordedOn") || tokyoTodayKey()),
           }),
         }),
@@ -350,17 +366,18 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   }
 
   async function onDeleteFeedback() {
-    if (!feedbackFor?.interview.feedback) return;
+    if (!feedbackFor?.editing) return;
     try {
       const payload = await readJson(
         await fetch(`/api/board/applications/${feedbackFor.appId}/feedback`, {
           method: "DELETE",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ interviewId: feedbackFor.interview.id }),
+          body: JSON.stringify({ feedbackId: feedbackFor.editing.id }),
         }),
       );
       await refreshFrom(payload);
       setFeedbackFor(null);
+      setConflictMsg(null);
     } catch {
       setConflictMsg(t("errorGeneric"));
     }
@@ -640,6 +657,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                       onOffer={() => patchApp(app.id, { action: "offer" })}
                       onAccept={() => patchApp(app.id, { action: "accept_offer" })}
                       onDecline={() => patchApp(app.id, { action: "decline_offer" })}
+                      onUndo={() => patchApp(app.id, { action: "undo" })}
                       onProposeSlots={() => openProposeSlots(app.id)}
                       onConfirmSlot={(slotId) => onConfirmSlot(app.id, slotId)}
                     />
@@ -691,11 +709,12 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             initial={editingApp}
             conflictMsg={conflictMsg}
             onSubmit={onEditApplication}
-            onOpenFeedback={(interview) =>
+            onOpenFeedback={(interview, editing) =>
               openFeedback({
                 appId: editingApp.id,
                 company: editingApp.company,
                 interview,
+                editing: editing ?? null,
               })
             }
             onCancel={() => {
@@ -907,12 +926,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             </div>
             <FeedbackForm
               t={t}
-              interview={feedbackFor.interview}
+              editing={feedbackFor.editing ?? null}
               conflictMsg={conflictMsg}
               onSubmit={onSaveFeedback}
-              onDelete={
-                feedbackFor.interview.feedback ? onDeleteFeedback : undefined
-              }
+              onDelete={feedbackFor.editing ? onDeleteFeedback : undefined}
             />
           </div>
         </>
@@ -938,7 +955,10 @@ function AddApplicationForm({
   conflictMsg?: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
-  onOpenFeedback?: (interview: BoardStageInterview) => void;
+  onOpenFeedback?: (
+    interview: BoardStageInterview,
+    editing?: BoardFeedback | null,
+  ) => void;
 }) {
   const [platformId, setPlatformId] = useState(
     initial?.platformId ?? platforms[0]?.id ?? "",
@@ -1111,48 +1131,17 @@ function AddApplicationForm({
           </label>
           <section
             data-testid="stage-interviews-section"
-            className="space-y-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
           >
             <h3 className="text-sm font-medium">{t("stageInterviews")}</h3>
             {initial.stageInterviews.length === 0 ? (
               <p className="text-sm text-zinc-500">{t("noStageInterviews")}</p>
             ) : (
-              <ul className="space-y-2">
-                {initial.stageInterviews.map((interview) => (
-                  <li
-                    key={interview.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-100 px-2 py-2 text-sm dark:border-zinc-800"
-                  >
-                    <div lang="ja">
-                      <p>
-                        {`${stageLabel(t, interview.stageKind)} · ${formatTokyoShort(
-                          interview.start,
-                        )}`}
-                      </p>
-                      {interview.feedback ? (
-                        <p className="text-xs text-zinc-500">
-                          {interview.feedback.summary}
-                        </p>
-                      ) : null}
-                    </div>
-                    {interview.feedback || interview.canWriteFeedback ? (
-                      <button
-                        type="button"
-                        className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                        onClick={() => onOpenFeedback?.(interview)}
-                      >
-                        {interview.feedback
-                          ? t("editFeedback")
-                          : t("writeFeedback")}
-                      </button>
-                    ) : interview.status === "scheduled" ? (
-                      <span className="text-xs text-zinc-500">
-                        {t("feedbackTooEarly")}
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <StageInterviewFeedbackGroups
+                t={t}
+                interviews={initial.stageInterviews}
+                onOpenFeedback={onOpenFeedback}
+              />
             )}
           </section>
         </>
@@ -1226,28 +1215,127 @@ function AddApplicationForm({
   );
 }
 
+function StageInterviewFeedbackGroups({
+  t,
+  interviews,
+  onOpenFeedback,
+}: {
+  t: TBoard;
+  interviews: BoardStageInterview[];
+  onOpenFeedback?: (
+    interview: BoardStageInterview,
+    editing?: BoardFeedback | null,
+  ) => void;
+}) {
+  const groups: { kind: string; items: BoardStageInterview[] }[] = [];
+  for (const interview of interviews) {
+    const last = groups[groups.length - 1];
+    if (last && last.kind === interview.stageKind) {
+      last.items.push(interview);
+    } else {
+      groups.push({ kind: interview.stageKind, items: [interview] });
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => (
+        <section
+          key={group.kind}
+          data-testid={`feedback-group-${group.kind}`}
+          className="space-y-2"
+        >
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            {stageLabel(t, group.kind)}
+          </h4>
+          <ul className="space-y-2">
+            {group.items.map((interview) => (
+              <li
+                key={interview.id}
+                className="rounded border border-zinc-100 px-2 py-2 text-sm dark:border-zinc-800"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p lang="ja">
+                    {`${formatTokyoShort(interview.start)} · ${interviewModeLabel(
+                      interview.mode,
+                    )}`}
+                    {interview.status === "cancelled" ? ` · ${t("interviewCancelled")}` : ""}
+                  </p>
+                  {interview.canWriteFeedback ? (
+                    <button
+                      type="button"
+                      data-testid={`append-feedback-${interview.id}`}
+                      className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+                      onClick={() => onOpenFeedback?.(interview, null)}
+                    >
+                      {interview.feedbacks.length > 0
+                        ? t("appendFeedback")
+                        : t("writeFeedback")}
+                    </button>
+                  ) : interview.status === "scheduled" ? (
+                    <span className="text-xs text-zinc-500">
+                      {t("feedbackTooEarly")}
+                    </span>
+                  ) : null}
+                </div>
+                {interview.feedbacks.length > 0 ? (
+                  <ul className="mt-2 space-y-1.5">
+                    {interview.feedbacks.map((feedback) => (
+                      <li
+                        key={feedback.id}
+                        className="flex flex-wrap items-start justify-between gap-2 rounded bg-zinc-50 px-2 py-1.5 text-xs dark:bg-zinc-900"
+                      >
+                        <div lang="ja">
+                          <p className="font-medium text-zinc-700 dark:text-zinc-200">
+                            {feedback.summary}
+                          </p>
+                          <p className="text-zinc-500">{feedback.recordedOn}</p>
+                        </div>
+                        {interview.status !== "cancelled" ? (
+                          <button
+                            type="button"
+                            className="rounded border border-zinc-300 px-2 py-0.5 dark:border-zinc-700"
+                            onClick={() => onOpenFeedback?.(interview, feedback)}
+                          >
+                            {t("editFeedback")}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-xs text-zinc-500">{t("noFeedbackYet")}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function FeedbackForm({
   t,
-  interview,
+  editing,
   conflictMsg,
   onSubmit,
   onDelete,
 }: {
   t: TBoard;
-  interview: BoardStageInterview;
+  editing?: BoardFeedback | null;
   conflictMsg?: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDelete?: () => void;
 }) {
-  const existing = interview.feedback;
   return (
-    <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+    <form className="flex flex-col gap-3" onSubmit={onSubmit} key={editing?.id ?? "new"}>
       <label className="flex flex-col gap-1 text-sm">
         {t("feedbackSource")}
         <select
           name="source"
           required
-          defaultValue={existing?.source ?? "company"}
+          defaultValue={editing?.source ?? "company"}
           className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="company">{t("feedbackSourceCompany")}</option>
@@ -1260,30 +1348,16 @@ function FeedbackForm({
         label={t("feedbackRecordedOn")}
         type="date"
         required
-        defaultValue={existing?.recordedOn ?? tokyoTodayKey()}
+        defaultValue={editing?.recordedOn ?? tokyoTodayKey()}
       />
-      <label className="flex flex-col gap-1 text-sm">
-        {t("feedbackRating")}
-        <select
-          name="rating"
-          defaultValue={existing?.rating?.toString() ?? ""}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          <option value="">{t("feedbackEmptyRating")}</option>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
       <label className="flex flex-col gap-1 text-sm">
         {t("feedbackBody")}
         <textarea
           name="body"
           lang="ja"
           rows={5}
-          defaultValue={existing?.body ?? ""}
+          required
+          defaultValue={editing?.body ?? ""}
           className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
         />
       </label>
@@ -1308,7 +1382,7 @@ function FeedbackForm({
           type="submit"
           className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
         >
-          {t("feedbackSave")}
+          {editing ? t("feedbackSave") : t("feedbackAppend")}
         </button>
       </div>
     </form>
@@ -1326,6 +1400,7 @@ function ApplicationCard({
   onOffer,
   onAccept,
   onDecline,
+  onUndo,
   onProposeSlots,
   onConfirmSlot,
 }: {
@@ -1339,6 +1414,7 @@ function ApplicationCard({
   onOffer: () => void;
   onAccept: () => void;
   onDecline: () => void;
+  onUndo: () => void;
   onProposeSlots: () => void;
   onConfirmSlot: (slotId: string) => void;
 }) {
@@ -1352,6 +1428,11 @@ function ApplicationCard({
     : [];
   const offerPending = app.outcome === "offer" && app.offerDecision === "pending";
   const inPlay = app.outcome === "in_progress" || offerPending;
+  const showUndo = canUndoAdvance({
+    outcome: app.outcome,
+    offerDecision: app.offerDecision,
+    stages: app.stages,
+  });
 
   return (
     <article
@@ -1539,6 +1620,16 @@ function ApplicationCard({
             onClick={onProposeSlots}
           >
             {t("proposeSlots")}
+          </button>
+        ) : null}
+        {showUndo ? (
+          <button
+            type="button"
+            data-testid="action-undo"
+            className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
+            onClick={onUndo}
+          >
+            {t("undoStage")}
           </button>
         ) : null}
       </div>

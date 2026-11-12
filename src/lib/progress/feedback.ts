@@ -3,8 +3,7 @@ import { ProgressError } from "./errors";
 
 export type FeedbackInput = {
   source: FeedbackSource;
-  body?: string | null;
-  rating?: number | null;
+  body: string;
   recordedOn: string;
 };
 
@@ -22,28 +21,21 @@ export function canCreateFeedback(input: {
   return start.getTime() <= now.getTime();
 }
 
-export function normalizeFeedbackBody(body: string | null | undefined): string | null {
-  if (body === undefined || body === null) return null;
+export function normalizeFeedbackBody(body: string | null | undefined): string {
+  if (body === undefined || body === null) {
+    throw new ProgressError("invalid", "body required");
+  }
   const trimmed = body.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  if (!trimmed) {
+    throw new ProgressError("invalid", "body required");
+  }
+  return trimmed;
 }
 
 export function validateFeedbackContent(input: {
   body?: string | null;
-  rating?: number | null;
-}): { body: string | null; rating: number | null } {
-  const body = normalizeFeedbackBody(input.body);
-  const rating =
-    input.rating === undefined || input.rating === null
-      ? null
-      : input.rating;
-  if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
-    throw new ProgressError("invalid", "rating must be 1–5");
-  }
-  if (body === null && rating === null) {
-    throw new ProgressError("invalid", "body or rating required");
-  }
-  return { body, rating };
+}): { body: string } {
+  return { body: normalizeFeedbackBody(input.body) };
 }
 
 export function feedbackSummary(input: {

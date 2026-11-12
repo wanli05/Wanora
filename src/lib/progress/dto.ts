@@ -48,8 +48,7 @@ export type BoardFeedback = {
   id: string;
   interviewId: string;
   source: FeedbackSource;
-  body: string | null;
-  rating: number | null;
+  body: string;
   recordedOn: string;
   summary: string;
 };
@@ -58,7 +57,7 @@ export type BoardStageInterview = BoardInterview & {
   stageId: string;
   stageKind: StageKind;
   canWriteFeedback: boolean;
-  feedback: BoardFeedback | null;
+  feedbacks: BoardFeedback[];
 };
 
 export type BoardJobPosting = {

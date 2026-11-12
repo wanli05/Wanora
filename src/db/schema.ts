@@ -541,24 +541,19 @@ export const interviewFeedbacks = pgTable(
     userId: userId(),
     interviewId: uuid("interview_id").notNull(),
     source: text("source").notNull(),
-    body: text("body"),
-    rating: integer("rating"),
+    body: text("body").notNull(),
     recordedOn: date("recorded_on").notNull(),
     ...timestamps,
   },
   (t) => [
     check("interview_feedbacks_source_check", inList("source", FEEDBACK_SOURCES)),
     check(
-      "interview_feedbacks_rating_check",
-      sql`${t.rating} is null or (${t.rating} >= 1 and ${t.rating} <= 5)`,
+      "interview_feedbacks_body_not_empty_check",
+      sql`length(btrim(${t.body})) > 0`,
     ),
-    check(
-      "interview_feedbacks_body_or_rating_check",
-      sql`${t.body} is not null or ${t.rating} is not null`,
-    ),
-    unique("interview_feedbacks_interview_uidx").on(t.interviewId),
     unique("interview_feedbacks_id_user_uidx").on(t.id, t.userId),
     index("interview_feedbacks_user_idx").on(t.userId),
+    index("interview_feedbacks_interview_idx").on(t.interviewId),
     foreignKey({
       columns: [t.interviewId, t.userId],
       foreignColumns: [interviews.id, interviews.userId],

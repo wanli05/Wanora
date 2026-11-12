@@ -182,3 +182,46 @@ export function outcomeAfterStages<T extends StageSnapshot>(
   }
   return { outcome: "in_progress", offerDecision: null };
 }
+
+/** Revert the most recently passed stage back to pending. */
+export function undoLastPass<T extends StageSnapshot>(stages: T[]): T[] {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  const lastPassed = [...ordered].reverse().find((stage) => stage.status === "passed");
+  if (!lastPassed) return stages;
+  return stages.map((stage) =>
+    stage.id === lastPassed.id ? { ...stage, status: "pending" as const } : stage,
+  );
+}
+
+/**
+ * Undo jump-to-offer: restore consecutive skipped stages before offer.
+ * Leaves a leading info_session skip in place so mid-career boards return to
+ * document screening (or whichever stage was current), not the info column.
+ */
+export function undoJumpToOffer<T extends StageSnapshot>(stages: T[]): T[] {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  const offerIndex = ordered.findIndex((stage) => stage.kind === "offer");
+  if (offerIndex < 0) return stages;
+  const restoreIds = new Set<string>();
+  for (let i = offerIndex - 1; i >= 0; i -= 1) {
+    const stage = ordered[i];
+    if (!stage || stage.status !== "skipped") break;
+    if (stage.kind === "info_session") continue;
+    restoreIds.add(stage.id);
+  }
+  if (restoreIds.size === 0) return stages;
+  return stages.map((stage) =>
+    restoreIds.has(stage.id) ? { ...stage, status: "pending" as const } : stage,
+  );
+}
+
+export function canUndoAdvance(input: {
+  outcome: Outcome;
+  offerDecision: OfferDecision | null;
+  stages: StageSnapshot[];
+}): boolean {
+  if (isClosed(input.outcome, input.offerDecision)) return true;
+  if (input.outcome === "offer" && input.offerDecision === "pending") return true;
+  if (input.outcome !== "in_progress") return false;
+  return input.stages.some((stage) => stage.status === "passed");
+}

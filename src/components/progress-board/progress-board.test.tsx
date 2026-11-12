@@ -146,6 +146,134 @@ describe("ProgressBoard", () => {
     expect(screen.queryByRole("button", { name: "跳过" })).not.toBeInTheDocument();
   });
 
+  it("shows undo on rejected cards and after a pass", async () => {
+    const { unmount } = renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(
+          sampleApp({
+            currentStageKind: "interview_final",
+            outcome: "rejected",
+            stages: [
+              {
+                id: "st-final",
+                kind: "interview_final",
+                customLabel: null,
+                position: 5,
+                status: "failed",
+                deadlineAt: null,
+              },
+            ],
+          }),
+        )}
+      />,
+      "zh-CN",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "全部" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("action-undo")).toHaveTextContent("撤销");
+    });
+    unmount();
+
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(
+          sampleApp({
+            currentStageKind: "aptitude_test",
+            stages: [
+              {
+                id: "st-doc",
+                kind: "document_screening",
+                customLabel: null,
+                position: 1,
+                status: "passed",
+                deadlineAt: null,
+              },
+              {
+                id: "st-apt",
+                kind: "aptitude_test",
+                customLabel: null,
+                position: 2,
+                status: "pending",
+                deadlineAt: null,
+              },
+            ],
+          }),
+        )}
+      />,
+      "zh-CN",
+    );
+    expect(screen.getByTestId("action-undo")).toBeInTheDocument();
+  });
+
+  it("groups feedback by interview round in the edit drawer", async () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(
+          sampleApp({
+            currentStageKind: "interview_final",
+            hasFeedback: true,
+            stageInterviews: [
+              {
+                id: "iv-1",
+                stageId: "st-1",
+                stageKind: "interview_1",
+                start: "2026-11-01T05:00:00.000Z",
+                end: "2026-11-01T06:00:00.000Z",
+                mode: "google_meet",
+                meetingUrl: null,
+                locationText: null,
+                status: "scheduled",
+                canWriteFeedback: true,
+                feedbacks: [
+                  {
+                    id: "fb-1",
+                    interviewId: "iv-1",
+                    source: "company",
+                    body: "志望動機が弱い",
+                    recordedOn: "2026-11-01",
+                    summary: "会社 · 志望動機が弱い",
+                  },
+                  {
+                    id: "fb-2",
+                    interviewId: "iv-1",
+                    source: "recruiter",
+                    body: "次回は具体例を",
+                    recordedOn: "2026-11-02",
+                    summary: "エージェント · 次回は具体例を",
+                  },
+                ],
+              },
+              {
+                id: "iv-2",
+                stageId: "st-2",
+                stageKind: "interview_final",
+                start: "2026-11-10T05:00:00.000Z",
+                end: "2026-11-10T06:00:00.000Z",
+                mode: "teams",
+                meetingUrl: null,
+                locationText: null,
+                status: "scheduled",
+                canWriteFeedback: true,
+                feedbacks: [],
+              },
+            ],
+          }),
+        )}
+      />,
+      "zh-CN",
+    );
+    screen.getByRole("button", { name: "编辑" }).click();
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-group-interview_1")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("feedback-group-interview_final")).toBeInTheDocument();
+    expect(screen.getByText("会社 · 志望動機が弱い")).toBeInTheDocument();
+    expect(screen.getByText("エージェント · 次回は具体例を")).toBeInTheDocument();
+    expect(screen.getByTestId("append-feedback-iv-1")).toHaveTextContent("追加反馈");
+    expect(screen.getByTestId("append-feedback-iv-2")).toHaveTextContent("记反馈");
+    expect(screen.queryByText("评分（1–5）")).not.toBeInTheDocument();
+  });
+
   it("labels withdraw as 辞退", () => {
     renderWithIntl(
       <ProgressBoard

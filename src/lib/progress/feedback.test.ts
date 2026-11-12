@@ -39,16 +39,13 @@ describe("canCreateFeedback", () => {
 });
 
 describe("validateFeedbackContent", () => {
-  it("requires body or rating", () => {
-    expect(() => validateFeedbackContent({ body: "  ", rating: null })).toThrow(
-      ProgressError,
-    );
+  it("requires a non-empty body", () => {
+    expect(() => validateFeedbackContent({ body: "  " })).toThrow(ProgressError);
   });
 
-  it("accepts rating-only feedback", () => {
-    expect(validateFeedbackContent({ body: null, rating: 4 })).toEqual({
-      body: null,
-      rating: 4,
+  it("accepts trimmed Japanese body", () => {
+    expect(validateFeedbackContent({ body: " 志望動機が弱い " })).toEqual({
+      body: "志望動機が弱い",
     });
   });
 });

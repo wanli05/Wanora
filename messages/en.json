@@ -136,7 +136,8 @@
     "jobNotes": "Job notes",
     "stageInterviews": "Interviews & feedback",
     "writeFeedback": "Add feedback",
-    "editFeedback": "Edit feedback",
+    "appendFeedback": "Add another",
+    "editFeedback": "Edit",
     "feedbackTooEarly": "Available after the interview starts",
     "feedbackTitle": "Interview feedback",
     "feedbackSource": "Source",
@@ -144,12 +145,15 @@
     "feedbackSourceRecruiter": "Recruiter",
     "feedbackSourceSelf": "Self",
     "feedbackBody": "Notes (Japanese)",
-    "feedbackRating": "Rating (1–5)",
+    "feedbackBodyRequired": "Please enter notes",
     "feedbackRecordedOn": "Recorded on",
     "feedbackSave": "Save feedback",
+    "feedbackAppend": "Add feedback",
     "feedbackDelete": "Delete",
-    "feedbackEmptyRating": "None",
-    "noStageInterviews": "No confirmed interviews yet"
+    "noFeedbackYet": "No feedback yet",
+    "noStageInterviews": "No confirmed interviews yet",
+    "interviewCancelled": "Cancelled",
+    "undoStage": "Undo"
   },
   "Platforms": {
     "mynavi_tenshoku": "マイナビ転職",

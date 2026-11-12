@@ -36,6 +36,13 @@
       "when": 1794412966286,
       "tag": "0004_job_posting_and_interview_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794491967909,
+      "tag": "0005_feedback_multi_drop_rating",
+      "breakpoints": true
     }
   ]
 }

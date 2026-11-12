@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   allowedAdvanceActions,
+  canUndoAdvance,
   currentStage,
   isAdvanceActionAllowed,
   isClosed,
@@ -9,6 +10,8 @@ import {
   outcomeAfterStages,
   passStages,
   skipStages,
+  undoJumpToOffer,
+  undoLastPass,
   visibleBoardColumns,
   type StageSnapshot,
 } from "./stages";
@@ -129,5 +132,50 @@ describe("mid-career stages", () => {
     expect(isClosed("offer", "accepted")).toBe(true);
     expect(isClosed("offer", "pending")).toBe(false);
     expect(isClosed("rejected", null)).toBe(true);
+  });
+
+  it("undoes the last pass back to the previous column", () => {
+    const afterPass = passStages(asSnapshots());
+    expect(currentStage(afterPass, "in_progress", null)?.kind).toBe("aptitude_test");
+    const undone = undoLastPass(afterPass);
+    expect(currentStage(undone, "in_progress", null)?.kind).toBe(
+      "document_screening",
+    );
+  });
+
+  it("undoes jump-to-offer by restoring consecutive skipped stages", () => {
+    const jumped = jumpToOffer(asSnapshots());
+    const undone = undoJumpToOffer(jumped);
+    expect(currentStage(undone, "in_progress", null)?.kind).toBe(
+      "document_screening",
+    );
+    expect(undone.find((stage) => stage.kind === "info_session")?.status).toBe(
+      "skipped",
+    );
+  });
+
+  it("exposes undo for closed outcomes and after a pass", () => {
+    const stages = asSnapshots();
+    expect(
+      canUndoAdvance({
+        outcome: "rejected",
+        offerDecision: null,
+        stages,
+      }),
+    ).toBe(true);
+    expect(
+      canUndoAdvance({
+        outcome: "in_progress",
+        offerDecision: null,
+        stages,
+      }),
+    ).toBe(false);
+    expect(
+      canUndoAdvance({
+        outcome: "in_progress",
+        offerDecision: null,
+        stages: passStages(stages),
+      }),
+    ).toBe(true);
   });
 });

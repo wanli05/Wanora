@@ -22,6 +22,7 @@ const schema = z
         "accept_offer",
         "decline_offer",
         "reopen",
+        "undo",
       ])
       .optional(),
     nextPrepNote: optionalText,
