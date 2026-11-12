@@ -253,7 +253,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             role: String(form.get("role") || "").trim() || null,
             ...platformBodyFromForm(form),
             recruiterName,
-            notes: String(form.get("notes") || "").trim() || null,
             appliedOn: String(form.get("appliedOn") || "") || undefined,
             companyUrl: String(form.get("companyUrl") || "").trim() || null,
             companyNotes: String(form.get("companyNotes") || "").trim() || null,
@@ -338,8 +337,12 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     event.preventDefault();
     if (!feedbackFor) return;
     const form = new FormData(event.currentTarget);
-    const body = String(form.get("body") || "").trim();
-    if (!body) {
+    const body = String(form.get("body") || "").trim() || null;
+    const question = String(form.get("question") || "").trim() || null;
+    const ownAnswer = String(form.get("ownAnswer") || "").trim() || null;
+    const resultText = String(form.get("resultText") || "").trim() || null;
+    const reflection = String(form.get("reflection") || "").trim() || null;
+    if (!body && !question && !ownAnswer && !resultText && !reflection) {
       setConflictMsg(t("feedbackBodyRequired"));
       return;
     }
@@ -355,6 +358,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
               : {}),
             source: String(form.get("source")),
             body,
+            question,
+            ownAnswer,
+            resultText,
+            reflection,
             recordedOn: String(form.get("recordedOn") || tokyoTodayKey()),
           }),
         }),
@@ -1121,16 +1128,6 @@ function AddApplicationForm({
               className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("notes")}
-            <textarea
-              name="notes"
-              lang="ja"
-              defaultValue={initial.notes ?? ""}
-              rows={2}
-              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </label>
           <section
             data-testid="stage-interviews-section"
             className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
@@ -1357,9 +1354,48 @@ function FeedbackForm({
         <textarea
           name="body"
           lang="ja"
-          rows={5}
-          required
+          rows={3}
           defaultValue={editing?.body ?? ""}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackQuestion")}
+        <textarea
+          name="question"
+          lang="ja"
+          rows={2}
+          defaultValue={editing?.question ?? ""}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackOwnAnswer")}
+        <textarea
+          name="ownAnswer"
+          lang="ja"
+          rows={2}
+          defaultValue={editing?.ownAnswer ?? ""}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackResultText")}
+        <input
+          name="resultText"
+          lang="ja"
+          defaultValue={editing?.resultText ?? ""}
+          placeholder={t("feedbackResultPlaceholder")}
+          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("feedbackReflection")}
+        <textarea
+          name="reflection"
+          lang="ja"
+          rows={2}
+          defaultValue={editing?.reflection ?? ""}
           className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
         />
       </label>

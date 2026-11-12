@@ -48,7 +48,11 @@ export type BoardFeedback = {
   id: string;
   interviewId: string;
   source: FeedbackSource;
-  body: string;
+  body: string | null;
+  question: string | null;
+  ownAnswer: string | null;
+  resultText: string | null;
+  reflection: string | null;
   recordedOn: string;
   summary: string;
 };
@@ -97,7 +101,6 @@ export type BoardApplication = {
   recruiterId: string | null;
   recruiterName: string | null;
   appliedOn: string;
-  notes: string | null;
   jobPosting: BoardJobPosting;
   hasJobPosting: boolean;
   hasFeedback: boolean;

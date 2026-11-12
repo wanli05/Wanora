@@ -122,7 +122,7 @@ describe("application board isolation", () => {
     ).rejects.toMatchObject({ code: "conflict" });
   });
 
-  it("lets the owner rewrite company, notes, and the interview URL after create", async () => {
+  it("lets the owner rewrite company, job notes, and the interview URL after create", async () => {
     const db = getDb();
     const signed = await signUp(uniqueEmail("reedit"));
     const userId = await sessionId(signed.cookie);
@@ -142,7 +142,7 @@ describe("application board isolation", () => {
     });
     await updateApplication(db, userId, app.id, {
       company: "正式社名",
-      notes: "URLは後から届いた",
+      jobNotes: "URLは後から届いた",
       recruiterName: "佐藤",
     });
     await updateInterview(db, userId, app.id, interview.interview.id, {
@@ -153,7 +153,7 @@ describe("application board isolation", () => {
     });
     const board = await loadBoard(db, userId);
     expect(board.applications[0]?.company).toBe("正式社名");
-    expect(board.applications[0]?.notes).toBe("URLは後から届いた");
+    expect(board.applications[0]?.jobPosting.jobNotes).toBe("URLは後から届いた");
     expect(board.applications[0]?.recruiterName).toBe("佐藤");
     expect(board.applications[0]?.interview?.meetingUrl).toBe(
       "https://teams.microsoft.com/l/meetup-join/later",

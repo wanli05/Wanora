@@ -288,10 +288,18 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
               interviewId: feedback.interviewId,
               source: feedback.source as FeedbackSource,
               body: feedback.body,
+              question: feedback.question,
+              ownAnswer: feedback.ownAnswer,
+              resultText: feedback.resultText,
+              reflection: feedback.reflection,
               recordedOn: feedback.recordedOn,
               summary: feedbackSummary({
                 source: feedback.source as FeedbackSource,
                 body: feedback.body,
+                question: feedback.question,
+                ownAnswer: feedback.ownAnswer,
+                resultText: feedback.resultText,
+                reflection: feedback.reflection,
               }),
             }));
           return {
@@ -328,7 +336,6 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
       recruiterId: row.app.recruiterId,
       recruiterName: row.recruiterName,
       appliedOn: row.app.appliedOn,
-      notes: row.app.notes,
       jobPosting,
       hasJobPosting: hasJobPostingContent(jobPosting),
       hasFeedback: stageInterviews.some((item) => item.feedbacks.length > 0),
@@ -397,7 +404,6 @@ export async function updateApplication(
     customPlatformName?: string | null;
     recruiterId?: string | null;
     recruiterName?: string | null;
-    notes?: string | null;
     appliedOn?: string;
     nextPrepNote?: string | null;
     companyUrl?: string | null;
@@ -417,7 +423,6 @@ export async function updateApplication(
     jobTitle?: string | null;
     platformId?: string;
     recruiterId?: string | null;
-    notes?: string | null;
     appliedOn?: string;
     nextPrepNote?: string | null;
     jobUrl?: string | null;
@@ -435,9 +440,6 @@ export async function updateApplication(
   }
   if (input.role !== undefined) {
     patch.jobTitle = input.role?.trim() || null;
-  }
-  if (input.notes !== undefined) {
-    patch.notes = input.notes?.trim() || null;
   }
   if (input.appliedOn !== undefined) {
     patch.appliedOn = input.appliedOn;

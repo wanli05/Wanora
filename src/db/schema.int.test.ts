@@ -111,6 +111,33 @@ describe("database schema (migrations applied)", () => {
     await getDb().insert(users).values(newUser({ uiLocale: "zh-CN" }));
   });
 
+  it("keeps job_notes only and allows structured interview feedback", async () => {
+    const db = getDb();
+    const appCols = await db.execute<{ column_name: string }>(sql`
+      select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'applications'
+      order by column_name`);
+    const appNames = appCols.rows.map((row) => row.column_name);
+    expect(appNames).toContain("job_notes");
+    expect(appNames).not.toContain("notes");
+
+    const fbCols = await db.execute<{ column_name: string }>(sql`
+      select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'interview_feedbacks'
+      order by column_name`);
+    const fbNames = fbCols.rows.map((row) => row.column_name);
+    expect(fbNames).toEqual(
+      expect.arrayContaining([
+        "body",
+        "question",
+        "own_answer",
+        "result_text",
+        "reflection",
+      ]),
+    );
+  });
+
+
   it("cascades user deletion to sessions and accounts", async () => {
     const db = getDb();
     const user = newUser();

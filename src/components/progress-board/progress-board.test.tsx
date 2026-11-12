@@ -32,7 +32,6 @@ function sampleApp(
     recruiterId: null,
     recruiterName: null,
     appliedOn: "2026-11-06",
-    notes: null,
     jobPosting: {
       jobUrl: null,
       salaryBandText: null,
@@ -230,6 +229,10 @@ describe("ProgressBoard", () => {
                     interviewId: "iv-1",
                     source: "company",
                     body: "志望動機が弱い",
+                    question: null,
+                    ownAnswer: null,
+                    resultText: null,
+                    reflection: null,
                     recordedOn: "2026-11-01",
                     summary: "会社 · 志望動機が弱い",
                   },
@@ -238,6 +241,10 @@ describe("ProgressBoard", () => {
                     interviewId: "iv-1",
                     source: "recruiter",
                     body: "次回は具体例を",
+                    question: null,
+                    ownAnswer: null,
+                    resultText: null,
+                    reflection: null,
                     recordedOn: "2026-11-02",
                     summary: "エージェント · 次回は具体例を",
                   },
@@ -302,6 +309,9 @@ describe("ProgressBoard", () => {
     expect(screen.getByRole("textbox", { name: "エージェント担当者" })).toBeInTheDocument();
     expect(screen.getByTestId("job-posting-section")).toBeInTheDocument();
     expect(screen.getByTestId("company-section")).toBeInTheDocument();
+    expect(screen.getByLabelText("求人其他")).toBeInTheDocument();
+    expect(screen.getByLabelText("下一步行动")).toBeInTheDocument();
+    expect(screen.queryByLabelText("备注")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存修改" })).toBeInTheDocument();
     expect(screen.getByTestId("delete-application")).toHaveTextContent("删除");
     expect(screen.getAllByRole("button", { name: "取消" }).length).toBeGreaterThan(0);

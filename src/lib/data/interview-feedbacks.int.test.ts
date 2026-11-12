@@ -53,7 +53,17 @@ describe("interview feedbacks", () => {
       body: "エージェントからのフィードバック",
       recordedOn: "2026-11-02",
     });
+    const structured = await createInterviewFeedback(db, userId, interview.interview.id, {
+      source: "self",
+      question: "志望動機は？",
+      ownAnswer: "御社の技術力が…",
+      resultText: "保留",
+      reflection: "具体例が足りない",
+      recordedOn: "2026-11-03",
+    });
     expect(first.id).not.toBe(second.id);
+    expect(structured.question).toBe("志望動機は？");
+    expect(structured.body).toBeNull();
 
     await updateInterviewFeedback(db, userId, first.id, {
       source: "company",
@@ -63,16 +73,19 @@ describe("interview feedbacks", () => {
 
     const board = await loadBoard(db, userId);
     const stageInterview = board.applications[0]?.stageInterviews[0];
-    expect(stageInterview?.feedbacks).toHaveLength(2);
+    expect(stageInterview?.feedbacks).toHaveLength(3);
     expect(stageInterview?.feedbacks.map((item) => item.body)).toEqual([
       "会社フィードバック更新",
       "エージェントからのフィードバック",
+      null,
     ]);
+    expect(stageInterview?.feedbacks[2]?.question).toBe("志望動機は？");
+    expect(stageInterview?.feedbacks[2]?.resultText).toBe("保留");
     expect(board.applications[0]?.hasFeedback).toBe(true);
 
     await deleteInterviewFeedback(db, userId, second.id);
     const afterDelete = await loadBoard(db, userId);
-    expect(afterDelete.applications[0]?.stageInterviews[0]?.feedbacks).toHaveLength(1);
+    expect(afterDelete.applications[0]?.stageInterviews[0]?.feedbacks).toHaveLength(2);
   });
 
   it("keeps feedbacks editable after rejecting a stage with a scheduled interview", async () => {

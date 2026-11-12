@@ -357,7 +357,6 @@ export const applications = pgTable(
     outcome: text("outcome").notNull().default("in_progress"),
     offerDecision: text("offer_decision"),
     nextPrepNote: text("next_prep_note"),
-    notes: text("notes"),
     ...timestamps,
   },
   (t) => [
@@ -534,6 +533,9 @@ export const busyBlocks = pgTable(
   ],
 );
 
+const feedbackTextNonEmpty = (column: AnyPgColumn) =>
+  sql`${column} is not null and length(btrim(${column})) > 0`;
+
 export const interviewFeedbacks = pgTable(
   "interview_feedbacks",
   {
@@ -541,15 +543,25 @@ export const interviewFeedbacks = pgTable(
     userId: userId(),
     interviewId: uuid("interview_id").notNull(),
     source: text("source").notNull(),
-    body: text("body").notNull(),
+    /** Overview / company quote; optional when structured fields are set. */
+    body: text("body"),
+    question: text("question"),
+    ownAnswer: text("own_answer"),
+    /** Free short text (通過/見送り/保留 etc.); not applications.outcome. */
+    resultText: text("result_text"),
+    reflection: text("reflection"),
     recordedOn: date("recorded_on").notNull(),
     ...timestamps,
   },
   (t) => [
     check("interview_feedbacks_source_check", inList("source", FEEDBACK_SOURCES)),
     check(
-      "interview_feedbacks_body_not_empty_check",
-      sql`length(btrim(${t.body})) > 0`,
+      "interview_feedbacks_content_check",
+      sql`${feedbackTextNonEmpty(t.body)}
+        or ${feedbackTextNonEmpty(t.question)}
+        or ${feedbackTextNonEmpty(t.ownAnswer)}
+        or ${feedbackTextNonEmpty(t.resultText)}
+        or ${feedbackTextNonEmpty(t.reflection)}`,
     ),
     unique("interview_feedbacks_id_user_uidx").on(t.id, t.userId),
     index("interview_feedbacks_user_idx").on(t.userId),

@@ -1,10 +1,23 @@
 import type { FeedbackSource } from "./enums";
 import { ProgressError } from "./errors";
+import { normalizeOptionalText } from "./job-posting";
+
+export type FeedbackStructuredFields = {
+  body: string | null;
+  question: string | null;
+  ownAnswer: string | null;
+  resultText: string | null;
+  reflection: string | null;
+};
 
 export type FeedbackInput = {
   source: FeedbackSource;
-  body: string;
   recordedOn: string;
+  body?: string | null;
+  question?: string | null;
+  ownAnswer?: string | null;
+  resultText?: string | null;
+  reflection?: string | null;
 };
 
 export function canCreateFeedback(input: {
@@ -21,26 +34,56 @@ export function canCreateFeedback(input: {
   return start.getTime() <= now.getTime();
 }
 
-export function normalizeFeedbackBody(body: string | null | undefined): string {
-  if (body === undefined || body === null) {
-    throw new ProgressError("invalid", "body required");
-  }
-  const trimmed = body.trim();
-  if (!trimmed) {
-    throw new ProgressError("invalid", "body required");
-  }
-  return trimmed;
+export function normalizeFeedbackField(
+  value: string | null | undefined,
+): string | null {
+  return normalizeOptionalText(value);
 }
 
 export function validateFeedbackContent(input: {
   body?: string | null;
-}): { body: string } {
-  return { body: normalizeFeedbackBody(input.body) };
+  question?: string | null;
+  ownAnswer?: string | null;
+  resultText?: string | null;
+  reflection?: string | null;
+}): FeedbackStructuredFields {
+  const fields: FeedbackStructuredFields = {
+    body: normalizeFeedbackField(input.body),
+    question: normalizeFeedbackField(input.question),
+    ownAnswer: normalizeFeedbackField(input.ownAnswer),
+    resultText: normalizeFeedbackField(input.resultText),
+    reflection: normalizeFeedbackField(input.reflection),
+  };
+  if (
+    !fields.body &&
+    !fields.question &&
+    !fields.ownAnswer &&
+    !fields.resultText &&
+    !fields.reflection
+  ) {
+    throw new ProgressError("invalid", "feedback content required");
+  }
+  return fields;
+}
+
+function firstSnippet(fields: FeedbackStructuredFields): string {
+  return (
+    fields.body ??
+    fields.question ??
+    fields.ownAnswer ??
+    fields.resultText ??
+    fields.reflection ??
+    ""
+  );
 }
 
 export function feedbackSummary(input: {
   source: FeedbackSource;
-  body: string | null;
+  body?: string | null;
+  question?: string | null;
+  ownAnswer?: string | null;
+  resultText?: string | null;
+  reflection?: string | null;
 }): string {
   const prefix =
     input.source === "company"
@@ -48,7 +91,13 @@ export function feedbackSummary(input: {
       : input.source === "recruiter"
         ? "エージェント"
         : "自分";
-  const snippet = input.body?.trim() ?? "";
+  const snippet = firstSnippet({
+    body: normalizeFeedbackField(input.body),
+    question: normalizeFeedbackField(input.question),
+    ownAnswer: normalizeFeedbackField(input.ownAnswer),
+    resultText: normalizeFeedbackField(input.resultText),
+    reflection: normalizeFeedbackField(input.reflection),
+  });
   if (!snippet) return prefix;
   const short = snippet.length > 18 ? `${snippet.slice(0, 18)}…` : snippet;
   return `${prefix} · ${short}`;

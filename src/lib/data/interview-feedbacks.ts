@@ -49,7 +49,7 @@ export async function createInterviewFeedback(
     );
   }
 
-  const { body } = validateFeedbackContent(input);
+  const content = validateFeedbackContent(input);
   const recordedOn = input.recordedOn || tokyoTodayKey();
   const source = input.source as FeedbackSource;
 
@@ -59,7 +59,7 @@ export async function createInterviewFeedback(
       userId,
       interviewId,
       source,
-      body,
+      ...content,
       recordedOn,
     })
     .returning();
@@ -78,7 +78,7 @@ export async function updateInterviewFeedback(
     throw new ProgressError("invalid", "cancelled interview feedback is read-only");
   }
 
-  const { body } = validateFeedbackContent(input);
+  const content = validateFeedbackContent(input);
   const recordedOn = input.recordedOn || tokyoTodayKey();
   const source = input.source as FeedbackSource;
 
@@ -86,7 +86,7 @@ export async function updateInterviewFeedback(
     .update(interviewFeedbacks)
     .set({
       source,
-      body,
+      ...content,
       recordedOn,
     })
     .where(

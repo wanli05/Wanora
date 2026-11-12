@@ -32,7 +32,6 @@ const schema = z
     customPlatformName: z.string().trim().min(1).nullable().optional(),
     recruiterId: z.uuid().nullable().optional(),
     recruiterName: z.string().trim().nullable().optional(),
-    notes: optionalText,
     appliedOn: z.string().optional(),
     companyUrl: optionalText,
     companyNotes: optionalText,

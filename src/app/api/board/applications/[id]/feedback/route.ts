@@ -23,19 +23,22 @@ export async function PUT(
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
   try {
-    const { interviewId, feedbackId, source, body, recordedOn } = parsed.data;
+    const {
+      interviewId,
+      feedbackId,
+      source,
+      body = null,
+      question = null,
+      ownAnswer = null,
+      resultText = null,
+      reflection = null,
+      recordedOn,
+    } = parsed.data;
+    const content = { source, body, question, ownAnswer, resultText, reflection, recordedOn };
     if (feedbackId) {
-      await updateInterviewFeedback(getDb(), user.id, feedbackId, {
-        source,
-        body,
-        recordedOn,
-      });
+      await updateInterviewFeedback(getDb(), user.id, feedbackId, content);
     } else {
-      await createInterviewFeedback(getDb(), user.id, interviewId, {
-        source,
-        body,
-        recordedOn,
-      });
+      await createInterviewFeedback(getDb(), user.id, interviewId, content);
     }
     return Response.json(await loadBoard(getDb(), user.id));
   } catch (error) {

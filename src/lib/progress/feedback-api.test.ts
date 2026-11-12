@@ -37,8 +37,26 @@ describe("parseFeedbackUpsertBody", () => {
     }
   });
 
-  it("requires a non-empty body", () => {
+  it("rejects when every content field is empty", () => {
     expect(parseFeedbackUpsertBody({ ...base, body: "  " }).success).toBe(false);
+  });
+
+  it("accepts structured fields without body", () => {
+    const parsed = parseFeedbackUpsertBody({
+      interviewId: base.interviewId,
+      source: "self",
+      recordedOn: base.recordedOn,
+      question: "強みは？",
+      ownAnswer: "粘り強さです",
+      resultText: "保留",
+      reflection: "具体例が足りない",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.body).toBeNull();
+      expect(parsed.data.question).toBe("強みは？");
+      expect(parsed.data.resultText).toBe("保留");
+    }
   });
 });
 
