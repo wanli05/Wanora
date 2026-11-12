@@ -99,8 +99,11 @@ describe("interview feedbacks", () => {
     const app = await createApplication(db, userId, {
       company: "落選後FB社",
       platformId: platform.id,
-      includeInfoSession: true,
+      skipAptitude: true,
+      includeSecondInterview: false,
     });
+    // document_screening → interview_1 (reject is allowed here; info_session is pass-only)
+    await advanceApplication(db, userId, app.id, "pass");
     const interview = await createInterview(db, userId, app.id, {
       start: "2026-11-01T10:00:00+09:00",
       end: "2026-11-01T11:00:00+09:00",
@@ -122,3 +125,4 @@ describe("interview feedbacks", () => {
     expect(kept?.canWriteFeedback).toBe(true);
   });
 });
+
