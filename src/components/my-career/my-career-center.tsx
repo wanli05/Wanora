@@ -1,0 +1,1100 @@
+"use client";
+
+import { useActionState, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ProfilePageForm,
+  type ProfilePageFormLabels,
+  type ProfilePageInitial,
+} from "@/components/profile-page-form";
+import { ExportSheets } from "@/components/my-career/export-sheets";
+import {
+  confirmPendingProjectAction,
+  deleteCareerEmployerAction,
+  deleteCareerGoalAction,
+  deleteCareerProjectAction,
+  deleteCareerSkillAction,
+  saveCareerEmployerAction,
+  saveCareerGoalAction,
+  saveCareerProfileExtrasAction,
+  saveCareerProjectAction,
+  saveCareerSkillAction,
+  type CareerSaveState,
+} from "@/lib/career-actions";
+import type { CareerLanguage, CareerTimelineItem } from "@/lib/domain/career";
+import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
+import { formatYearMonthInputValue } from "@/lib/domain/dates";
+import { jaOf } from "@/lib/domain/career";
+import type { LocalizedText } from "@/lib/domain/localized-text";
+
+export type MyCareerModule =
+  | "profile"
+  | "work"
+  | "projects"
+  | "skills"
+  | "goals"
+  | "timeline"
+  | "export";
+
+export type MyCareerLabels = {
+  modules: Record<MyCareerModule, string>;
+  save: string;
+  add: string;
+  remove: string;
+  saved: string;
+  errors: Record<NonNullable<CareerSaveState["error"]>, string>;
+  profileBanner: string;
+  workSub: string;
+  projectsSub: string;
+  projectsPendingHint: string;
+  confirmDraft: string;
+  skillsSub: string;
+  goalsSub: string;
+  goalShort: string;
+  goalLong: string;
+  timelineSub: string;
+  exportSub: string;
+  exportRireki: string;
+  exportShokumu: string;
+  exportPrint: string;
+  residence: string;
+  salary: string;
+  languages: string;
+  titleUrl: string;
+  pendingBadge: string;
+};
+
+export type CareerEmployerDto = {
+  id: string;
+  companyNameJa: string;
+  title: string;
+  startYm: string;
+  endYm: string;
+  capitalText: string;
+  revenueText: string;
+  employeesText: string;
+  narrativeJa: string;
+};
+
+export type CareerProjectDto = {
+  id: string;
+  titleJa: string;
+  titleUrl: string;
+  startYm: string;
+  endYm: string;
+  overviewJa: string;
+  phasesJa: string;
+  responsibilitiesJa: string;
+  resultsJa: string;
+  environment: string;
+  roleText: string;
+  scaleText: string;
+  teamSizeText: string;
+  status: "confirmed" | "pending_confirm";
+};
+
+export type CareerSkillDto = {
+  id: string;
+  category: string;
+  name: string;
+  yearsText: string;
+  description: string;
+};
+
+export type CareerGoalDto = {
+  id: string;
+  kind: "short" | "long";
+  contentJa: string;
+};
+
+export type CareerExtrasInitial = {
+  headline: string;
+  directionTags: string;
+  selfPrJa: string;
+  jobSummaryJa: string;
+  strengthsText: string;
+  languages: CareerLanguage[];
+  residenceStatus: string;
+  residencePeriod: string;
+  residenceUntil: string;
+  salaryAnnualMan: string;
+  salaryBonusMan: string;
+  salaryMonthlyMan: string;
+  salaryOvertimeMan: string;
+  salaryHope: string;
+  personalHopeJa: string;
+};
+
+type Props = {
+  labels: MyCareerLabels;
+  profileForm: {
+    initial: ProfilePageInitial;
+    labels: ProfilePageFormLabels;
+  };
+  extras: CareerExtrasInitial;
+  employers: CareerEmployerDto[];
+  projects: CareerProjectDto[];
+  skills: CareerSkillDto[];
+  goals: CareerGoalDto[];
+  licenses: { yearMonth: string; nameJa: string }[];
+  timeline: CareerTimelineItem[];
+  exportSnapshot: ExportSnapshot;
+};
+
+const MODULES: MyCareerModule[] = [
+  "profile",
+  "work",
+  "projects",
+  "skills",
+  "goals",
+  "timeline",
+  "export",
+];
+
+export function MyCareerCenter(props: Props) {
+  const [module, setModule] = useState<MyCareerModule>("profile");
+  const [exportDoc, setExportDoc] = useState<"rirekisho" | "shokumu">(
+    "rirekisho",
+  );
+
+  return (
+    <div className="mc-shell">
+      <div className="mc-layout">
+        <aside className="mc-side mc-no-print">
+          <h2>My Career</h2>
+          {MODULES.map((id, index) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={module === id ? "page" : undefined}
+              onClick={() => setModule(id)}
+            >
+              <span className="mc-n">{id === "export" ? "↓" : index + 1}</span>
+              <span>{props.labels.modules[id]}</span>
+            </button>
+          ))}
+        </aside>
+        <div className="mc-main">
+          {module === "profile" ? (
+            <ProfileModule {...props} />
+          ) : null}
+          {module === "work" ? (
+            <WorkModule
+              labels={props.labels}
+              employers={props.employers}
+            />
+          ) : null}
+          {module === "projects" ? (
+            <ProjectsModule labels={props.labels} projects={props.projects} />
+          ) : null}
+          {module === "skills" ? (
+            <SkillsModule
+              labels={props.labels}
+              skills={props.skills}
+              licenses={props.licenses}
+            />
+          ) : null}
+          {module === "goals" ? (
+            <GoalsModule labels={props.labels} goals={props.goals} />
+          ) : null}
+          {module === "timeline" ? (
+            <TimelineModule
+              labels={props.labels}
+              timeline={props.timeline}
+              onJump={setModule}
+            />
+          ) : null}
+          {module === "export" ? (
+            <ExportModule
+              labels={props.labels}
+              snapshot={props.exportSnapshot}
+              doc={exportDoc}
+              setDoc={setExportDoc}
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Feedback({
+  state,
+  labels,
+}: {
+  state: CareerSaveState;
+  labels: MyCareerLabels;
+}) {
+  if (state.ok) return <p className="text-sm text-teal-800">{labels.saved}</p>;
+  if (state.error)
+    return <p className="text-sm text-red-700">{labels.errors[state.error]}</p>;
+  return null;
+}
+
+function ProfileModule({
+  labels,
+  profileForm,
+  extras,
+  timeline,
+}: Props) {
+  const [state, action, pending] = useActionState(
+    saveCareerProfileExtrasAction,
+    {},
+  );
+  const [langs, setLangs] = useState(extras.languages);
+  const recent = timeline.slice(0, 4);
+
+  return (
+    <div className="mc-stack">
+      <div className="mc-banner mc-banner-ok">{labels.profileBanner}</div>
+      <div className="mc-card">
+        <p className="text-2xl font-semibold text-[var(--mc-teal-deep)]">
+          {jaOf(profileForm.initial.fullName as LocalizedText) || "—"}
+        </p>
+        <p className="mt-1 text-sm text-[var(--mc-muted)]">
+          {extras.headline || "—"}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {extras.directionTags
+            .split(/[,、]/)
+            .map((t) => t.trim())
+            .filter(Boolean)
+            .map((tag) => (
+              <span key={tag} className="mc-chip">
+                {tag}
+              </span>
+            ))}
+        </div>
+      </div>
+
+      <form action={action} className="mc-card mc-stack">
+        <input type="hidden" name="languagesJson" value={JSON.stringify(langs)} />
+        <label className="mc-field">
+          ヘッドライン
+          <input name="headline" defaultValue={extras.headline} />
+        </label>
+        <label className="mc-field">
+          方向タグ（読点区切り）
+          <input name="directionTags" defaultValue={extras.directionTags} />
+        </label>
+        <label className="mc-field">
+          自己PR
+          <textarea name="selfPr_ja" rows={4} defaultValue={extras.selfPrJa} />
+        </label>
+        <label className="mc-field">
+          職務要約
+          <textarea
+            name="jobSummary_ja"
+            rows={4}
+            defaultValue={extras.jobSummaryJa}
+          />
+        </label>
+        <label className="mc-field">
+          活かせる経験（1行1項目）
+          <textarea
+            name="strengths"
+            rows={4}
+            defaultValue={extras.strengthsText}
+          />
+        </label>
+
+        <div className="mc-grid-2">
+          <div className="mc-card">
+            <h3 className="mb-2 font-semibold text-[var(--mc-teal-deep)]">
+              {labels.residence}
+            </h3>
+            <label className="mc-field">
+              在留資格
+              <input
+                name="residenceStatus"
+                defaultValue={extras.residenceStatus}
+              />
+            </label>
+            <label className="mc-field">
+              在留期間
+              <input
+                name="residencePeriod"
+                defaultValue={extras.residencePeriod}
+              />
+            </label>
+            <label className="mc-field">
+              期限日
+              <input
+                type="date"
+                name="residenceUntil"
+                defaultValue={extras.residenceUntil}
+              />
+            </label>
+          </div>
+          <div className="mc-card">
+            <h3 className="mb-2 font-semibold text-[var(--mc-teal-deep)]">
+              {labels.salary}
+            </h3>
+            <label className="mc-field">
+              年収（万円）
+              <input
+                name="salaryAnnualMan"
+                defaultValue={extras.salaryAnnualMan}
+              />
+            </label>
+            <label className="mc-field">
+              賞与（万円）
+              <input name="salaryBonusMan" defaultValue={extras.salaryBonusMan} />
+            </label>
+            <label className="mc-field">
+              月収（万円）
+              <input
+                name="salaryMonthlyMan"
+                defaultValue={extras.salaryMonthlyMan}
+              />
+            </label>
+            <label className="mc-field">
+              時間外（万円）
+              <input
+                name="salaryOvertimeMan"
+                defaultValue={extras.salaryOvertimeMan}
+              />
+            </label>
+            <label className="mc-field">
+              希望年収
+              <input name="salaryHope" defaultValue={extras.salaryHope} />
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-2 font-semibold text-[var(--mc-teal-deep)]">
+            {labels.languages}
+          </h3>
+          <LanguageEditor languages={langs} onChange={setLangs} />
+        </div>
+
+        <label className="mc-field">
+          本人希望
+          <textarea
+            name="personalHope_ja"
+            rows={2}
+            defaultValue={extras.personalHopeJa}
+          />
+        </label>
+
+        <button className="mc-btn" type="submit" disabled={pending}>
+          {labels.save}
+        </button>
+        <Feedback state={state} labels={labels} />
+      </form>
+
+      <div className="mc-sec-head">
+        <div>
+          <h2>履歴書フィールド</h2>
+          <p>基本情報・学歴・簡略職歴・資格（既存フォーム）</p>
+        </div>
+      </div>
+      <ProfilePageForm
+        initial={profileForm.initial}
+        labels={profileForm.labels}
+      />
+
+      <div className="mc-sec-head">
+        <div>
+          <h2>最近の出来事</h2>
+        </div>
+      </div>
+      <div className="mc-timeline">
+        {recent.map((item) => (
+          <div key={item.id} className="mc-tl-item">
+            <p className="text-xs font-semibold text-[var(--mc-muted)]">
+              {item.at}
+            </p>
+            <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
+              {item.title}
+            </h3>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LanguageEditor({
+  languages,
+  onChange,
+}: {
+  languages: CareerLanguage[];
+  onChange: (next: CareerLanguage[]) => void;
+}) {
+  return (
+    <div className="mc-stack">
+      {languages.map((lang, index) => (
+        <div key={index} className="mc-grid-2">
+          <label className="mc-field">
+            言語
+            <input
+              value={lang.language}
+              onChange={(e) => {
+                const next = [...languages];
+                next[index] = { ...lang, language: e.target.value };
+                onChange(next);
+              }}
+            />
+          </label>
+          <label className="mc-field">
+            レベル
+            <input
+              value={lang.level}
+              onChange={(e) => {
+                const next = [...languages];
+                next[index] = { ...lang, level: e.target.value };
+                onChange(next);
+              }}
+            />
+          </label>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="mc-btn mc-btn-ghost"
+        onClick={() =>
+          onChange([...languages, { language: "", level: "ビジネス" }])
+        }
+      >
+        言語を追加
+      </button>
+    </div>
+  );
+}
+
+function WorkModule({
+  labels,
+  employers,
+}: {
+  labels: MyCareerLabels;
+  employers: CareerEmployerDto[];
+}) {
+  const [state, action, pending] = useActionState(saveCareerEmployerAction, {});
+  const [editing, setEditing] = useState<CareerEmployerDto | null>(null);
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <div className="mc-stack">
+      <div className="mc-sec-head">
+        <div>
+          <h2>{labels.modules.work}</h2>
+          <p>{labels.workSub}</p>
+        </div>
+        <button
+          type="button"
+          className="mc-btn"
+          onClick={() =>
+            setEditing({
+              id: "",
+              companyNameJa: "",
+              title: "",
+              startYm: formatYearMonthInputValue(
+                new Date().getFullYear(),
+                new Date().getMonth() + 1,
+              ),
+              endYm: "",
+              capitalText: "",
+              revenueText: "",
+              employeesText: "",
+              narrativeJa: "",
+            })
+          }
+        >
+          {labels.add}
+        </button>
+      </div>
+      <div className="mc-stack">
+        {employers.map((row) => (
+          <article key={row.id} className="mc-card">
+            <h3 className="font-semibold text-[var(--mc-teal-deep)]">
+              {row.companyNameJa}
+            </h3>
+            <p className="text-xs text-[var(--mc-muted)]">
+              {row.startYm} — {row.endYm || "現在"} · {row.title}
+            </p>
+            <p className="mt-2 text-sm">
+              {[row.capitalText, row.revenueText, row.employeesText]
+                .filter(Boolean)
+                .join(" / ")}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="mc-btn mc-btn-ghost"
+                onClick={() => setEditing(row)}
+              >
+                編集
+              </button>
+              <button
+                type="button"
+                className="mc-btn mc-btn-danger"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await deleteCareerEmployerAction(row.id);
+                    router.refresh();
+                  })
+                }
+              >
+                {labels.remove}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {editing ? (
+        <form action={action} className="mc-card mc-stack">
+          <input type="hidden" name="id" value={editing.id} />
+          <label className="mc-field">
+            会社名
+            <input
+              name="companyName_ja"
+              defaultValue={editing.companyNameJa}
+              required
+            />
+          </label>
+          <label className="mc-field">
+            職位
+            <input name="title" defaultValue={editing.title} />
+          </label>
+          <div className="mc-grid-2">
+            <label className="mc-field">
+              開始
+              <input
+                type="month"
+                name="startYm"
+                defaultValue={editing.startYm}
+                required
+              />
+            </label>
+            <label className="mc-field">
+              終了（空=現在）
+              <input type="month" name="endYm" defaultValue={editing.endYm} />
+            </label>
+          </div>
+          <label className="mc-field">
+            資本金
+            <input name="capitalText" defaultValue={editing.capitalText} />
+          </label>
+          <label className="mc-field">
+            売上高
+            <input name="revenueText" defaultValue={editing.revenueText} />
+          </label>
+          <label className="mc-field">
+            従業員数
+            <input name="employeesText" defaultValue={editing.employeesText} />
+          </label>
+          <label className="mc-field">
+            叙述
+            <textarea
+              name="narrative_ja"
+              rows={3}
+              defaultValue={editing.narrativeJa}
+            />
+          </label>
+          <div className="flex gap-2">
+            <button className="mc-btn" type="submit" disabled={pending}>
+              {labels.save}
+            </button>
+            <button
+              type="button"
+              className="mc-btn mc-btn-ghost"
+              onClick={() => setEditing(null)}
+            >
+              閉じる
+            </button>
+          </div>
+          <Feedback state={state} labels={labels} />
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectsModule({
+  labels,
+  projects,
+}: {
+  labels: MyCareerLabels;
+  projects: CareerProjectDto[];
+}) {
+  const [state, action, pending] = useActionState(saveCareerProjectAction, {});
+  const [editing, setEditing] = useState<CareerProjectDto | null>(null);
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const empty = (): CareerProjectDto => ({
+    id: "",
+    titleJa: "",
+    titleUrl: "",
+    startYm: formatYearMonthInputValue(
+      new Date().getFullYear(),
+      new Date().getMonth() + 1,
+    ),
+    endYm: "",
+    overviewJa: "",
+    phasesJa: "",
+    responsibilitiesJa: "",
+    resultsJa: "",
+    environment: "",
+    roleText: "",
+    scaleText: "",
+    teamSizeText: "",
+    status: "confirmed",
+  });
+
+  return (
+    <div className="mc-stack">
+      <div className="mc-sec-head">
+        <div>
+          <h2>{labels.modules.projects}</h2>
+          <p>{labels.projectsSub}</p>
+        </div>
+        <button type="button" className="mc-btn" onClick={() => setEditing(empty())}>
+          {labels.add}
+        </button>
+      </div>
+      <div className="mc-banner">{labels.projectsPendingHint}</div>
+      <div className="mc-stack">
+        {projects.map((row) => (
+          <article key={row.id} className="mc-card">
+            <h3 className="font-semibold text-[var(--mc-teal-deep)]">
+              {row.titleUrl ? (
+                <a
+                  href={row.titleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                  style={{ color: "var(--mc-link)" }}
+                >
+                  {row.titleJa}
+                </a>
+              ) : (
+                row.titleJa
+              )}
+              {row.status === "pending_confirm" ? (
+                <span className="mc-chip ml-2">{labels.pendingBadge}</span>
+              ) : null}
+            </h3>
+            <p className="text-xs text-[var(--mc-muted)]">
+              {row.startYm} — {row.endYm || "現在"} · {row.roleText}
+            </p>
+            <p className="mt-2 text-sm whitespace-pre-wrap">{row.overviewJa}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="mc-btn mc-btn-ghost"
+                onClick={() => setEditing(row)}
+              >
+                編集
+              </button>
+              {row.status === "pending_confirm" ? (
+                <button
+                  type="button"
+                  className="mc-btn"
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await confirmPendingProjectAction(row.id);
+                      router.refresh();
+                    })
+                  }
+                >
+                  {labels.confirmDraft}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="mc-btn mc-btn-danger"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await deleteCareerProjectAction(row.id);
+                    router.refresh();
+                  })
+                }
+              >
+                {labels.remove}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {editing ? (
+        <form action={action} className="mc-card mc-stack">
+          <input type="hidden" name="id" value={editing.id} />
+          <label className="mc-field">
+            タイトル
+            <input name="title_ja" defaultValue={editing.titleJa} required />
+          </label>
+          <label className="mc-field">
+            {labels.titleUrl}
+            <input name="titleUrl" type="url" defaultValue={editing.titleUrl} />
+          </label>
+          <div className="mc-grid-2">
+            <label className="mc-field">
+              開始
+              <input
+                type="month"
+                name="startYm"
+                defaultValue={editing.startYm}
+                required
+              />
+            </label>
+            <label className="mc-field">
+              終了
+              <input type="month" name="endYm" defaultValue={editing.endYm} />
+            </label>
+          </div>
+          <label className="mc-field">
+            ステータス
+            <select name="status" defaultValue={editing.status}>
+              <option value="confirmed">confirmed</option>
+              <option value="pending_confirm">pending_confirm</option>
+            </select>
+          </label>
+          <label className="mc-field">
+            概要
+            <textarea
+              name="overview_ja"
+              rows={3}
+              defaultValue={editing.overviewJa}
+            />
+          </label>
+          <label className="mc-field">
+            担当フェーズ
+            <textarea name="phases_ja" rows={2} defaultValue={editing.phasesJa} />
+          </label>
+          <label className="mc-field">
+            業務内容
+            <textarea
+              name="responsibilities_ja"
+              rows={3}
+              defaultValue={editing.responsibilitiesJa}
+            />
+          </label>
+          <label className="mc-field">
+            実績
+            <textarea
+              name="results_ja"
+              rows={3}
+              defaultValue={editing.resultsJa}
+            />
+          </label>
+          <label className="mc-field">
+            開発環境
+            <textarea
+              name="environment"
+              rows={3}
+              defaultValue={editing.environment}
+            />
+          </label>
+          <label className="mc-field">
+            役割
+            <input name="roleText" defaultValue={editing.roleText} />
+          </label>
+          <label className="mc-field">
+            規模
+            <input name="scaleText" defaultValue={editing.scaleText} />
+          </label>
+          <label className="mc-field">
+            チーム規模
+            <input name="teamSizeText" defaultValue={editing.teamSizeText} />
+          </label>
+          <div className="flex gap-2">
+            <button className="mc-btn" type="submit" disabled={pending}>
+              {labels.save}
+            </button>
+            <button
+              type="button"
+              className="mc-btn mc-btn-ghost"
+              onClick={() => setEditing(null)}
+            >
+              閉じる
+            </button>
+          </div>
+          <Feedback state={state} labels={labels} />
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
+function SkillsModule({
+  labels,
+  skills,
+  licenses,
+}: {
+  labels: MyCareerLabels;
+  skills: CareerSkillDto[];
+  licenses: { yearMonth: string; nameJa: string }[];
+}) {
+  const [state, action, pending] = useActionState(saveCareerSkillAction, {});
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <div className="mc-stack">
+      <div className="mc-sec-head">
+        <div>
+          <h2>{labels.modules.skills}</h2>
+          <p>{labels.skillsSub}</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {skills.map((skill) => (
+          <div key={skill.id} className="mc-card">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs text-[var(--mc-muted)]">{skill.category}</p>
+                <p className="font-semibold">{skill.name}</p>
+                <p className="text-xs text-[var(--mc-muted)]">{skill.yearsText}</p>
+                <p className="mt-1 text-sm">{skill.description}</p>
+              </div>
+              <button
+                type="button"
+                className="mc-btn mc-btn-danger"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await deleteCareerSkillAction(skill.id);
+                    router.refresh();
+                  })
+                }
+              >
+                {labels.remove}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <form action={action} className="mc-card mc-stack">
+        <div className="mc-grid-2">
+          <label className="mc-field">
+            分類
+            <input name="category" required />
+          </label>
+          <label className="mc-field">
+            技術
+            <input name="name" required />
+          </label>
+        </div>
+        <label className="mc-field">
+          経験
+          <input name="yearsText" required />
+        </label>
+        <label className="mc-field">
+          内容
+          <input name="description" />
+        </label>
+        <button className="mc-btn" type="submit" disabled={pending}>
+          {labels.add}
+        </button>
+        <Feedback state={state} labels={labels} />
+      </form>
+      <article className="mc-card">
+        <h3 className="font-semibold text-[var(--mc-teal-deep)]">資格</h3>
+        <ul className="mt-2 list-disc pl-5 text-sm">
+          {licenses.map((lic, i) => (
+            <li key={i}>
+              {lic.yearMonth} {lic.nameJa}
+            </li>
+          ))}
+        </ul>
+      </article>
+    </div>
+  );
+}
+
+function GoalsModule({
+  labels,
+  goals,
+}: {
+  labels: MyCareerLabels;
+  goals: CareerGoalDto[];
+}) {
+  const [state, action, pending] = useActionState(saveCareerGoalAction, {});
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const shortGoals = useMemo(
+    () => goals.filter((g) => g.kind === "short"),
+    [goals],
+  );
+  const longGoals = useMemo(
+    () => goals.filter((g) => g.kind === "long"),
+    [goals],
+  );
+
+  return (
+    <div className="mc-stack">
+      <div className="mc-sec-head">
+        <div>
+          <h2>{labels.modules.goals}</h2>
+          <p>{labels.goalsSub}</p>
+        </div>
+      </div>
+      <div className="mc-grid-2">
+        <article className="mc-card">
+          <h3 className="font-semibold text-[var(--mc-teal-deep)]">
+            {labels.goalShort}
+          </h3>
+          <ul className="mt-2 list-disc pl-5 text-sm">
+            {shortGoals.map((g) => (
+              <li key={g.id} className="mb-2">
+                {g.contentJa}{" "}
+                <button
+                  type="button"
+                  className="mc-btn mc-btn-danger ml-2"
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await deleteCareerGoalAction(g.id);
+                      router.refresh();
+                    })
+                  }
+                >
+                  {labels.remove}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </article>
+        <article className="mc-card">
+          <h3 className="font-semibold text-[var(--mc-teal-deep)]">
+            {labels.goalLong}
+          </h3>
+          <ul className="mt-2 list-disc pl-5 text-sm">
+            {longGoals.map((g) => (
+              <li key={g.id} className="mb-2">
+                {g.contentJa}{" "}
+                <button
+                  type="button"
+                  className="mc-btn mc-btn-danger ml-2"
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await deleteCareerGoalAction(g.id);
+                      router.refresh();
+                    })
+                  }
+                >
+                  {labels.remove}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </div>
+      <form action={action} className="mc-card mc-stack">
+        <label className="mc-field">
+          種類
+          <select name="kind" defaultValue="short">
+            <option value="short">{labels.goalShort}</option>
+            <option value="long">{labels.goalLong}</option>
+          </select>
+        </label>
+        <label className="mc-field">
+          内容
+          <textarea name="content_ja" rows={3} required />
+        </label>
+        <button className="mc-btn" type="submit" disabled={pending}>
+          {labels.add}
+        </button>
+        <Feedback state={state} labels={labels} />
+      </form>
+    </div>
+  );
+}
+
+function TimelineModule({
+  labels,
+  timeline,
+  onJump,
+}: {
+  labels: MyCareerLabels;
+  timeline: CareerTimelineItem[];
+  onJump: (m: MyCareerModule) => void;
+}) {
+  return (
+    <div className="mc-stack">
+      <div className="mc-sec-head">
+        <div>
+          <h2>{labels.modules.timeline}</h2>
+          <p>{labels.timelineSub}</p>
+        </div>
+      </div>
+      <div className="mc-timeline">
+        {timeline.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="mc-tl-item text-left"
+            onClick={() => onJump(item.module)}
+          >
+            <p className="text-xs font-semibold text-[var(--mc-muted)]">
+              {item.at}
+            </p>
+            <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
+              {item.title}
+            </h3>
+            {item.summary ? (
+              <p className="text-sm text-[var(--mc-muted)]">{item.summary}</p>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ExportModule({
+  labels,
+  snapshot,
+  doc,
+  setDoc,
+}: {
+  labels: MyCareerLabels;
+  snapshot: ExportSnapshot;
+  doc: "rirekisho" | "shokumu";
+  setDoc: (d: "rirekisho" | "shokumu") => void;
+}) {
+  return (
+    <div className="mc-stack">
+      <div className="mc-sec-head mc-no-print">
+        <div>
+          <h2>{labels.modules.export}</h2>
+          <p>{labels.exportSub}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={`mc-btn ${doc === "rirekisho" ? "" : "mc-btn-ghost"}`}
+            aria-pressed={doc === "rirekisho"}
+            onClick={() => setDoc("rirekisho")}
+          >
+            {labels.exportRireki}
+          </button>
+          <button
+            type="button"
+            className={`mc-btn ${doc === "shokumu" ? "" : "mc-btn-ghost"}`}
+            aria-pressed={doc === "shokumu"}
+            onClick={() => setDoc("shokumu")}
+          >
+            {labels.exportShokumu}
+          </button>
+          <button
+            type="button"
+            className="mc-btn mc-btn-ghost"
+            onClick={() => window.print()}
+          >
+            {labels.exportPrint}
+          </button>
+        </div>
+      </div>
+      <ExportSheets snapshot={snapshot} doc={doc} />
+    </div>
+  );
+}

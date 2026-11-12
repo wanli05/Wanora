@@ -4,9 +4,10 @@
   },
   "Nav": {
     "language": "表示言語",
-    "progress": "進捗",
+    "progress": "進捗ボード",
     "recruiters": "エージェント",
-    "profile": "個人資料"
+    "profile": "個人資料",
+    "myCareer": "My Career"
   },
   "Home": {
     "tagline": "日本で就職・転職活動をする人のための応募管理アプリ"
@@ -283,5 +284,46 @@
         "transferred": "異動"
       }
     }
+  },
+  "MyCareer": {
+    "title": "My Career",
+    "subtitle": "職業アーカイブ中心。書類の本文は日本語で入力します（画面表示言語は右上で切替）。",
+    "modules": {
+      "profile": "プロフィール",
+      "work": "職歴",
+      "projects": "プロジェクト",
+      "skills": "スキルと成長",
+      "goals": "キャリア目標",
+      "timeline": "タイムライン",
+      "export": "导出预览"
+    },
+    "save": "保存",
+    "add": "追加",
+    "remove": "削除",
+    "saved": "保存しました。",
+    "errors": {
+      "unauthenticated": "ログインし直してください。",
+      "invalid": "入力内容を確認してください。",
+      "saveFailed": "保存に失敗しました。"
+    },
+    "profileBanner": "档案总览：身份 + 語学 + 在留 + 給与。旧JIS四栏なし。",
+    "workSub": "会社メタと職位。履歴書の簡略行と職務経歴書の詳細を同源。",
+    "projectsSub": "タイトルに作品／倉庫リンク可。四列投影。",
+    "projectsPendingHint": "pending_confirm は確認後に確定（本ラウンドは手工カード、モデル未接続）。",
+    "confirmDraft": "確認して確定",
+    "skillsSub": "年数 + 説明（職務経歴書スキル行列）。",
+    "goalsSub": "短期／長期。希望年収はプロフィールの給与へ。",
+    "goalShort": "短期",
+    "goalLong": "長期",
+    "timelineSub": "只読集約。导出本文には入りません。",
+    "exportSub": "export-final 目視同構。印刷で PDF 化可。「○日現在」= 导出当天 Asia/Tokyo。",
+    "exportRireki": "履歴書",
+    "exportShokumu": "職務経歴書",
+    "exportPrint": "印刷 / PDF",
+    "residence": "在留",
+    "salary": "給与",
+    "languages": "語学",
+    "titleUrl": "タイトル超リンク",
+    "pendingBadge": "確認待ち"
   }
 }

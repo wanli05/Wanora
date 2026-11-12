@@ -4,9 +4,10 @@
   },
   "Nav": {
     "language": "界面语言",
-    "progress": "进度",
+    "progress": "进度板",
     "recruiters": "猎头",
-    "profile": "个人资料"
+    "profile": "个人资料",
+    "myCareer": "My Career"
   },
   "Home": {
     "tagline": "面向在日本求职者的投递进度管理应用"
@@ -283,5 +284,46 @@
         "transferred": "调动"
       }
     }
+  },
+  "MyCareer": {
+    "title": "My Career",
+    "subtitle": "职业档案中心。履历正文只填日语（界面语言可在右上切换）。",
+    "modules": {
+      "profile": "プロフィール",
+      "work": "職歴",
+      "projects": "プロジェクト",
+      "skills": "スキルと成長",
+      "goals": "キャリア目標",
+      "timeline": "タイムライン",
+      "export": "导出预览"
+    },
+    "save": "保存",
+    "add": "添加",
+    "remove": "删除",
+    "saved": "已保存。",
+    "errors": {
+      "unauthenticated": "请重新登录。",
+      "invalid": "请检查输入。",
+      "saveFailed": "保存失败。"
+    },
+    "profileBanner": "档案总览：身份 + 语学 + 在留 + 给与。无旧 JIS 四栏。",
+    "workSub": "会社元数据与职位；与履歴書简略行、職務経歴書详情同源。",
+    "projectsSub": "标题可挂作品/仓库链接；四列投影。",
+    "projectsPendingHint": "pending_confirm 确认后写入（本轮手工卡片，不接模型）。",
+    "confirmDraft": "确认并保存",
+    "skillsSub": "年数 + 说明（对齐職務経歴書技能矩阵）。",
+    "goalsSub": "短期/长期；希望年収在档案总览給与。",
+    "goalShort": "短期",
+    "goalLong": "長期",
+    "timelineSub": "只读聚合；不进入导出正文。",
+    "exportSub": "对齐 export-final 目视同构。可用打印生成 PDF。「○日現在」= 导出当天 Asia/Tokyo。",
+    "exportRireki": "履歴書",
+    "exportShokumu": "職務経歴書",
+    "exportPrint": "打印 / PDF",
+    "residence": "在留",
+    "salary": "給与",
+    "languages": "語学",
+    "titleUrl": "标题超链接",
+    "pendingBadge": "待确认"
   }
 }
