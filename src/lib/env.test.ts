@@ -42,4 +42,14 @@ describe("parseServerEnv", () => {
       }).AUTH_GOOGLE_CLIENT_ID,
     ).toBe("id");
   });
+
+  it("requires S3 settings to be set together", () => {
+    expect(() =>
+      parseServerEnv({
+        ...base,
+        S3_ENDPOINT: "http://localhost:9000",
+        S3_ACCESS_KEY: "minioadmin",
+      }),
+    ).toThrow(/S3_/);
+  });
 });

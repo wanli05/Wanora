@@ -7,6 +7,11 @@ const serverEnvSchema = z
     AUTH_URL: z.url().default("http://localhost:3000"),
     AUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     AUTH_GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    S3_ENDPOINT: z.url().optional(),
+    S3_ACCESS_KEY: z.string().min(1).optional(),
+    S3_SECRET_KEY: z.string().min(1).optional(),
+    S3_BUCKET: z.string().min(1).optional(),
+    S3_REGION: z.string().min(1).optional(),
   })
   .refine(
     (env) => !!env.AUTH_GOOGLE_CLIENT_ID === !!env.AUTH_GOOGLE_CLIENT_SECRET,
@@ -14,6 +19,19 @@ const serverEnvSchema = z
       message:
         "AUTH_GOOGLE_CLIENT_ID and AUTH_GOOGLE_CLIENT_SECRET must be set together",
     },
+  )
+  .refine(
+    (env) => {
+      const keys = [
+        env.S3_ENDPOINT,
+        env.S3_ACCESS_KEY,
+        env.S3_SECRET_KEY,
+        env.S3_BUCKET,
+      ];
+      const set = keys.filter(Boolean).length;
+      return set === 0 || set === 4;
+    },
+    { message: "S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, and S3_BUCKET must be set together" },
   );
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -33,4 +51,15 @@ let cached: ServerEnv | undefined;
 export function getServerEnv(): ServerEnv {
   cached ??= parseServerEnv(process.env);
   return cached;
+}
+
+export function isObjectStorageConfigured(
+  env: ServerEnv = getServerEnv(),
+): boolean {
+  return Boolean(
+    env.S3_ENDPOINT &&
+      env.S3_ACCESS_KEY &&
+      env.S3_SECRET_KEY &&
+      env.S3_BUCKET,
+  );
 }

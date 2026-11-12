@@ -1,0 +1,227 @@
+import {
+  BOARD_COLUMN_KINDS,
+  DEFAULT_STAGE_ORDER,
+  INTERVIEW_STAGE_KINDS,
+  MID_CAREER_SKIPPED,
+  type BoardColumnKind,
+  type OfferDecision,
+  type Outcome,
+  type StageKind,
+  type StageStatus,
+} from "./enums";
+
+export type StageSnapshot = {
+  id: string;
+  kind: StageKind;
+  customLabel: string | null;
+  position: number;
+  status: StageStatus;
+  deadlineAt: string | null;
+};
+
+export function midCareerStages(): {
+  kind: StageKind;
+  status: StageStatus;
+  position: number;
+}[] {
+  return DEFAULT_STAGE_ORDER.map((kind, position) => ({
+    kind,
+    position,
+    status: MID_CAREER_SKIPPED.has(kind) ? "skipped" : "pending",
+  }));
+}
+
+export function isClosed(
+  outcome: Outcome,
+  offerDecision: OfferDecision | null,
+): boolean {
+  if (outcome === "rejected" || outcome === "withdrawn") return true;
+  return outcome === "offer" && offerDecision !== "pending";
+}
+
+export function currentStage<T extends StageSnapshot>(
+  stages: T[],
+  outcome: Outcome,
+  offerDecision: OfferDecision | null,
+): T | undefined {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  if (outcome === "rejected") {
+    return ordered.find((stage) => stage.status === "failed");
+  }
+  if (outcome === "withdrawn") {
+    return ordered.find(
+      (stage) => stage.status === "pending" || stage.status === "scheduled",
+    );
+  }
+  if (outcome === "offer" && offerDecision !== "accepted") {
+    return ordered.find((stage) => stage.kind === "offer");
+  }
+  return ordered.find(
+    (stage) => stage.status === "pending" || stage.status === "scheduled",
+  );
+}
+
+export function stageDisplayName(stage: StageSnapshot): string {
+  if (stage.kind === "custom") return stage.customLabel ?? "カスタム";
+  const names: Record<string, string> = {
+    info_session: "説明会",
+    document_screening: "書類選考",
+    aptitude_test: "適性検査",
+    skill_test: "スキルテスト",
+    interview_1: "一次面接",
+    interview_2: "二次面接",
+    interview_final: "最終面接",
+    casual_meeting: "カジュアル面談",
+    offer: "内定",
+  };
+  return names[stage.kind] ?? stage.kind;
+}
+
+export function canScheduleInterview(kind: StageKind): boolean {
+  return INTERVIEW_STAGE_KINDS.has(kind);
+}
+
+export const ADVANCE_ACTIONS = [
+  "pass",
+  "skip",
+  "reject",
+  "withdraw",
+  "offer",
+] as const;
+
+export type AdvanceAction = (typeof ADVANCE_ACTIONS)[number];
+
+/** Which stage-outcome buttons exist for the current stage. */
+export function allowedAdvanceActions(kind: StageKind): readonly AdvanceAction[] {
+  // Skip is not offered in the UI (same board effect as pass).
+  if (kind === "info_session") return ["pass"];
+  if (kind === "interview_final") return ["pass", "reject", "offer"];
+  if (kind === "offer") return [];
+  return ["pass", "reject", "withdraw"];
+}
+
+export function isAdvanceActionAllowed(
+  kind: StageKind | null | undefined,
+  action: AdvanceAction,
+): boolean {
+  if (!kind) return false;
+  return allowedAdvanceActions(kind).includes(action);
+}
+
+/** 説明会 stays hidden until an in-progress application is actually in that stage. */
+export function visibleBoardColumns(
+  apps: {
+    currentStageKind: StageKind | null;
+    outcome: Outcome;
+    offerDecision: OfferDecision | null;
+  }[],
+): readonly BoardColumnKind[] {
+  const hasOpenInfoSession = apps.some(
+    (app) =>
+      app.currentStageKind === "info_session" &&
+      !isClosed(app.outcome, app.offerDecision),
+  );
+  return BOARD_COLUMN_KINDS.filter(
+    (kind) => kind !== "info_session" || hasOpenInfoSession,
+  );
+}
+
+export function passStages<T extends StageSnapshot>(stages: T[]): T[] {
+  const current = currentStage(stages, "in_progress", null);
+  if (!current) return stages;
+  const next = [...stages].sort((a, b) => a.position - b.position);
+  return next.map((stage) =>
+    stage.id === current.id ? { ...stage, status: "passed" as const } : stage,
+  );
+}
+
+export function skipStages<T extends StageSnapshot>(stages: T[]): T[] {
+  const current = currentStage(stages, "in_progress", null);
+  if (!current) return stages;
+  return stages.map((stage) =>
+    stage.id === current.id ? { ...stage, status: "skipped" as const } : stage,
+  );
+}
+
+export function failCurrent<T extends StageSnapshot>(stages: T[]): T[] {
+  const current = currentStage(stages, "in_progress", null);
+  if (!current) return stages;
+  return stages.map((stage) =>
+    stage.id === current.id ? { ...stage, status: "failed" as const } : stage,
+  );
+}
+
+export function jumpToOffer<T extends StageSnapshot>(stages: T[]): T[] {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  const offer = ordered.find((stage) => stage.kind === "offer");
+  return stages.map((stage) => {
+    if (stage.kind === "offer") {
+      return { ...stage, status: "pending" as const };
+    }
+    if (
+      offer &&
+      stage.position < offer.position &&
+      (stage.status === "pending" || stage.status === "scheduled")
+    ) {
+      return { ...stage, status: "skipped" as const };
+    }
+    return stage;
+  });
+}
+
+export function outcomeAfterStages<T extends StageSnapshot>(
+  stages: T[],
+  previous: Outcome,
+): { outcome: Outcome; offerDecision: OfferDecision | null } {
+  if (previous === "rejected" || previous === "withdrawn") {
+    return { outcome: previous, offerDecision: null };
+  }
+  const current = currentStage(stages, "in_progress", null);
+  if (!current || current.kind === "offer") {
+    return { outcome: "offer", offerDecision: "pending" };
+  }
+  return { outcome: "in_progress", offerDecision: null };
+}
+
+/** Revert the most recently passed stage back to pending. */
+export function undoLastPass<T extends StageSnapshot>(stages: T[]): T[] {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  const lastPassed = [...ordered].reverse().find((stage) => stage.status === "passed");
+  if (!lastPassed) return stages;
+  return stages.map((stage) =>
+    stage.id === lastPassed.id ? { ...stage, status: "pending" as const } : stage,
+  );
+}
+
+/**
+ * Undo jump-to-offer: restore consecutive skipped stages before offer.
+ * Leaves a leading info_session skip in place so mid-career boards return to
+ * document screening (or whichever stage was current), not the info column.
+ */
+export function undoJumpToOffer<T extends StageSnapshot>(stages: T[]): T[] {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  const offerIndex = ordered.findIndex((stage) => stage.kind === "offer");
+  if (offerIndex < 0) return stages;
+  const restoreIds = new Set<string>();
+  for (let i = offerIndex - 1; i >= 0; i -= 1) {
+    const stage = ordered[i];
+    if (!stage || stage.status !== "skipped") break;
+    if (stage.kind === "info_session") continue;
+    restoreIds.add(stage.id);
+  }
+  if (restoreIds.size === 0) return stages;
+  return stages.map((stage) =>
+    restoreIds.has(stage.id) ? { ...stage, status: "pending" as const } : stage,
+  );
+}
+
+export function canUndoAdvance(input: {
+  outcome: Outcome;
+  offerDecision: OfferDecision | null;
+  stages: StageSnapshot[];
+}): boolean {
+  if (isClosed(input.outcome, input.offerDecision)) return true;
+  if (input.outcome === "offer" && input.offerDecision === "pending") return true;
+  if (input.outcome !== "in_progress") return false;
+  return input.stages.some((stage) => stage.status === "passed");
+}

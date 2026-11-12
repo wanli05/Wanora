@@ -41,6 +41,12 @@ CI（`.github/workflows/ci.yml`）在每个 PR 和 main 推送上运行 `pnpm ve
 - 数据库：Drizzle schema 在 `src/db/schema.ts`；改 schema 后用 `pnpm db:generate --name <描述>` 生成迁移（`drizzle/`，提交进仓库），不要手改已提交的迁移。`pnpm db:migrate` 执行迁移。
 - 用户数据隔离：用户 ID 只能来自会话（`src/lib/session.ts` 的 `getSessionUser`），不能取自请求参数或 body；数据访问函数（`src/lib/data/`）显式接收 `userId` 并按它过滤。
 
+## 个人资料与导出（内容语言）
+
+- **界面语言**（`NEXT_LOCALE` / 语言切换器）：只影响 chrome（导航、按钮、标签等），不影响用户录入的履历正文字段。
+- **履历录入**：用户在个人资料 / 学歴 / 職歴 / 免許表单中**只填日语**；数据库仍用 `LocalizedText` jsonb，当前写入 `{ "ja": "…" }` 即可。不要在表单里要求中/英三语并列输入。
+- **导出（履歴書 / 職務経歴書，后续里程碑）**：导出时可选择 ja / zh-CN / en；非日语内容由后端从日语**自动翻译**生成。未接入获批的翻译 API 前，使用 `src/lib/domain/export-translation.ts` 的 stub（原样返回日语并保留 TODO），不要私自调用外部翻译服务。
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know
