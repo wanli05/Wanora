@@ -350,7 +350,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             interviewId: feedbackFor.interview.id,
-            feedbackId: feedbackFor.editing?.id,
+            ...(feedbackFor.editing?.id
+              ? { feedbackId: feedbackFor.editing.id }
+              : {}),
             source: String(form.get("source")),
             body,
             recordedOn: String(form.get("recordedOn") || tokyoTodayKey()),
