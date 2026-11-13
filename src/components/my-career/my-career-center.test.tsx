@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MyCareerCenter, type MyCareerLabels } from "./my-career-center";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
@@ -32,7 +32,7 @@ const labels: MyCareerLabels = {
     skills: "スキル",
     goals: "目標",
     timeline: "タイムライン",
-    export: "导出",
+    export: "書類出力",
   },
   save: "保存",
   add: "追加",
@@ -57,7 +57,10 @@ const labels: MyCareerLabels = {
   exportSub: "export",
   exportRireki: "履歴書",
   exportShokumu: "職務経歴書",
-  exportPrint: "print",
+  exportDocx: "docx",
+  exportPdf: "pdf",
+  exportDownloading: "busy",
+  exportFailed: "fail export",
   residence: "在留",
   salary: "給与",
   languages: "語学",
@@ -224,12 +227,115 @@ describe("MyCareerCenter", () => {
     expect(screen.getByText("プロフィール")).toBeInTheDocument();
     expect(screen.getByText("プロジェクト")).toBeInTheDocument();
     expect(screen.getByText("タイムライン")).toBeInTheDocument();
-    expect(screen.getByText("导出")).toBeInTheDocument();
+    expect(screen.getByText("書類出力")).toBeInTheDocument();
     expect(screen.getByText("国籍・在留")).toBeInTheDocument();
     expect(screen.getByText("給与")).toBeInTheDocument();
     expect(screen.getByText("山田")).toBeInTheDocument();
     expect(document.querySelector(".mc-identity")).not.toBeNull();
     expect(document.querySelector(".mc-meta-grid")).not.toBeNull();
     expect(document.querySelector(".mc-resume-wrap")).not.toBeNull();
+  });
+
+  it("opens 書類出力 with Word/PDF downloads and no print button", () => {
+    render(
+      <MyCareerCenter
+        labels={labels}
+        profileForm={{
+          initial: {
+            fullName: { ja: "山田" },
+            fullNameKana: "",
+            birthDate: "",
+            age: null,
+            gender: {},
+            postalCode: "",
+            dateFormat: "wareki",
+            address: {},
+            addressKana: "",
+            phone: "",
+            email: "",
+            altContact: {},
+            education: [],
+            licenses: [],
+            storageReady: false,
+            hasPhoto: false,
+          },
+          labels: {
+            edit: "e",
+            save: "s",
+            addRow: "a",
+            removeRow: "r",
+            savedMessage: "ok",
+            errorMessages: {
+              unauthenticated: "",
+              fullNameRequired: "",
+              invalidEmail: "",
+              invalidDateFormat: "",
+              saveFailed: "",
+            },
+            sections: {
+              basic: "",
+              education: "",
+              licenses: "",
+            },
+            basic: {
+              fullName: "",
+              fullNameKana: "",
+              birthDate: "",
+              ageSuffix: "",
+              gender: "",
+              postalCode: "",
+              dateFormat: "",
+              dateFormatWareki: "",
+              dateFormatSeireki: "",
+              address: "",
+              addressKana: "",
+              phone: "",
+              email: "",
+              altContact: "",
+              photo: "",
+              photoAlt: "",
+            },
+            japaneseHint: "",
+            education: { empty: "", school: "", event: "", yearMonth: "" },
+            licenses: { empty: "", name: "", yearMonth: "" },
+            events: {
+              education: {
+                enrolled: "",
+                graduated: "",
+                withdrawn: "",
+                completed: "",
+              },
+            },
+          },
+        }}
+        extras={{
+          headline: "",
+          directionTags: "",
+          selfPrJa: "",
+          jobSummaryJa: "",
+          strengthsText: "",
+          languages: [],
+          nationality: "",
+          residenceStatus: "",
+          residenceUntil: "",
+          salaryAnnualMan: "",
+          salaryMonthlyMan: "",
+          salaryHope: "",
+          personalHopeJa: "",
+        }}
+        employers={[]}
+        projects={[]}
+        skills={[]}
+        goals={[]}
+        licenses={[]}
+        timeline={[]}
+        exportSnapshot={emptySnapshot}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /書類出力/ }));
+    expect(screen.getByRole("button", { name: "docx" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "pdf" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /print|印刷/i })).toBeNull();
   });
 });

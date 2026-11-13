@@ -1,0 +1,477 @@
+import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  WidthType,
+  type ITableCellOptions,
+} from "docx";
+import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
+import type { ExportDocKind } from "@/lib/export/load-export-snapshot";
+
+const PAGE_WIDTH = 11906; // A4 twips
+const MARGIN = 720; // ~0.5in
+const CONTENT = PAGE_WIDTH - MARGIN * 2;
+
+const thin = {
+  style: BorderStyle.SINGLE,
+  size: 8,
+  color: "333333",
+};
+const borders = { top: thin, bottom: thin, left: thin, right: thin };
+
+function cell(
+  text: string,
+  opts: {
+    width: number;
+    bold?: boolean;
+    center?: boolean;
+    shade?: string;
+    colspan?: number;
+  },
+): TableCell {
+  const options: ITableCellOptions = {
+    borders,
+    width: { size: opts.width, type: WidthType.DXA },
+    columnSpan: opts.colspan,
+    shading: opts.shade ? { fill: opts.shade } : undefined,
+    children: text.split("\n").map(
+      (line) =>
+        new Paragraph({
+          alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+          children: [
+            new TextRun({
+              text: line,
+              bold: opts.bold,
+              size: 18,
+              font: { eastAsia: "游明朝", ascii: "Times New Roman" },
+            }),
+          ],
+        }),
+    ),
+  };
+  return new TableCell(options);
+}
+
+function p(text: string, opts?: { bold?: boolean; center?: boolean; size?: number }) {
+  return new Paragraph({
+    alignment: opts?.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+    spacing: { after: 80 },
+    children: [
+      new TextRun({
+        text,
+        bold: opts?.bold,
+        size: opts?.size ?? 20,
+        font: { eastAsia: "游明朝", ascii: "Times New Roman" },
+      }),
+    ],
+  });
+}
+
+function h(text: string) {
+  return new Paragraph({
+    heading: HeadingLevel.HEADING_2,
+    spacing: { before: 200, after: 80 },
+    border: {
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: "222222", space: 4 },
+    },
+    children: [
+      new TextRun({
+        text,
+        bold: true,
+        size: 22,
+        font: { eastAsia: "游明朝", ascii: "Times New Roman" },
+      }),
+    ],
+  });
+}
+
+function buildRirekisho(snapshot: ExportSnapshot): Document {
+  const wLab = Math.round(CONTENT * 0.18);
+  const wRest = CONTENT - wLab;
+  const wYm = Math.round(CONTENT * 0.1);
+  const wMm = Math.round(CONTENT * 0.08);
+  const wBody = CONTENT - wYm - wMm;
+
+  const eduRows = [
+    new TableRow({
+      children: [
+        cell("年", { width: wYm, bold: true, center: true, shade: "F3F3F3" }),
+        cell("月", { width: wMm, bold: true, center: true, shade: "F3F3F3" }),
+        cell("学歴・職歴", { width: wBody, bold: true, shade: "F3F3F3" }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        cell("", { width: wYm }),
+        cell("", { width: wMm }),
+        cell("学　歴", { width: wBody, bold: true, center: true }),
+      ],
+    }),
+    ...snapshot.educationLines.map(
+      (row) =>
+        new TableRow({
+          children: [
+            cell(row.year, { width: wYm, center: true }),
+            cell(row.month, { width: wMm, center: true }),
+            cell(row.text, { width: wBody }),
+          ],
+        }),
+    ),
+    new TableRow({
+      children: [
+        cell("", { width: wYm }),
+        cell("", { width: wMm }),
+        cell("職　歴", { width: wBody, bold: true, center: true }),
+      ],
+    }),
+    ...snapshot.workLines.map(
+      (row) =>
+        new TableRow({
+          children: [
+            cell(row.year, { width: wYm, center: true }),
+            cell(row.month, { width: wMm, center: true }),
+            cell(row.text, { width: wBody }),
+          ],
+        }),
+    ),
+    ...(snapshot.workLines.length > 0
+      ? [
+          new TableRow({
+            children: [
+              cell("", { width: wYm }),
+              cell("", { width: wMm }),
+              cell("現在に至る", { width: wBody }),
+            ],
+          }),
+        ]
+      : []),
+    new TableRow({
+      children: [
+        cell("", { width: wYm }),
+        cell("", { width: wMm }),
+        cell("以上", { width: wBody }),
+      ],
+    }),
+  ];
+
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: PAGE_WIDTH, height: 16838 },
+            margin: {
+              top: MARGIN,
+              bottom: MARGIN,
+              left: MARGIN,
+              right: MARGIN,
+            },
+          },
+        },
+        children: [
+          p("履　歴　書", { bold: true, center: true, size: 32 }),
+          p(snapshot.asOfRirekisho, { center: true }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: [wLab, wRest],
+            rows: [
+              new TableRow({
+                children: [
+                  cell("ふりがな", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell(snapshot.fullNameKana, { width: wRest }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("氏　名", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell(snapshot.fullName, { width: wRest }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("生年月日", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell(
+                    `${snapshot.birthLine}${snapshot.gender ? `　／　性別 ${snapshot.gender}` : ""}`,
+                    { width: wRest },
+                  ),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("現住所", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell(
+                    [snapshot.addressKana, snapshot.address]
+                      .filter(Boolean)
+                      .join("\n"),
+                    { width: wRest },
+                  ),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("電話", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell(snapshot.phone, { width: wRest }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("E-mail", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell(snapshot.email, { width: wRest }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [] }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: [wYm, wMm, wBody],
+            rows: eduRows,
+          }),
+          new Paragraph({ children: [] }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: [wYm, wMm, wBody],
+            rows: [
+              new TableRow({
+                children: [
+                  cell("年", {
+                    width: wYm,
+                    bold: true,
+                    center: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell("月", {
+                    width: wMm,
+                    bold: true,
+                    center: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell("免許・資格", {
+                    width: wBody,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                ],
+              }),
+              ...snapshot.licenseLines.map(
+                (row) =>
+                  new TableRow({
+                    children: [
+                      cell(row.year, { width: wYm, center: true }),
+                      cell(row.month, { width: wMm, center: true }),
+                      cell(row.text, { width: wBody }),
+                    ],
+                  }),
+              ),
+              new TableRow({
+                children: [
+                  cell("備考", { width: wYm, bold: true, shade: "F3F3F3" }),
+                  cell(snapshot.residenceLines.join("\n"), {
+                    width: wMm + wBody,
+                    colspan: 2,
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [] }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: [CONTENT],
+            rows: [
+              new TableRow({
+                children: [
+                  cell("現在の給与条件", {
+                    width: CONTENT,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                ],
+              }),
+              ...snapshot.salaryLines.map(
+                (line) =>
+                  new TableRow({
+                    children: [cell(line, { width: CONTENT })],
+                  }),
+              ),
+              new TableRow({
+                children: [
+                  cell("語学レベル", {
+                    width: CONTENT,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell(
+                    snapshot.languages
+                      .map((l) => `${l.language}（${l.level}）`)
+                      .join("　／　"),
+                    { width: CONTENT },
+                  ),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell(
+                    "本人希望記入欄（特に給料・職種・勤務時間・勤務地・その他についての希望などがあれば記入）",
+                    { width: CONTENT, bold: true, shade: "F3F3F3" },
+                  ),
+                ],
+              }),
+              new TableRow({
+                children: [cell(snapshot.personalHope, { width: CONTENT })],
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+}
+
+function buildShokumu(snapshot: ExportSnapshot): Document {
+  const c0 = Math.round(CONTENT * 0.14);
+  const c1 = Math.round(CONTENT * 0.42);
+  const c2 = Math.round(CONTENT * 0.22);
+  const c3 = CONTENT - c0 - c1 - c2;
+  const s0 = Math.round(CONTENT * 0.18);
+  const s1 = Math.round(CONTENT * 0.28);
+  const s2 = Math.round(CONTENT * 0.14);
+  const s3 = CONTENT - s0 - s1 - s2;
+
+  const children: (Paragraph | Table)[] = [
+    p("職　務　経　歴　書", { bold: true, center: true, size: 32 }),
+    p(snapshot.asOfShokumu),
+    p(`氏名　　${snapshot.fullName}`),
+    h("■職務経歴"),
+    p(snapshot.jobCareerLine),
+    h("■職務要約"),
+    p(snapshot.jobSummary),
+    h("■活かせる経験・知識"),
+    ...snapshot.strengths.map((s) => p(`・${s}`)),
+    h("■職務詳細"),
+  ];
+
+  for (const e of snapshot.employers) {
+    children.push(p(e.header, { bold: true }));
+    if (e.meta) children.push(p(e.meta));
+  }
+
+  children.push(
+    new Table({
+      width: { size: CONTENT, type: WidthType.DXA },
+      columnWidths: [c0, c1, c2, c3],
+      rows: [
+        new TableRow({
+          children: [
+            cell("期間", { width: c0, bold: true, shade: "F3F3F3" }),
+            cell("業務内容", { width: c1, bold: true, shade: "F3F3F3" }),
+            cell("開発環境", { width: c2, bold: true, shade: "F3F3F3" }),
+            cell("規模/役割", { width: c3, bold: true, shade: "F3F3F3" }),
+          ],
+        }),
+        ...snapshot.projects.map((proj) => {
+          const body = [
+            proj.title,
+            proj.overview ? `【プロジェクト概要】\n${proj.overview}` : "",
+            proj.phases ? `【担当フェーズ】\n${proj.phases}` : "",
+            proj.responsibilities
+              ? `【業務内容】\n${proj.responsibilities}`
+              : "",
+            proj.results ? `【実績・取り組み等】\n${proj.results}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+          return new TableRow({
+            children: [
+              cell(proj.period, { width: c0 }),
+              cell(body, { width: c1 }),
+              cell(proj.environment, { width: c2 }),
+              cell(proj.roleScale, { width: c3 }),
+            ],
+          });
+        }),
+      ],
+    }),
+  );
+
+  children.push(h("■資格"));
+  for (const row of snapshot.licenseLines) {
+    children.push(p(`・${row.year}年${row.month}月　${row.text}`));
+  }
+  children.push(h("■言語"));
+  for (const l of snapshot.languages) {
+    children.push(p(`・${l.language}（${l.level}）`));
+  }
+  children.push(h("■（テクニカル）スキル"));
+  children.push(
+    new Table({
+      width: { size: CONTENT, type: WidthType.DXA },
+      columnWidths: [s0, s1, s2, s3],
+      rows: [
+        new TableRow({
+          children: [
+            cell("分類", { width: s0, bold: true, shade: "F3F3F3" }),
+            cell("技術", { width: s1, bold: true, shade: "F3F3F3" }),
+            cell("経験", { width: s2, bold: true, shade: "F3F3F3" }),
+            cell("内容", { width: s3, bold: true, shade: "F3F3F3" }),
+          ],
+        }),
+        ...snapshot.skillRows.map(
+          (row) =>
+            new TableRow({
+              children: [
+                cell(row.category, { width: s0 }),
+                cell(row.name, { width: s1 }),
+                cell(row.yearsText, { width: s2 }),
+                cell(row.description ?? "", { width: s3 }),
+              ],
+            }),
+        ),
+      ],
+    }),
+  );
+  children.push(h("■自己PR"), p(snapshot.selfPr));
+  children.push(h("■自己研鑽（プロジェクトタイトル／リンクと同源）"));
+  for (const link of snapshot.selfStudyLinks) {
+    children.push(p(`・${link.label}（${link.url}）`));
+  }
+
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: PAGE_WIDTH, height: 16838 },
+            margin: {
+              top: MARGIN,
+              bottom: MARGIN,
+              left: MARGIN,
+              right: MARGIN,
+            },
+          },
+        },
+        children,
+      },
+    ],
+  });
+}
+
+export async function buildExportDocx(
+  snapshot: ExportSnapshot,
+  doc: ExportDocKind,
+): Promise<Buffer> {
+  const document =
+    doc === "rirekisho" ? buildRirekisho(snapshot) : buildShokumu(snapshot);
+  return Buffer.from(await Packer.toBuffer(document));
+}

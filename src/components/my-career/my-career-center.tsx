@@ -68,7 +68,10 @@ export type MyCareerLabels = {
   exportSub: string;
   exportRireki: string;
   exportShokumu: string;
-  exportPrint: string;
+  exportDocx: string;
+  exportPdf: string;
+  exportDownloading: string;
+  exportFailed: string;
   residence: string;
   salary: string;
   languages: string;
@@ -1263,9 +1266,40 @@ function ExportModule({
   doc: "rirekisho" | "shokumu";
   setDoc: (d: "rirekisho" | "shokumu") => void;
 }) {
+  const [busy, setBusy] = useState<"docx" | "pdf" | null>(null);
+  const [error, setError] = useState(false);
+
+  async function download(format: "docx" | "pdf") {
+    setBusy(format);
+    setError(false);
+    try {
+      const res = await fetch(
+        `/api/profile/export?doc=${doc}&format=${format}`,
+      );
+      if (!res.ok) throw new Error(`export ${res.status}`);
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+      const plain = /filename="?([^";]+)"?/i.exec(cd);
+      const filename = star
+        ? decodeURIComponent(star[1])
+        : (plain?.[1] ?? `${doc}.${format}`);
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mc-stack">
-      <div className="mc-sec-head mc-no-print">
+      <div className="mc-sec-head">
         <div>
           <h2>{labels.modules.export}</h2>
           <p>{labels.exportSub}</p>
@@ -1289,13 +1323,27 @@ function ExportModule({
           </button>
           <button
             type="button"
-            className="mc-btn mc-btn-ghost"
-            onClick={() => window.print()}
+            className="mc-btn"
+            disabled={busy != null}
+            onClick={() => void download("docx")}
           >
-            {labels.exportPrint}
+            {busy === "docx" ? labels.exportDownloading : labels.exportDocx}
+          </button>
+          <button
+            type="button"
+            className="mc-btn"
+            disabled={busy != null}
+            onClick={() => void download("pdf")}
+          >
+            {busy === "pdf" ? labels.exportDownloading : labels.exportPdf}
           </button>
         </div>
       </div>
+      {error ? (
+        <p className="text-sm text-red-700" role="alert">
+          {labels.exportFailed}
+        </p>
+      ) : null}
       <ExportSheets snapshot={snapshot} doc={doc} />
     </div>
   );
