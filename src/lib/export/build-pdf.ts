@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import {
   buildExportHtml,
