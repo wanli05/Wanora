@@ -120,6 +120,33 @@ describe("ProgressBoard", () => {
     );
   });
 
+  it("spreads 書類選考→内定 columns equally across the board width", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    const row = screen.getByTestId("kanban-row");
+    expect(row.className).toMatch(/\bw-full\b/);
+    expect(row.className).not.toMatch(/overflow-x-auto/);
+
+    const columns = [
+      "document_screening",
+      "aptitude_test",
+      "interview_1",
+      "interview_2",
+      "interview_final",
+      "offer",
+    ].map((kind) => screen.getByTestId(`column-${kind}`));
+    expect(columns).toHaveLength(6);
+    for (const col of columns) {
+      expect(col.className).toMatch(/\bflex-1\b/);
+      expect(col.className).toMatch(/\bmin-w-0\b/);
+      expect(col.className).not.toMatch(/\bw-36\b|\bw-56\b|\bshrink-0\b/);
+    }
+  });
+
   it("hides offer on document screening but keeps pass and reject", () => {
     renderWithIntl(
       <ProgressBoard

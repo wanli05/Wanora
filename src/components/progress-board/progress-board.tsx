@@ -630,7 +630,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           onRecruiter={() => setAddingRecruiter(true)}
         />
       ) : view === "kanban" ? (
-        <div className="flex min-h-[28rem] gap-3 overflow-x-auto pb-4">
+        <div
+          data-testid="kanban-row"
+          className="flex w-full min-h-[28rem] gap-2 pb-4 md:gap-3"
+        >
           {visibleBoardColumns(visible).map((kind) => {
             const cards = visible.filter((app) => app.currentStageKind === kind);
             const vacant = cards.length === 0;
@@ -639,10 +642,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                 key={kind}
                 data-testid={`column-${kind}`}
                 data-occupied={vacant ? "false" : "true"}
-                className={`flex shrink-0 flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
-                  vacant
-                    ? "w-36 border-zinc-200 opacity-60 dark:border-zinc-800"
-                    : "w-56 border-zinc-200 dark:border-zinc-800"
+                className={`flex min-w-0 flex-1 flex-col rounded-xl border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-900/30 ${
+                  vacant ? "opacity-60" : ""
                 }`}
               >
                 <header className="flex items-baseline justify-between px-1 py-2">
