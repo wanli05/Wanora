@@ -238,7 +238,8 @@
       "remove": "Remove photo",
       "tooLarge": "File is too large (keep under 8MB).",
       "invalidType": "Choose a JPEG / PNG / WebP image.",
-      "storageDisabled": "Object storage is not configured (set S3_* in .env.local)."
+      "storageDisabled": "Photo storage is unavailable. Configure S3_* or restart the app.",
+      "localBackendHint": "Dev mode: photos are saved under .data/objects. Configure S3 / MinIO for production."
     },
     "basic": {
       "fullName": "Full name",

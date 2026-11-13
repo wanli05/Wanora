@@ -104,6 +104,8 @@ export type ProfilePageInitial = {
   licenses: Omit<LicenseRow, "clientKey">[];
   storageReady: boolean;
   hasPhoto: boolean;
+  /** Dev fallback when S3_* is unset. */
+  photoLocalBackend?: boolean;
 };
 
 function withClientKeys<T extends { id?: string; yearMonth: string }>(
@@ -339,6 +341,7 @@ export function ProfilePageForm({
             <PhotoUpload
               disabled={!initial.storageReady}
               hasPhoto={initial.hasPhoto}
+              localBackend={Boolean(initial.photoLocalBackend)}
               initialUrl={
                 initial.hasPhoto ? "/api/profile/photo" : null
               }

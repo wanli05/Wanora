@@ -238,7 +238,8 @@
       "remove": "删除照片",
       "tooLarge": "文件过大（请控制在 8MB 以内）。",
       "invalidType": "请选择 JPEG / PNG / WebP 图片。",
-      "storageDisabled": "未配置对象存储，无法保存照片（请在 .env.local 设置 S3_*）。"
+      "storageDisabled": "无法使用写真存储。请配置 S3_* 或重启应用。",
+      "localBackendHint": "开发模式：写真保存在本地 .data/objects。生产请配置 S3 / MinIO。"
     },
     "basic": {
       "fullName": "姓名",

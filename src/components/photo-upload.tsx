@@ -13,12 +13,19 @@ type Props = {
   /** Existing saved photo URL (e.g. `/api/profile/photo`). */
   initialUrl?: string | null;
   hasPhoto?: boolean;
+  /** When S3 is unset, server persists under `.data/objects`. */
+  localBackend?: boolean;
 };
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /** Crop to 3:4 and upload original + print-sized JPEG via `/api/profile/photo`. */
-export function PhotoUpload({ disabled, initialUrl, hasPhoto }: Props) {
+export function PhotoUpload({
+  disabled,
+  initialUrl,
+  hasPhoto,
+  localBackend = false,
+}: Props) {
   const t = useTranslations("Profile.photo");
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -137,6 +144,9 @@ export function PhotoUpload({ disabled, initialUrl, hasPhoto }: Props) {
         <p className="text-xs text-amber-700 dark:text-amber-400">
           {t("storageDisabled")}
         </p>
+      ) : null}
+      {!disabled && localBackend ? (
+        <p className="text-xs text-zinc-500">{t("localBackendHint")}</p>
       ) : null}
     </div>
   );

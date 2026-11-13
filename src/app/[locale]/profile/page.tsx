@@ -108,8 +108,10 @@ async function ProfilePageContent() {
         nameJa: localizedJa(entry.name as LocalizedText),
       };
     }),
-    storageReady: isObjectStorageConfigured(),
+    // Always true: S3 when configured, else local `.data/objects` fallback.
+    storageReady: true,
     hasPhoto: Boolean(profile?.photoKey),
+    photoLocalBackend: !isObjectStorageConfigured(),
   };
 
   const profileLabels: ProfilePageFormLabels = {

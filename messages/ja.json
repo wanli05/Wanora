@@ -238,7 +238,8 @@
       "remove": "写真を削除",
       "tooLarge": "ファイルサイズが大きすぎます（8MB以下にしてください）。",
       "invalidType": "JPEG / PNG / WebP 形式の画像を選んでください。",
-      "storageDisabled": "オブジェクトストレージ未設定のため、写真は保存できません（.env.local に S3_* を設定）。"
+      "storageDisabled": "写真の保存先を利用できません。S3_* を設定するか、アプリを再起動してください。",
+      "localBackendHint": "開発モード：写真はローカル（.data/objects）に保存されます。本番では S3 / MinIO を設定してください。"
     },
     "basic": {
       "fullName": "氏名",

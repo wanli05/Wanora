@@ -14,9 +14,6 @@ export async function GET(request: Request) {
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!isObjectStorageConfigured()) {
-    return Response.json({ error: "storage_disabled" }, { status: 503 });
-  }
   const profile = await getProfileByUserId(getDb(), user.id);
   if (!profile?.photoKey) {
     return Response.json({ error: "not_found" }, { status: 404 });
@@ -29,6 +26,7 @@ export async function GET(request: Request) {
     headers: {
       "Content-Type": obj.contentType,
       "Cache-Control": "private, max-age=60",
+      "X-Wanora-Photo-Backend": isObjectStorageConfigured() ? "s3" : "local",
     },
   });
 }
@@ -37,9 +35,6 @@ export async function POST(request: Request) {
   const user = await getSessionUser(request.headers);
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
-  }
-  if (!isObjectStorageConfigured()) {
-    return Response.json({ error: "storage_disabled" }, { status: 503 });
   }
 
   const form = await request.formData();
@@ -62,16 +57,17 @@ export async function POST(request: Request) {
   await putUserObject(printKey, printBuffer, "image/jpeg");
   await setProfilePhotoKey(getDb(), user.id, printKey);
 
-  return Response.json({ ok: true, key: printKey });
+  return Response.json({
+    ok: true,
+    key: printKey,
+    backend: isObjectStorageConfigured() ? "s3" : "local",
+  });
 }
 
 export async function DELETE(request: Request) {
   const user = await getSessionUser(request.headers);
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
-  }
-  if (!isObjectStorageConfigured()) {
-    return Response.json({ error: "storage_disabled" }, { status: 503 });
   }
   try {
     await deleteUserObject(profilePhotoKey(user.id, "original"));
