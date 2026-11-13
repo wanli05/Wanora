@@ -7,6 +7,7 @@ import {
   type ExportDocKind,
   type ExportFormat,
 } from "@/lib/export/load-export-snapshot";
+import { loadPhotoPrintJpeg } from "@/lib/export/load-photo-print";
 import { getSessionUser } from "@/lib/session";
 
 function parseDoc(raw: string | null): ExportDocKind | null {
@@ -35,11 +36,15 @@ export async function GET(request: Request) {
     );
   }
 
-  const snapshot = await loadExportSnapshotForUser(getDb(), user.id);
+  const db = getDb();
+  const snapshot = await loadExportSnapshotForUser(db, user.id);
+  const photoPrintJpeg =
+    doc === "rirekisho" ? await loadPhotoPrintJpeg(db, user.id) : null;
+  const options = { photoPrintJpeg };
   const body =
     format === "docx"
-      ? await buildExportDocx(snapshot, doc)
-      : await buildExportPdf(snapshot, doc);
+      ? await buildExportDocx(snapshot, doc, options)
+      : await buildExportPdf(snapshot, doc, options);
 
   const filename = exportFilename(doc, format);
   const contentType =

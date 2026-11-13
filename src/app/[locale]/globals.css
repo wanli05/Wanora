@@ -487,6 +487,12 @@ body {
   font-size: 10px;
   color: #888;
   background: #fafafa;
+  overflow: hidden;
+}
+.mc-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .mc-rk table,
 .mc-sk table {

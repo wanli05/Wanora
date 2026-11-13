@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionUser = vi.fn();
 const loadExportSnapshotForUser = vi.fn();
+const loadPhotoPrintJpeg = vi.fn();
 const buildExportDocx = vi.fn();
 const buildExportPdf = vi.fn();
 
@@ -24,6 +25,10 @@ vi.mock("@/lib/export/load-export-snapshot", async () => {
   };
 });
 
+vi.mock("@/lib/export/load-photo-print", () => ({
+  loadPhotoPrintJpeg: (...args: unknown[]) => loadPhotoPrintJpeg(...args),
+}));
+
 vi.mock("@/lib/export/build-docx", () => ({
   buildExportDocx: (...args: unknown[]) => buildExportDocx(...args),
 }));
@@ -37,6 +42,7 @@ describe("GET /api/profile/export", () => {
     vi.clearAllMocks();
     getSessionUser.mockResolvedValue({ id: "user-1" });
     loadExportSnapshotForUser.mockResolvedValue({ fullName: "楊" });
+    loadPhotoPrintJpeg.mockResolvedValue(null);
     buildExportDocx.mockResolvedValue(Buffer.from("PK-docx"));
     buildExportPdf.mockResolvedValue(Buffer.from("%PDF-1.4"));
   });

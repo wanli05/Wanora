@@ -56,8 +56,20 @@ describe("buildExportDocx", () => {
     for (const doc of ["rirekisho", "shokumu"] as const) {
       const buf = await buildExportDocx(snap, doc);
       expect(buf.byteLength).toBeGreaterThan(1000);
-      // DOCX is a ZIP package
       expect(buf.subarray(0, 2).toString("utf8")).toBe("PK");
     }
+  });
+
+  it("embeds a JPEG into rirekisho when photo bytes are provided", async () => {
+    // Minimal valid-enough JPEG SOI/EOI; docx packs the bytes as-is.
+    const jpeg = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+    ]);
+    const withPhoto = await buildExportDocx(sampleSnapshot(), "rirekisho", {
+      photoPrintJpeg: jpeg,
+    });
+    const without = await buildExportDocx(sampleSnapshot(), "rirekisho");
+    expect(withPhoto.byteLength).toBeGreaterThan(without.byteLength);
   });
 });

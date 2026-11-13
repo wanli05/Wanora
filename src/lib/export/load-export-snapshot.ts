@@ -37,6 +37,7 @@ export async function loadExportSnapshotForUser(
       fullNameKana: profile?.fullNameKana ?? null,
       birthDate: profile?.birthDate ?? null,
       gender: (profile?.gender ?? null) as LocalizedText | null,
+      photoKey: profile?.photoKey ?? null,
       postalCode: profile?.postalCode ?? null,
       address: (profile?.address ?? null) as LocalizedText | null,
       addressKana: profile?.addressKana ?? null,

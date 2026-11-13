@@ -1,14 +1,18 @@
 import { chromium } from "playwright";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
-import { buildExportHtml } from "@/lib/export/build-export-html";
+import {
+  buildExportHtml,
+  type ExportRenderOptions,
+} from "@/lib/export/build-export-html";
 import type { ExportDocKind } from "@/lib/export/load-export-snapshot";
 
 /** Render locked-layout HTML to A4 PDF via headless Chromium (mvp-plan). */
 export async function buildExportPdf(
   snapshot: ExportSnapshot,
   doc: ExportDocKind,
+  options?: ExportRenderOptions,
 ): Promise<Buffer> {
-  const html = buildExportHtml(snapshot, doc);
+  const html = buildExportHtml(snapshot, doc, options);
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();

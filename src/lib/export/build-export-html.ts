@@ -1,6 +1,11 @@
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import type { ExportDocKind } from "@/lib/export/load-export-snapshot";
 
+export type ExportRenderOptions = {
+  /** 30×40mm@300dpi JPEG bytes for 履歴書写真; omit/null → empty frame. */
+  photoPrintJpeg?: Buffer | null;
+};
+
 function esc(text: string): string {
   return text
     .replaceAll("&", "&amp;")
@@ -13,12 +18,20 @@ function nl(text: string): string {
   return esc(text).replaceAll("\n", "<br/>");
 }
 
+function photoDataUrl(buf: Buffer | null | undefined): string | null {
+  if (!buf?.byteLength) return null;
+  return `data:image/jpeg;base64,${buf.toString("base64")}`;
+}
+
 const CSS = `
 @page { size: A4; margin: 12mm; }
 body { margin: 0; font-family: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: 11.5px; line-height: 1.45; color: #111; }
 .sheet { width: 100%; }
+.rk-head { display: grid; grid-template-columns: 1fr 28mm; gap: 8px; align-items: start; margin-bottom: 8px; }
 h1 { margin: 0 0 6px; text-align: center; font-size: 20px; letter-spacing: 0.4em; font-weight: 600; }
 .meta { text-align: right; margin: 0 0 2px; font-size: 12px; }
+.photo { width: 28mm; height: 36mm; border: 1px solid #444; display: grid; place-items: center; font-size: 10px; color: #888; background: #fafafa; overflow: hidden; }
+.photo img { width: 100%; height: 100%; object-fit: cover; }
 table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 th, td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
 .lab { width: 18%; background: #f3f3f3; font-weight: 600; white-space: nowrap; }
@@ -33,7 +46,7 @@ a { color: #0a4d8c; word-break: break-all; }
 ul { margin: 0 0 8px; padding-left: 1.2em; }
 `;
 
-function rirekishoHtml(s: ExportSnapshot): string {
+function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
   const edu = s.educationLines
     .map(
       (r) =>
@@ -58,17 +71,29 @@ function rirekishoHtml(s: ExportSnapshot): string {
   const langs = s.languages
     .map((l) => `${esc(l.language)}（${esc(l.level)}）`)
     .join("　／　");
+  const dataUrl = photoDataUrl(photoJpeg);
+  const photoBlock = dataUrl
+    ? `<div class="photo"><img src="${dataUrl}" alt="証明写真"/></div>`
+    : `<div class="photo">写真</div>`;
 
   return `
   <article class="sheet">
-    <h1>履　歴　書</h1>
-    <p class="meta">${esc(s.asOfRirekisho)}</p>
+    <div class="rk-head">
+      <div>
+        <h1>履　歴　書</h1>
+        <p class="meta">${esc(s.asOfRirekisho)}</p>
+        <table>
+          <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.fullNameKana)}</td></tr>
+          <tr><td class="lab">氏　名</td><td colspan="3">${esc(s.fullName)}</td></tr>
+          <tr><td class="lab">生年月日</td><td>${esc(s.birthLine)}</td><td class="lab">性別</td><td>${esc(s.gender)}</td></tr>
+        </table>
+      </div>
+      ${photoBlock}
+    </div>
     <table>
-      <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.fullNameKana)}</td></tr>
-      <tr><td class="lab">氏　名</td><td colspan="3">${esc(s.fullName)}</td></tr>
-      <tr><td class="lab">生年月日</td><td>${esc(s.birthLine)}</td><td class="lab">性別</td><td>${esc(s.gender)}</td></tr>
-      <tr><td class="lab">現住所</td><td colspan="3">${nl([s.addressKana, s.address].filter(Boolean).join("\n"))}</td></tr>
-      <tr><td class="lab">電話</td><td colspan="3">${esc(s.phone)}</td></tr>
+      <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.addressKana)}</td></tr>
+      <tr><td class="lab">現住所</td><td colspan="3">${nl(s.address)}</td></tr>
+      <tr><td class="lab">電話</td><td></td><td class="lab">携帯</td><td>${esc(s.phone)}</td></tr>
       <tr><td class="lab">E-mail</td><td colspan="3">${esc(s.email)}</td></tr>
     </table>
     <table>
@@ -183,8 +208,11 @@ function shokumuHtml(s: ExportSnapshot): string {
 export function buildExportHtml(
   snapshot: ExportSnapshot,
   doc: ExportDocKind,
+  options?: ExportRenderOptions,
 ): string {
   const body =
-    doc === "rirekisho" ? rirekishoHtml(snapshot) : shokumuHtml(snapshot);
+    doc === "rirekisho"
+      ? rirekishoHtml(snapshot, options?.photoPrintJpeg)
+      : shokumuHtml(snapshot);
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"/><style>${CSS}</style></head><body>${body}</body></html>`;
 }

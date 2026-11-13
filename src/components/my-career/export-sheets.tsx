@@ -13,17 +13,26 @@ function nl(text: string) {
 export function ExportSheets({
   snapshot,
   doc,
+  photoUrl = null,
 }: {
   snapshot: ExportSnapshot;
   doc: "rirekisho" | "shokumu";
+  /** Session photo URL (`/api/profile/photo`); null → empty 写真 frame. */
+  photoUrl?: string | null;
 }) {
   if (doc === "rirekisho") {
-    return <RirekishoSheet snapshot={snapshot} />;
+    return <RirekishoSheet snapshot={snapshot} photoUrl={photoUrl} />;
   }
   return <ShokumuSheet snapshot={snapshot} />;
 }
 
-function RirekishoSheet({ snapshot }: { snapshot: ExportSnapshot }) {
+function RirekishoSheet({
+  snapshot,
+  photoUrl,
+}: {
+  snapshot: ExportSnapshot;
+  photoUrl: string | null;
+}) {
   return (
     <article className="mc-a4 mc-rk">
       <div className="mc-rk-head">
@@ -49,7 +58,14 @@ function RirekishoSheet({ snapshot }: { snapshot: ExportSnapshot }) {
             </tbody>
           </table>
         </div>
-        <div className="mc-photo">写真</div>
+        <div className="mc-photo">
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- authenticated photo API
+            <img src={photoUrl} alt="証明写真" />
+          ) : (
+            "写真"
+          )}
+        </div>
       </div>
 
       <table>

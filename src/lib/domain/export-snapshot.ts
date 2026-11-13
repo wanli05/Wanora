@@ -18,6 +18,8 @@ export type ExportProfileSlice = {
   fullNameKana: string | null;
   birthDate: Date | null;
   gender: LocalizedText | null;
+  /** profiles.photo_key present — 証明写真 only (not users.image). */
+  photoKey?: string | null;
   postalCode: string | null;
   address: LocalizedText | null;
   addressKana: string | null;
@@ -96,6 +98,8 @@ export type ExportSnapshot = {
   fullNameKana: string;
   birthLine: string;
   gender: string;
+  /** True when profiles.photo_key is set (証明写真; never users.image). */
+  hasPhoto: boolean;
   addressKana: string;
   address: string;
   postalCode: string;
@@ -310,6 +314,7 @@ export function buildExportSnapshot(input: {
     fullNameKana: p.fullNameKana?.trim() ?? "",
     birthLine,
     gender: jaOf(p.gender),
+    hasPhoto: Boolean(p.photoKey),
     addressKana: p.addressKana?.trim() ?? "",
     address: [p.postalCode ? `〒${p.postalCode}` : "", jaOf(p.address)]
       .filter(Boolean)

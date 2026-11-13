@@ -250,6 +250,9 @@ export function MyCareerCenter(props: Props) {
             <ExportModule
               labels={props.labels}
               snapshot={props.exportSnapshot}
+              photoUrl={
+                props.exportSnapshot.hasPhoto ? "/api/profile/photo" : null
+              }
               doc={exportDoc}
               setDoc={setExportDoc}
             />
@@ -1258,11 +1261,13 @@ function TimelineModule({
 function ExportModule({
   labels,
   snapshot,
+  photoUrl,
   doc,
   setDoc,
 }: {
   labels: MyCareerLabels;
   snapshot: ExportSnapshot;
+  photoUrl: string | null;
   doc: "rirekisho" | "shokumu";
   setDoc: (d: "rirekisho" | "shokumu") => void;
 }) {
@@ -1344,7 +1349,7 @@ function ExportModule({
           {labels.exportFailed}
         </p>
       ) : null}
-      <ExportSheets snapshot={snapshot} doc={doc} />
+      <ExportSheets snapshot={snapshot} doc={doc} photoUrl={photoUrl} />
     </div>
   );
 }

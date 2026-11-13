@@ -3,16 +3,23 @@ import {
   BorderStyle,
   Document,
   HeadingLevel,
+  ImageRun,
   Packer,
   Paragraph,
   Table,
   TableCell,
   TableRow,
   TextRun,
+  VerticalAlign,
   WidthType,
   type ITableCellOptions,
 } from "docx";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
+import {
+  PHOTO_DISPLAY_HEIGHT_PX,
+  PHOTO_DISPLAY_WIDTH_PX,
+} from "@/lib/domain/photo-print";
+import type { ExportRenderOptions } from "@/lib/export/build-export-html";
 import type { ExportDocKind } from "@/lib/export/load-export-snapshot";
 
 const PAGE_WIDTH = 11906; // A4 twips
@@ -92,9 +99,58 @@ function h(text: string) {
   });
 }
 
-function buildRirekisho(snapshot: ExportSnapshot): Document {
-  const wLab = Math.round(CONTENT * 0.18);
-  const wRest = CONTENT - wLab;
+function photoCell(photoPrintJpeg: Buffer | null | undefined, width: number) {
+  const children = photoPrintJpeg?.byteLength
+    ? [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new ImageRun({
+              type: "jpg",
+              data: photoPrintJpeg,
+              transformation: {
+                width: PHOTO_DISPLAY_WIDTH_PX,
+                height: PHOTO_DISPLAY_HEIGHT_PX,
+              },
+              altText: {
+                title: "証明写真",
+                description: "履歴書証明写真",
+                name: "photo",
+              },
+            }),
+          ],
+        }),
+      ]
+    : [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new TextRun({
+              text: "写真",
+              size: 18,
+              font: { eastAsia: "游明朝", ascii: "Times New Roman" },
+            }),
+          ],
+        }),
+      ];
+  return new TableCell({
+    borders,
+    width: { size: width, type: WidthType.DXA },
+    verticalAlign: VerticalAlign.CENTER,
+    children,
+  });
+}
+
+function buildRirekisho(
+  snapshot: ExportSnapshot,
+  photoPrintJpeg?: Buffer | null,
+): Document {
+  const wPhoto = Math.round((28 / 210) * PAGE_WIDTH);
+  const wId = CONTENT - wPhoto - 80;
+  const wLab = Math.round(wId * 0.22);
+  const wRest = wId - wLab;
+  const wLabFull = Math.round(CONTENT * 0.18);
+  const wRestFull = CONTENT - wLabFull;
   const wYm = Math.round(CONTENT * 0.1);
   const wMm = Math.round(CONTENT * 0.08);
   const wBody = CONTENT - wYm - wMm;
@@ -180,50 +236,115 @@ function buildRirekisho(snapshot: ExportSnapshot): Document {
           p(snapshot.asOfRirekisho, { center: true }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [wLab, wRest],
+            columnWidths: [wId, wPhoto],
             rows: [
               new TableRow({
                 children: [
-                  cell("ふりがな", { width: wLab, bold: true, shade: "F3F3F3" }),
-                  cell(snapshot.fullNameKana, { width: wRest }),
+                  new TableCell({
+                    borders: {
+                      top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                      bottom: {
+                        style: BorderStyle.NONE,
+                        size: 0,
+                        color: "FFFFFF",
+                      },
+                      left: {
+                        style: BorderStyle.NONE,
+                        size: 0,
+                        color: "FFFFFF",
+                      },
+                      right: {
+                        style: BorderStyle.NONE,
+                        size: 0,
+                        color: "FFFFFF",
+                      },
+                    },
+                    width: { size: wId, type: WidthType.DXA },
+                    children: [
+                      new Table({
+                        width: { size: wId, type: WidthType.DXA },
+                        columnWidths: [wLab, wRest],
+                        rows: [
+                          new TableRow({
+                            children: [
+                              cell("ふりがな", {
+                                width: wLab,
+                                bold: true,
+                                shade: "F3F3F3",
+                              }),
+                              cell(snapshot.fullNameKana, { width: wRest }),
+                            ],
+                          }),
+                          new TableRow({
+                            children: [
+                              cell("氏　名", {
+                                width: wLab,
+                                bold: true,
+                                shade: "F3F3F3",
+                              }),
+                              cell(snapshot.fullName, { width: wRest }),
+                            ],
+                          }),
+                          new TableRow({
+                            children: [
+                              cell("生年月日", {
+                                width: wLab,
+                                bold: true,
+                                shade: "F3F3F3",
+                              }),
+                              cell(
+                                `${snapshot.birthLine}${snapshot.gender ? `　／　性別 ${snapshot.gender}` : ""}`,
+                                { width: wRest },
+                              ),
+                            ],
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+                  photoCell(photoPrintJpeg, wPhoto),
                 ],
               }),
+            ],
+          }),
+          new Paragraph({ children: [] }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: [wLabFull, wRestFull],
+            rows: [
               new TableRow({
                 children: [
-                  cell("氏　名", { width: wLab, bold: true, shade: "F3F3F3" }),
-                  cell(snapshot.fullName, { width: wRest }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell("生年月日", { width: wLab, bold: true, shade: "F3F3F3" }),
-                  cell(
-                    `${snapshot.birthLine}${snapshot.gender ? `　／　性別 ${snapshot.gender}` : ""}`,
-                    { width: wRest },
-                  ),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell("現住所", { width: wLab, bold: true, shade: "F3F3F3" }),
+                  cell("現住所", {
+                    width: wLabFull,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
                   cell(
                     [snapshot.addressKana, snapshot.address]
                       .filter(Boolean)
                       .join("\n"),
-                    { width: wRest },
+                    { width: wRestFull },
                   ),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("電話", { width: wLab, bold: true, shade: "F3F3F3" }),
-                  cell(snapshot.phone, { width: wRest }),
+                  cell("電話", {
+                    width: wLabFull,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.phone, { width: wRestFull }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("E-mail", { width: wLab, bold: true, shade: "F3F3F3" }),
-                  cell(snapshot.email, { width: wRest }),
+                  cell("E-mail", {
+                    width: wLabFull,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.email, { width: wRestFull }),
                 ],
               }),
             ],
@@ -470,8 +591,11 @@ function buildShokumu(snapshot: ExportSnapshot): Document {
 export async function buildExportDocx(
   snapshot: ExportSnapshot,
   doc: ExportDocKind,
+  options?: ExportRenderOptions,
 ): Promise<Buffer> {
   const document =
-    doc === "rirekisho" ? buildRirekisho(snapshot) : buildShokumu(snapshot);
+    doc === "rirekisho"
+      ? buildRirekisho(snapshot, options?.photoPrintJpeg)
+      : buildShokumu(snapshot);
   return Buffer.from(await Packer.toBuffer(document));
 }

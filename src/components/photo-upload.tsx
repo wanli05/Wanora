@@ -2,6 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
+import {
+  PHOTO_ASPECT_RATIO,
+  PHOTO_PRINT_HEIGHT_PX,
+  PHOTO_PRINT_WIDTH_PX,
+} from "@/lib/domain/photo-print";
 
 type Props = {
   disabled?: boolean;
@@ -139,7 +144,7 @@ export function PhotoUpload({ disabled, initialUrl, hasPhoto }: Props) {
 
 async function cropToThreeFour(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
-  const targetRatio = 3 / 4;
+  const targetRatio = PHOTO_ASPECT_RATIO;
   const sourceRatio = bitmap.width / bitmap.height;
   let sx = 0;
   let sy = 0;
@@ -152,14 +157,22 @@ async function cropToThreeFour(file: File): Promise<Blob> {
     sh = bitmap.width / targetRatio;
     sy = (bitmap.height - sh) / 2;
   }
-  const outW = 900;
-  const outH = 1200;
   const canvas = document.createElement("canvas");
-  canvas.width = outW;
-  canvas.height = outH;
+  canvas.width = PHOTO_PRINT_WIDTH_PX;
+  canvas.height = PHOTO_PRINT_HEIGHT_PX;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas unsupported");
-  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, outW, outH);
+  ctx.drawImage(
+    bitmap,
+    sx,
+    sy,
+    sw,
+    sh,
+    0,
+    0,
+    PHOTO_PRINT_WIDTH_PX,
+    PHOTO_PRINT_HEIGHT_PX,
+  );
   bitmap.close();
   return new Promise((resolve, reject) => {
     canvas.toBlob(

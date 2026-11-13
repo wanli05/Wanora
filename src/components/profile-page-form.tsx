@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useCallback, useState, type ReactNode } from "react";
 import { JapaneseTextField } from "@/components/japanese-text-field";
 import { PhotoUpload } from "@/components/photo-upload";
+import { PostalAddressFields } from "@/components/postal-address-fields";
 import { YearMonthField } from "@/app/[locale]/profile/form-fields";
 import type { EducationEventCode } from "@/lib/domain/resume-events";
 import { EDUCATION_EVENT_CODES } from "@/lib/domain/resume-events";
@@ -63,6 +64,11 @@ export type ProfilePageFormLabels = {
     altContact: string;
     photo: string;
     photoAlt: string;
+    postalLookupHint: string;
+    postalLookingUp: string;
+    postalNotFound: string;
+    postalLookupFailed: string;
+    postalLineRemainderHint: string;
   };
   japaneseHint: string;
   education: {
@@ -272,43 +278,36 @@ export function ProfilePageForm({
               value={initial.gender}
               hint={labels.japaneseHint}
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium">{labels.basic.postalCode}</span>
-                <input
-                  name="postalCode"
-                  defaultValue={initial.postalCode}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium">{labels.basic.dateFormat}</span>
-                <select
-                  name="dateFormat"
-                  defaultValue={initial.dateFormat}
-                  className={inputClass}
-                >
-                  <option value="wareki">{labels.basic.dateFormatWareki}</option>
-                  <option value="seireki">
-                    {labels.basic.dateFormatSeireki}
-                  </option>
-                </select>
-              </label>
-            </div>
-            <JapaneseTextField
-              fieldPrefix="address"
-              label={labels.basic.address}
-              value={initial.address}
-              hint={labels.japaneseHint}
-            />
             <label className="block space-y-1 text-sm">
-              <span className="font-medium">{labels.basic.addressKana}</span>
-              <input
-                name="addressKana"
-                defaultValue={initial.addressKana}
+              <span className="font-medium">{labels.basic.dateFormat}</span>
+              <select
+                name="dateFormat"
+                defaultValue={initial.dateFormat}
                 className={inputClass}
-              />
+              >
+                <option value="wareki">{labels.basic.dateFormatWareki}</option>
+                <option value="seireki">
+                  {labels.basic.dateFormatSeireki}
+                </option>
+              </select>
             </label>
+            <PostalAddressFields
+              labels={{
+                postalCode: labels.basic.postalCode,
+                address: labels.basic.address,
+                addressKana: labels.basic.addressKana,
+                japaneseHint: labels.japaneseHint,
+                lookupHint: labels.basic.postalLookupHint,
+                lookingUp: labels.basic.postalLookingUp,
+                notFound: labels.basic.postalNotFound,
+                lookupFailed: labels.basic.postalLookupFailed,
+                lineRemainderHint: labels.basic.postalLineRemainderHint,
+              }}
+              initialPostalCode={initial.postalCode}
+              initialAddressJa={initial.address.ja ?? ""}
+              initialAddressKana={initial.addressKana}
+              inputClass={inputClass}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-1 text-sm">
                 <span className="font-medium">{labels.basic.phone}</span>
@@ -347,21 +346,28 @@ export function ProfilePageForm({
           </div>
         ) : (
           <RirekishoTable>
-            {initial.hasPhoto ? (
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                <th className="w-36 py-2.5 pr-4 text-left align-top text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {labels.basic.photo}
-                </th>
-                <td className="py-2.5 text-sm text-zinc-900 dark:text-zinc-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- authenticated photo API */}
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <th className="w-36 py-2.5 pr-4 text-left align-top text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {labels.basic.photo}
+              </th>
+              <td className="py-2.5 text-sm text-zinc-900 dark:text-zinc-100">
+                {initial.hasPhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- authenticated photo API
                   <img
                     src="/api/profile/photo"
                     alt={labels.basic.photoAlt}
-                    className="h-28 w-[84px] rounded border border-zinc-200 object-cover dark:border-zinc-700"
+                    className="h-[113px] w-[85px] rounded border border-zinc-200 object-cover dark:border-zinc-700"
                   />
-                </td>
-              </tr>
-            ) : null}
+                ) : (
+                  <div
+                    className="flex h-[113px] w-[85px] items-center justify-center rounded border border-dashed border-zinc-300 text-xs text-zinc-400 dark:border-zinc-600"
+                    aria-label={labels.basic.photo}
+                  >
+                    {labels.basic.photo}
+                  </div>
+                )}
+              </td>
+            </tr>
             <ViewRow
               label={labels.basic.fullName}
               value={initial.fullName.ja}

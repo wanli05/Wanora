@@ -92,6 +92,18 @@ describe("buildExportHtml", () => {
     expect(html).toContain("現在の給与条件");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
+    expect(html).toContain('class="photo"');
+    expect(html).toContain(">写真</div>");
+  });
+
+  it("embeds 証明写真 JPEG in the rirekisho photo frame", () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const html = buildExportHtml(sampleSnapshot(), "rirekisho", {
+      photoPrintJpeg: jpeg,
+    });
+    expect(html).toContain('src="data:image/jpeg;base64,');
+    expect(html).toContain('alt="証明写真"');
+    expect(html).not.toContain(">写真</div>");
   });
 
   it("renders shokumu with project link and skills", () => {
