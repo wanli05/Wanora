@@ -300,6 +300,8 @@
     "save": "保存",
     "add": "追加",
     "remove": "削除",
+    "edit": "編集",
+    "cancel": "キャンセル",
     "saved": "保存しました。",
     "errors": {
       "unauthenticated": "ログインし直してください。",
@@ -324,6 +326,33 @@
     "salary": "給与",
     "languages": "語学",
     "titleUrl": "タイトル超リンク",
-    "pendingBadge": "確認待ち"
+    "pendingBadge": "確認待ち",
+    "snapshotTitle": "いまのスナップショット",
+    "snapProjects": "プロジェクト",
+    "snapSkills": "スキル記録",
+    "snapHope": "希望年収",
+    "recentTitle": "最近の出来事",
+    "recentSub": "タイムラインの先頭。",
+    "resumeSectionTitle": "履歴書フィールド",
+    "resumeSectionSub": "基本情報・学歴・簡略職歴・資格",
+    "fields": {
+      "headline": "ヘッドライン",
+      "directionTags": "方向タグ（読点区切り）",
+      "selfPr": "自己PR",
+      "jobSummary": "職務要約",
+      "strengths": "活かせる経験（1行1項目）",
+      "residenceStatus": "在留資格",
+      "residencePeriod": "在留期間",
+      "residenceUntil": "期限日",
+      "salaryAnnual": "年収（万円）",
+      "salaryBonus": "賞与（万円）",
+      "salaryMonthly": "月収（万円）",
+      "salaryOvertime": "時間外（万円）",
+      "salaryHope": "希望年収",
+      "personalHope": "本人希望",
+      "language": "言語",
+      "level": "レベル",
+      "addLanguage": "言語を追加"
+    }
   }
 }

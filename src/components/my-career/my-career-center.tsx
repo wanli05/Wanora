@@ -1,6 +1,13 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   ProfilePageForm,
@@ -41,6 +48,8 @@ export type MyCareerLabels = {
   save: string;
   add: string;
   remove: string;
+  edit: string;
+  cancel: string;
   saved: string;
   errors: Record<NonNullable<CareerSaveState["error"]>, string>;
   profileBanner: string;
@@ -62,6 +71,33 @@ export type MyCareerLabels = {
   languages: string;
   titleUrl: string;
   pendingBadge: string;
+  snapshotTitle: string;
+  snapProjects: string;
+  snapSkills: string;
+  snapHope: string;
+  recentTitle: string;
+  recentSub: string;
+  resumeSectionTitle: string;
+  resumeSectionSub: string;
+  fields: {
+    headline: string;
+    directionTags: string;
+    selfPr: string;
+    jobSummary: string;
+    strengths: string;
+    residenceStatus: string;
+    residencePeriod: string;
+    residenceUntil: string;
+    salaryAnnual: string;
+    salaryBonus: string;
+    salaryMonthly: string;
+    salaryOvertime: string;
+    salaryHope: string;
+    personalHope: string;
+    language: string;
+    level: string;
+    addLanguage: string;
+  };
 };
 
 export type CareerEmployerDto = {
@@ -231,173 +267,333 @@ function Feedback({
   return null;
 }
 
+function dash(value: string | null | undefined): string {
+  const v = value?.trim();
+  return v ? v : "—";
+}
+
 function ProfileModule({
   labels,
   profileForm,
   extras,
+  projects,
+  skills,
   timeline,
 }: Props) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
   const [state, action, pending] = useActionState(
     saveCareerProfileExtrasAction,
     {},
   );
+  const wasPending = useRef(false);
   const [langs, setLangs] = useState(extras.languages);
   const recent = timeline.slice(0, 4);
+
+  useEffect(() => {
+    if (wasPending.current && !pending && state.ok) {
+      setEditing(false);
+      router.refresh();
+    }
+    wasPending.current = pending;
+  }, [pending, state.ok, router]);
+
+  const name = jaOf(profileForm.initial.fullName as LocalizedText);
+  const tags = extras.directionTags
+    .split(/[,、]/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const confirmedProjects = projects.filter((p) => p.status === "confirmed");
+  const salaryNow =
+    extras.salaryAnnualMan.trim() !== ""
+      ? `${extras.salaryAnnualMan}万円${
+          extras.salaryBonusMan.trim()
+            ? `（賞与 ${extras.salaryBonusMan}万）`
+            : ""
+        }`
+      : "—";
+  const salaryMonth =
+    extras.salaryMonthlyMan.trim() !== ""
+      ? `${extras.salaryMonthlyMan}万円${
+          extras.salaryOvertimeMan.trim()
+            ? `（時間外 ${extras.salaryOvertimeMan}万）`
+            : ""
+        }`
+      : "—";
+  const residencePeriodLine = [
+    extras.residencePeriod.trim(),
+    extras.residenceUntil.trim()
+      ? `（至 ${extras.residenceUntil}）`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
 
   return (
     <div className="mc-stack">
       <div className="mc-banner mc-banner-ok">{labels.profileBanner}</div>
-      <div className="mc-card">
-        <p className="text-2xl font-semibold text-[var(--mc-teal-deep)]">
-          {jaOf(profileForm.initial.fullName as LocalizedText) || "—"}
-        </p>
-        <p className="mt-1 text-sm text-[var(--mc-muted)]">
-          {extras.headline || "—"}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {extras.directionTags
-            .split(/[,、]/)
-            .map((t) => t.trim())
-            .filter(Boolean)
-            .map((tag) => (
-              <span key={tag} className="mc-chip">
-                {tag}
-              </span>
-            ))}
-        </div>
+
+      <div className="mc-panel-actions mc-no-print">
+        {editing ? (
+          <button
+            type="button"
+            className="mc-btn mc-btn-ghost"
+            onClick={() => {
+              setLangs(extras.languages);
+              setEditing(false);
+            }}
+          >
+            {labels.cancel}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="mc-btn"
+            onClick={() => {
+              setLangs(extras.languages);
+              setEditing(true);
+            }}
+          >
+            {labels.edit}
+          </button>
+        )}
       </div>
 
-      <form action={action} className="mc-card mc-stack">
-        <input type="hidden" name="languagesJson" value={JSON.stringify(langs)} />
-        <label className="mc-field">
-          ヘッドライン
-          <input name="headline" defaultValue={extras.headline} />
-        </label>
-        <label className="mc-field">
-          方向タグ（読点区切り）
-          <input name="directionTags" defaultValue={extras.directionTags} />
-        </label>
-        <label className="mc-field">
-          自己PR
-          <textarea name="selfPr_ja" rows={4} defaultValue={extras.selfPrJa} />
-        </label>
-        <label className="mc-field">
-          職務要約
-          <textarea
-            name="jobSummary_ja"
-            rows={4}
-            defaultValue={extras.jobSummaryJa}
-          />
-        </label>
-        <label className="mc-field">
-          活かせる経験（1行1項目）
-          <textarea
-            name="strengths"
-            rows={4}
-            defaultValue={extras.strengthsText}
-          />
-        </label>
+      {!editing ? (
+        <>
+          <div className="mc-hero">
+            <div className="mc-identity">
+              <p className="mc-identity-name">{dash(name)}</p>
+              <p className="mc-identity-meta">{dash(extras.headline)}</p>
+              {tags.length > 0 ? (
+                <div className="mc-chips">
+                  {tags.map((tag) => (
+                    <span key={tag} className="mc-chip">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {extras.selfPrJa.trim() ? (
+                <p className="mc-identity-pr">{extras.selfPrJa}</p>
+              ) : (
+                <p className="mc-empty">{labels.fields.selfPr}</p>
+              )}
+            </div>
+            <div className="mc-snapshot">
+              <h3>{labels.snapshotTitle}</h3>
+              <dl>
+                <div>
+                  <dt>{labels.snapProjects}</dt>
+                  <dd>{confirmedProjects.length}</dd>
+                </div>
+                <div>
+                  <dt>{labels.snapSkills}</dt>
+                  <dd>{skills.length}</dd>
+                </div>
+                <div>
+                  <dt>{labels.snapHope}</dt>
+                  <dd>{dash(extras.salaryHope)}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
 
-        <div className="mc-grid-2">
+          <div className="mc-meta-grid">
+            <div className="mc-card">
+              <h3>{labels.residence}</h3>
+              <dl className="mc-dl">
+                <dt>{labels.fields.residenceStatus}</dt>
+                <dd>{dash(extras.residenceStatus)}</dd>
+                <dt>{labels.fields.residencePeriod}</dt>
+                <dd>{dash(residencePeriodLine)}</dd>
+              </dl>
+            </div>
+            <div className="mc-card">
+              <h3>{labels.salary}</h3>
+              <dl className="mc-dl">
+                <dt>{labels.fields.salaryAnnual}</dt>
+                <dd>{salaryNow}</dd>
+                <dt>{labels.fields.salaryMonthly}</dt>
+                <dd>{salaryMonth}</dd>
+                <dt>{labels.fields.salaryHope}</dt>
+                <dd>{dash(extras.salaryHope)}</dd>
+              </dl>
+            </div>
+          </div>
+
           <div className="mc-card">
-            <h3 className="mb-2 font-semibold text-[var(--mc-teal-deep)]">
-              {labels.residence}
+            <h3
+              style={{
+                margin: "0 0 8px",
+                fontSize: 14,
+                color: "var(--mc-teal-deep)",
+              }}
+            >
+              {labels.languages}
             </h3>
+            {langs.length > 0 ? (
+              <ul className="mc-lang-list">
+                {langs.map((lang, i) => (
+                  <li key={`${lang.language}-${i}`}>
+                    {lang.language} — {lang.level}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mc-empty">—</p>
+            )}
+          </div>
+        </>
+      ) : (
+        <form action={action} className="mc-edit-panel">
+          <input
+            type="hidden"
+            name="languagesJson"
+            value={JSON.stringify(langs)}
+          />
+          <div className="mc-card">
+            <h3>{labels.modules.profile}</h3>
             <label className="mc-field">
-              在留資格
-              <input
-                name="residenceStatus"
-                defaultValue={extras.residenceStatus}
+              {labels.fields.headline}
+              <input name="headline" defaultValue={extras.headline} />
+            </label>
+            <label className="mc-field">
+              {labels.fields.directionTags}
+              <input name="directionTags" defaultValue={extras.directionTags} />
+            </label>
+            <label className="mc-field">
+              {labels.fields.selfPr}
+              <textarea
+                name="selfPr_ja"
+                rows={4}
+                defaultValue={extras.selfPrJa}
               />
             </label>
             <label className="mc-field">
-              在留期間
-              <input
-                name="residencePeriod"
-                defaultValue={extras.residencePeriod}
+              {labels.fields.jobSummary}
+              <textarea
+                name="jobSummary_ja"
+                rows={4}
+                defaultValue={extras.jobSummaryJa}
               />
             </label>
             <label className="mc-field">
-              期限日
-              <input
-                type="date"
-                name="residenceUntil"
-                defaultValue={extras.residenceUntil}
+              {labels.fields.strengths}
+              <textarea
+                name="strengths"
+                rows={4}
+                defaultValue={extras.strengthsText}
+              />
+            </label>
+            <label className="mc-field">
+              {labels.fields.personalHope}
+              <textarea
+                name="personalHope_ja"
+                rows={2}
+                defaultValue={extras.personalHopeJa}
               />
             </label>
           </div>
-          <div className="mc-card">
-            <h3 className="mb-2 font-semibold text-[var(--mc-teal-deep)]">
-              {labels.salary}
-            </h3>
-            <label className="mc-field">
-              年収（万円）
-              <input
-                name="salaryAnnualMan"
-                defaultValue={extras.salaryAnnualMan}
-              />
-            </label>
-            <label className="mc-field">
-              賞与（万円）
-              <input name="salaryBonusMan" defaultValue={extras.salaryBonusMan} />
-            </label>
-            <label className="mc-field">
-              月収（万円）
-              <input
-                name="salaryMonthlyMan"
-                defaultValue={extras.salaryMonthlyMan}
-              />
-            </label>
-            <label className="mc-field">
-              時間外（万円）
-              <input
-                name="salaryOvertimeMan"
-                defaultValue={extras.salaryOvertimeMan}
-              />
-            </label>
-            <label className="mc-field">
-              希望年収
-              <input name="salaryHope" defaultValue={extras.salaryHope} />
-            </label>
+
+          <div className="mc-meta-grid">
+            <div className="mc-card">
+              <h3>{labels.residence}</h3>
+              <label className="mc-field">
+                {labels.fields.residenceStatus}
+                <input
+                  name="residenceStatus"
+                  defaultValue={extras.residenceStatus}
+                />
+              </label>
+              <label className="mc-field">
+                {labels.fields.residencePeriod}
+                <input
+                  name="residencePeriod"
+                  defaultValue={extras.residencePeriod}
+                />
+              </label>
+              <label className="mc-field">
+                {labels.fields.residenceUntil}
+                <input
+                  type="date"
+                  name="residenceUntil"
+                  defaultValue={extras.residenceUntil}
+                />
+              </label>
+            </div>
+            <div className="mc-card">
+              <h3>{labels.salary}</h3>
+              <label className="mc-field">
+                {labels.fields.salaryAnnual}
+                <input
+                  name="salaryAnnualMan"
+                  defaultValue={extras.salaryAnnualMan}
+                />
+              </label>
+              <label className="mc-field">
+                {labels.fields.salaryBonus}
+                <input
+                  name="salaryBonusMan"
+                  defaultValue={extras.salaryBonusMan}
+                />
+              </label>
+              <label className="mc-field">
+                {labels.fields.salaryMonthly}
+                <input
+                  name="salaryMonthlyMan"
+                  defaultValue={extras.salaryMonthlyMan}
+                />
+              </label>
+              <label className="mc-field">
+                {labels.fields.salaryOvertime}
+                <input
+                  name="salaryOvertimeMan"
+                  defaultValue={extras.salaryOvertimeMan}
+                />
+              </label>
+              <label className="mc-field">
+                {labels.fields.salaryHope}
+                <input name="salaryHope" defaultValue={extras.salaryHope} />
+              </label>
+            </div>
           </div>
-        </div>
 
-        <div>
-          <h3 className="mb-2 font-semibold text-[var(--mc-teal-deep)]">
-            {labels.languages}
-          </h3>
-          <LanguageEditor languages={langs} onChange={setLangs} />
-        </div>
+          <div className="mc-card">
+            <h3>{labels.languages}</h3>
+            <LanguageEditor
+              labels={labels}
+              languages={langs}
+              onChange={setLangs}
+            />
+          </div>
 
-        <label className="mc-field">
-          本人希望
-          <textarea
-            name="personalHope_ja"
-            rows={2}
-            defaultValue={extras.personalHopeJa}
-          />
-        </label>
-
-        <button className="mc-btn" type="submit" disabled={pending}>
-          {labels.save}
-        </button>
-        <Feedback state={state} labels={labels} />
-      </form>
+          <div className="mc-panel-actions">
+            <button className="mc-btn" type="submit" disabled={pending}>
+              {labels.save}
+            </button>
+          </div>
+          <Feedback state={state} labels={labels} />
+        </form>
+      )}
 
       <div className="mc-sec-head">
         <div>
-          <h2>履歴書フィールド</h2>
-          <p>基本情報・学歴・簡略職歴・資格（既存フォーム）</p>
+          <h2>{labels.resumeSectionTitle}</h2>
+          <p>{labels.resumeSectionSub}</p>
         </div>
       </div>
-      <ProfilePageForm
-        initial={profileForm.initial}
-        labels={profileForm.labels}
-      />
+      <div className="mc-resume-wrap">
+        <ProfilePageForm
+          initial={profileForm.initial}
+          labels={profileForm.labels}
+        />
+      </div>
 
       <div className="mc-sec-head">
         <div>
-          <h2>最近の出来事</h2>
+          <h2>{labels.recentTitle}</h2>
+          <p>{labels.recentSub}</p>
         </div>
       </div>
       <div className="mc-timeline">
@@ -417,9 +613,11 @@ function ProfileModule({
 }
 
 function LanguageEditor({
+  labels,
   languages,
   onChange,
 }: {
+  labels: MyCareerLabels;
   languages: CareerLanguage[];
   onChange: (next: CareerLanguage[]) => void;
 }) {
@@ -428,7 +626,7 @@ function LanguageEditor({
       {languages.map((lang, index) => (
         <div key={index} className="mc-grid-2">
           <label className="mc-field">
-            言語
+            {labels.fields.language}
             <input
               value={lang.language}
               onChange={(e) => {
@@ -439,7 +637,7 @@ function LanguageEditor({
             />
           </label>
           <label className="mc-field">
-            レベル
+            {labels.fields.level}
             <input
               value={lang.level}
               onChange={(e) => {
@@ -458,7 +656,7 @@ function LanguageEditor({
           onChange([...languages, { language: "", level: "ビジネス" }])
         }
       >
-        言語を追加
+        {labels.fields.addLanguage}
       </button>
     </div>
   );

@@ -37,6 +37,8 @@ const labels: MyCareerLabels = {
   save: "保存",
   add: "追加",
   remove: "削除",
+  edit: "編集",
+  cancel: "キャンセル",
   saved: "saved",
   errors: {
     unauthenticated: "auth",
@@ -62,6 +64,33 @@ const labels: MyCareerLabels = {
   languages: "語学",
   titleUrl: "url",
   pendingBadge: "pending",
+  snapshotTitle: "snapshot",
+  snapProjects: "projects",
+  snapSkills: "skills",
+  snapHope: "hope",
+  recentTitle: "recent",
+  recentSub: "recent sub",
+  resumeSectionTitle: "resume",
+  resumeSectionSub: "resume sub",
+  fields: {
+    headline: "headline",
+    directionTags: "tags",
+    selfPr: "pr",
+    jobSummary: "summary",
+    strengths: "strengths",
+    residenceStatus: "status",
+    residencePeriod: "period",
+    residenceUntil: "until",
+    salaryAnnual: "annual",
+    salaryBonus: "bonus",
+    salaryMonthly: "monthly",
+    salaryOvertime: "ot",
+    salaryHope: "hope salary",
+    personalHope: "personal",
+    language: "lang",
+    level: "level",
+    addLanguage: "add lang",
+  },
 };
 
 const emptySnapshot: ExportSnapshot = {
@@ -204,5 +233,11 @@ describe("MyCareerCenter", () => {
     expect(screen.getByText("タイムライン")).toBeInTheDocument();
     expect(screen.getByText("导出")).toBeInTheDocument();
     expect(screen.getByText("banner")).toBeInTheDocument();
+    expect(screen.getByText("在留")).toBeInTheDocument();
+    expect(screen.getByText("給与")).toBeInTheDocument();
+    expect(screen.getByText("山田")).toBeInTheDocument();
+    expect(document.querySelector(".mc-identity")).not.toBeNull();
+    expect(document.querySelector(".mc-meta-grid")).not.toBeNull();
+    expect(document.querySelector(".mc-resume-wrap")).not.toBeNull();
   });
 });

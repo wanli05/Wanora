@@ -300,6 +300,8 @@
     "save": "Save",
     "add": "Add",
     "remove": "Remove",
+    "edit": "Edit",
+    "cancel": "Cancel",
     "saved": "Saved.",
     "errors": {
       "unauthenticated": "Please sign in again.",
@@ -320,10 +322,37 @@
     "exportRireki": "Rirekisho",
     "exportShokumu": "Shokumu keirekisho",
     "exportPrint": "Print / PDF",
-    "residence": "Residence status",
+    "residence": "Residence",
     "salary": "Salary",
     "languages": "Languages",
     "titleUrl": "Title hyperlink",
-    "pendingBadge": "Pending confirm"
+    "pendingBadge": "Pending confirm",
+    "snapshotTitle": "Snapshot",
+    "snapProjects": "Projects",
+    "snapSkills": "Skills logged",
+    "snapHope": "Desired salary",
+    "recentTitle": "Recent",
+    "recentSub": "Top of the timeline.",
+    "resumeSectionTitle": "Rirekisho fields",
+    "resumeSectionSub": "Basics, education, short work history, licenses",
+    "fields": {
+      "headline": "Headline",
+      "directionTags": "Direction tags (comma-separated)",
+      "selfPr": "Self PR",
+      "jobSummary": "Job summary",
+      "strengths": "Strengths (one per line)",
+      "residenceStatus": "Status of residence",
+      "residencePeriod": "Period of stay",
+      "residenceUntil": "Valid until",
+      "salaryAnnual": "Annual (man yen)",
+      "salaryBonus": "Bonus (man yen)",
+      "salaryMonthly": "Monthly (man yen)",
+      "salaryOvertime": "Overtime (man yen)",
+      "salaryHope": "Desired salary",
+      "personalHope": "Personal wishes",
+      "language": "Language",
+      "level": "Level",
+      "addLanguage": "Add language"
+    }
   }
 }

@@ -27,13 +27,16 @@ test("signed-in user can edit profile and add education on one page", async ({
   await page.getByRole("link", { name: "My Career" }).click();
   await expect(page).toHaveURL("/profile");
 
-  // Nested ProfilePageForm under プロフィール (career extras also has 保存).
-  await page.getByRole("button", { name: "編集" }).click();
+  // Career overview has its own 編集; resume fields live in .mc-resume-wrap.
+  await expect(page.locator(".mc-meta-grid")).toBeVisible();
+  await expect(page.locator(".mc-identity")).toBeVisible();
+  const resumeWrap = page.locator(".mc-resume-wrap");
+  await resumeWrap.getByRole("button", { name: "編集" }).click();
   // Sign-up may stay mounted (Activity); prefer #fullName_ja over getByLabel("氏名").
   await expect(page.locator("#fullName_ja")).toBeVisible();
-  await expect(page.getByRole("status")).not.toBeVisible();
+  await expect(resumeWrap.getByRole("status")).not.toBeVisible();
 
-  const resumeForm = page.locator("form").filter({
+  const resumeForm = resumeWrap.locator("form").filter({
     has: page.locator("#fullName_ja"),
   });
 

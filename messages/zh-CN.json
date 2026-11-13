@@ -300,6 +300,8 @@
     "save": "保存",
     "add": "添加",
     "remove": "删除",
+    "edit": "编辑",
+    "cancel": "取消",
     "saved": "已保存。",
     "errors": {
       "unauthenticated": "请重新登录。",
@@ -324,6 +326,33 @@
     "salary": "給与",
     "languages": "語学",
     "titleUrl": "标题超链接",
-    "pendingBadge": "待确认"
+    "pendingBadge": "待确认",
+    "snapshotTitle": "当前快照",
+    "snapProjects": "项目",
+    "snapSkills": "技能记录",
+    "snapHope": "希望年収",
+    "recentTitle": "最近动态",
+    "recentSub": "时间线开头。",
+    "resumeSectionTitle": "履歴書字段",
+    "resumeSectionSub": "基本信息・学历・简略职历・资格",
+    "fields": {
+      "headline": "标题行",
+      "directionTags": "方向标签（顿号分隔）",
+      "selfPr": "自己PR",
+      "jobSummary": "职务要約",
+      "strengths": "可发挥经验（一行一项）",
+      "residenceStatus": "在留资格",
+      "residencePeriod": "在留期间",
+      "residenceUntil": "期限日",
+      "salaryAnnual": "年収（万日元）",
+      "salaryBonus": "奖金（万日元）",
+      "salaryMonthly": "月収（万日元）",
+      "salaryOvertime": "加班（万日元）",
+      "salaryHope": "希望年収",
+      "personalHope": "本人希望",
+      "language": "语言",
+      "level": "水平",
+      "addLanguage": "添加语言"
+    }
   }
 }
