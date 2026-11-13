@@ -28,7 +28,8 @@ export function buildCareerTimeline(input: {
     status: string;
   }[];
   skills: { id: string; name: string; yearsText: string; updatedAt?: Date }[];
-  goals: { id: string; kind: string; content: LocalizedText }[];
+  /** Goals stay in Career Goals only — no dated timestamp, so excluded from timeline. */
+  goals?: { id: string; kind: string; content: LocalizedText }[];
 }): CareerTimelineItem[] {
   const items: CareerTimelineItem[] = [];
 
@@ -94,15 +95,6 @@ export function buildCareerTimeline(input: {
       at: ymLabel(row.startYm),
       title: jaOf(row.title),
       module: "projects",
-    });
-  }
-  for (const row of input.goals) {
-    items.push({
-      id: `goal-${row.id}`,
-      kind: "goal",
-      at: row.kind === "short" ? "短期" : "長期",
-      title: jaOf(row.content),
-      module: "goals",
     });
   }
 

@@ -601,13 +601,14 @@ function ProfileModule({
       </div>
       <div className="mc-timeline">
         {recent.map((item) => (
-          <div key={item.id} className="mc-tl-item">
-            <p className="text-xs font-semibold text-[var(--mc-muted)]">
-              {item.at}
-            </p>
-            <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
-              {item.title}
-            </h3>
+          <div key={item.id} className="mc-tl-row">
+            <p className="mc-tl-at">{item.at}</p>
+            <div className="mc-tl-rail" aria-hidden />
+            <div className="mc-tl-item">
+              <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
+                {item.title}
+              </h3>
+            </div>
           </div>
         ))}
       </div>
@@ -1229,22 +1230,22 @@ function TimelineModule({
       </div>
       <div className="mc-timeline">
         {timeline.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="mc-tl-item text-left"
-            onClick={() => onJump(item.module)}
-          >
-            <p className="text-xs font-semibold text-[var(--mc-muted)]">
-              {item.at}
-            </p>
-            <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
-              {item.title}
-            </h3>
-            {item.summary ? (
-              <p className="text-sm text-[var(--mc-muted)]">{item.summary}</p>
-            ) : null}
-          </button>
+          <div key={item.id} className="mc-tl-row">
+            <p className="mc-tl-at">{item.at}</p>
+            <div className="mc-tl-rail" aria-hidden />
+            <button
+              type="button"
+              className="mc-tl-item text-left"
+              onClick={() => onJump(item.module)}
+            >
+              <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
+                {item.title}
+              </h3>
+              {item.summary ? (
+                <p className="text-sm text-[var(--mc-muted)]">{item.summary}</p>
+              ) : null}
+            </button>
+          </div>
         ))}
       </div>
     </div>

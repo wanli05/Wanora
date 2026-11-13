@@ -45,12 +45,15 @@ describe("buildCareerTimeline", () => {
       skills: [],
       goals: [
         { id: "g1", kind: "short", content: { ja: "上流" } },
+        { id: "g2", kind: "long", content: { ja: "長期目標" } },
       ],
     });
 
     expect(items.some((i) => i.title === "確定")).toBe(true);
     expect(items.some((i) => i.title === "草稿")).toBe(false);
-    expect(items.some((i) => i.module === "goals")).toBe(true);
+    // Undated goals stay in Career Goals, not the timeline.
+    expect(items.some((i) => i.module === "goals")).toBe(false);
+    expect(items.some((i) => i.title === "長期目標")).toBe(false);
   });
 
   it("prefers employers over legacy work history rows", () => {

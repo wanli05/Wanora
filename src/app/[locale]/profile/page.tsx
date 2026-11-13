@@ -226,11 +226,6 @@ async function ProfilePageContent() {
       name: s.name,
       yearsText: s.yearsText,
     })),
-    goals: goals.map((g) => ({
-      id: g.id,
-      kind: g.kind,
-      content: g.content as LocalizedText,
-    })),
   });
 
   const exportSnapshot = buildExportSnapshot({

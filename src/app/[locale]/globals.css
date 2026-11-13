@@ -364,36 +364,86 @@ body {
   color: var(--mc-teal-deep);
 }
 .mc-timeline {
-  position: relative;
-  padding-left: 18px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.mc-timeline::before {
+.mc-tl-row {
+  display: grid;
+  grid-template-columns: 6.75rem 1.25rem minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: stretch;
+  min-height: 4.75rem;
+}
+.mc-tl-at {
+  margin: 0;
+  padding-top: 1rem;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--mc-muted);
+  white-space: nowrap;
+}
+.mc-tl-rail {
+  position: relative;
+}
+.mc-tl-rail::before {
   content: "";
   position: absolute;
-  left: 5px;
-  top: 4px;
-  bottom: 4px;
+  left: 50%;
+  top: 0;
+  bottom: -12px;
   width: 2px;
+  transform: translateX(-50%);
   background: linear-gradient(180deg, var(--mc-teal), #c5d4cd);
 }
+.mc-tl-row:last-child .mc-tl-rail::before {
+  bottom: 50%;
+}
+.mc-tl-rail::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 1.15rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: var(--mc-teal);
+  box-shadow: 0 0 0 3px var(--mc-teal-soft);
+  z-index: 1;
+}
 .mc-tl-item {
-  position: relative;
-  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 4.75rem;
+  margin: 0;
   padding: 12px 14px;
   background: var(--mc-card);
   border: 1px solid var(--mc-line);
   border-radius: 12px;
+  width: 100%;
 }
-.mc-tl-item::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  top: 18px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--mc-teal);
-  box-shadow: 0 0 0 3px var(--mc-teal-soft);
+.mc-tl-item h3 {
+  margin: 0;
+}
+.mc-tl-item p {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .mc-tl-row {
+    grid-template-columns: 5.25rem 1rem minmax(0, 1fr);
+    column-gap: 8px;
+  }
+  .mc-tl-at {
+    font-size: 11px;
+    white-space: normal;
+  }
 }
 .mc-a4 {
   width: min(210mm, 100%);
