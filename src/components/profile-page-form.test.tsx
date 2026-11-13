@@ -55,6 +55,11 @@ const labels: ProfilePageFormLabels = {
     altContact: "其他联系",
     photo: "证明写真",
     photoAlt: "证明写真预览",
+    postalLookupHint: "lookup hint",
+    postalLookingUp: "looking up",
+    postalNotFound: "not found",
+    postalLookupFailed: "lookup failed",
+    postalLineRemainderHint: "add remainder",
   },
   japaneseHint: "日语",
   education: {
