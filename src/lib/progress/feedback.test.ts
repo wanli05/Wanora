@@ -57,6 +57,7 @@ describe("validateFeedbackContent", () => {
       body: "志望動機が弱い",
       question: null,
       ownAnswer: null,
+      qaItems: [],
       resultText: null,
       reflection: null,
     });
@@ -74,8 +75,30 @@ describe("validateFeedbackContent", () => {
       body: null,
       question: "自己紹介してください",
       ownAnswer: "大学で…",
+      qaItems: [{ question: "自己紹介してください", answer: "大学で…" }],
       resultText: "通過",
       reflection: "もっと短く",
+    });
+  });
+
+  it("accepts qaItems-only content and mirrors legacy columns", () => {
+    expect(
+      validateFeedbackContent({
+        qaItems: [
+          { question: "Q1", answer: "A1" },
+          { question: "Q2", answer: "A2" },
+        ],
+      }),
+    ).toEqual({
+      body: null,
+      question: "Q1",
+      ownAnswer: "A1",
+      qaItems: [
+        { question: "Q1", answer: "A1" },
+        { question: "Q2", answer: "A2" },
+      ],
+      resultText: null,
+      reflection: null,
     });
   });
 });

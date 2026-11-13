@@ -10,11 +10,18 @@ const optionalTrimmed = z
     return trimmed.length > 0 ? trimmed : null;
   });
 
+const qaItemSchema = z.object({
+  question: optionalTrimmed,
+  answer: optionalTrimmed,
+  tag: optionalTrimmed.optional(),
+});
+
 /**
  * Body for PUT /feedback.
  * - No `.strict()`: stale clients may still send `rating` after we dropped it.
  * - `feedbackId` is nullish so append payloads with an explicit null still create.
- * - At least one of body / question / ownAnswer / resultText / reflection required.
+ * - At least one of body / question / ownAnswer / qaItems / resultText / reflection required.
+ * - Legacy question/ownAnswer remain accepted; qaItems preferred for multi-block UI.
  */
 export const feedbackUpsertSchema = z
   .object({
@@ -24,17 +31,22 @@ export const feedbackUpsertSchema = z
     body: optionalTrimmed,
     question: optionalTrimmed,
     ownAnswer: optionalTrimmed,
+    qaItems: z.array(qaItemSchema).nullish(),
     resultText: optionalTrimmed,
     reflection: optionalTrimmed,
     recordedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   })
   .superRefine((value, ctx) => {
+    const hasQa = (value.qaItems ?? []).some(
+      (item) => item.question || item.answer,
+    );
     if (
       !value.body &&
       !value.question &&
       !value.ownAnswer &&
       !value.resultText &&
-      !value.reflection
+      !value.reflection &&
+      !hasQa
     ) {
       ctx.addIssue({
         code: "custom",

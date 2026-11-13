@@ -711,6 +711,13 @@ export const busyBlocks = pgTable(
 const feedbackTextNonEmpty = (column: AnyPgColumn) =>
   sql`${column} is not null and length(btrim(${column})) > 0`;
 
+/** One Q&A block inside interview feedback (demo: addable rows). */
+export type FeedbackQaItem = {
+  question: string | null;
+  answer: string | null;
+  tag?: string | null;
+};
+
 export const interviewFeedbacks = pgTable(
   "interview_feedbacks",
   {
@@ -720,8 +727,14 @@ export const interviewFeedbacks = pgTable(
     source: text("source").notNull(),
     /** Overview / company quote; optional when structured fields are set. */
     body: text("body"),
+    /**
+     * Legacy single Q&A pair — kept for reversible mapping.
+     * Prefer `qaItems`; writers mirror the first block here.
+     */
     question: text("question"),
     ownAnswer: text("own_answer"),
+    /** Structured Q&A blocks; never drop legacy columns when reading/writing. */
+    qaItems: jsonb("qa_items").$type<FeedbackQaItem[]>().notNull().default([]),
     /** Free short text (通過/見送り/保留 etc.); not applications.outcome. */
     resultText: text("result_text"),
     reflection: text("reflection"),
@@ -736,7 +749,15 @@ export const interviewFeedbacks = pgTable(
         or ${feedbackTextNonEmpty(t.question)}
         or ${feedbackTextNonEmpty(t.ownAnswer)}
         or ${feedbackTextNonEmpty(t.resultText)}
-        or ${feedbackTextNonEmpty(t.reflection)}`,
+        or ${feedbackTextNonEmpty(t.reflection)}
+        or (
+          jsonb_typeof(${t.qaItems}) = 'array'
+          and jsonb_array_length(${t.qaItems}) > 0
+        )`,
+    ),
+    check(
+      "interview_feedbacks_qa_items_array_check",
+      sql`jsonb_typeof(${t.qaItems}) = 'array'`,
     ),
     unique("interview_feedbacks_id_user_uidx").on(t.id, t.userId),
     index("interview_feedbacks_user_idx").on(t.userId),
