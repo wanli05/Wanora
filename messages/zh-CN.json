@@ -315,7 +315,7 @@
     "workSub": "会社元数据与职位；履歴書简略行与職務経歴書详情同源。",
     "projectsSub": "标题可挂作品/仓库链接；四列投影。",
     "projectsPendingHint": "pending_confirm 确认后写入（本轮手工卡片，不接模型）。",
-    "confirmDraft": "确认并保存",
+    "confirmDraft": "待确认",
     "skillsSub": "年数 + 说明（对齐職務経歴書技能矩阵）。",
     "goalsSub": "短期/长期；希望年収在档案总览給与。",
     "goalShort": "短期",

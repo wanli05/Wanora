@@ -315,7 +315,7 @@
     "workSub": "会社メタと職位。履歴書の簡略行と職務経歴書の詳細を同源。",
     "projectsSub": "タイトルに作品／倉庫リンク可。四列投影。",
     "projectsPendingHint": "pending_confirm は確認後に確定（本ラウンドは手工カード、モデル未接続）。",
-    "confirmDraft": "確認して確定",
+    "confirmDraft": "確認待ち",
     "skillsSub": "年数 + 説明（職務経歴書スキル行列）。",
     "goalsSub": "短期／長期。希望年収はプロフィールの給与へ。",
     "goalShort": "短期",
