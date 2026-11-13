@@ -52,4 +52,34 @@ describe("buildCareerTimeline", () => {
     expect(items.some((i) => i.title === "草稿")).toBe(false);
     expect(items.some((i) => i.module === "goals")).toBe(true);
   });
+
+  it("prefers employers over legacy work history rows", () => {
+    const items = buildCareerTimeline({
+      education: [],
+      workHistory: [
+        {
+          id: "legacy",
+          yearMonth: yearMonthFromInput(2020, 1),
+          company: { ja: "旧会社" },
+          eventCode: "joined",
+        },
+      ],
+      employers: [
+        {
+          id: "e1",
+          companyName: { ja: "新会社" },
+          title: "PM",
+          startYm: yearMonthFromInput(2024, 4),
+          endYm: null,
+        },
+      ],
+      licenses: [],
+      projects: [],
+      skills: [],
+      goals: [],
+    });
+
+    expect(items.some((i) => i.title.includes("新会社"))).toBe(true);
+    expect(items.some((i) => i.title === "旧会社")).toBe(false);
+  });
 });

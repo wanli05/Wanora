@@ -47,6 +47,24 @@ export function parseStrengths(raw: unknown): string[] {
   return parseDirectionTags(raw);
 }
 
+/** True when nationality indicates a Japanese national (locks 在留 fields). */
+export function isJapaneseNationality(
+  value: string | null | undefined,
+): boolean {
+  const raw = value?.trim().normalize("NFKC") ?? "";
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  if (
+    lower === "japan" ||
+    lower === "japanese" ||
+    lower === "jp" ||
+    lower === "jpn"
+  ) {
+    return true;
+  }
+  return raw === "日本" || raw === "日本国" || raw === "日本人";
+}
+
 export function parseLanguages(raw: unknown): CareerLanguage[] {
   if (!Array.isArray(raw)) return [];
   const out: CareerLanguage[] = [];

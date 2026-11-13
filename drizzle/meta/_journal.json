@@ -57,6 +57,13 @@
       "when": 1794506486044,
       "tag": "0007_my_career_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794586724137,
+      "tag": "0008_profile_nationality",
+      "breakpoints": true
     }
   ]
 }

@@ -56,10 +56,9 @@ export default async function ProfilePage() {
   const tField = await getTranslations("Profile.japaneseField");
   const tSave = await getTranslations("Profile.saveFeedback");
   const tEducation = await getTranslations("Profile.education");
-  const tWork = await getTranslations("Profile.workHistory");
   const tLicenses = await getTranslations("Profile.licenses");
+  const tPhoto = await getTranslations("Profile.photo");
   const te = await getTranslations("Profile.events.education");
-  const tw = await getTranslations("Profile.events.workHistory");
   const tCareer = await getTranslations("MyCareer");
 
   const age =
@@ -89,15 +88,6 @@ export default async function ProfilePage() {
         eventCode: entry.eventCode as EducationEventCode,
       };
     }),
-    workHistory: workEntries.map((entry) => {
-      const ym = formatYearMonthDate(entry.yearMonth);
-      return {
-        id: entry.id,
-        yearMonth: formatYearMonthInputValue(ym.year, ym.month),
-        workContentJa: localizedJa(entry.company as LocalizedText),
-        eventCode: entry.eventCode as WorkHistoryEventCode,
-      };
-    }),
     licenses: licenseEntries.map((entry) => {
       const ym = formatYearMonthDate(entry.acquiredYm);
       return {
@@ -107,6 +97,7 @@ export default async function ProfilePage() {
       };
     }),
     storageReady: isObjectStorageConfigured(),
+    hasPhoto: Boolean(profile?.photoKey),
   };
 
   const profileLabels: ProfilePageFormLabels = {
@@ -125,7 +116,6 @@ export default async function ProfilePage() {
     sections: {
       basic: tPage("sections.basic"),
       education: tPage("sections.education"),
-      workHistory: tPage("sections.workHistory"),
       licenses: tPage("sections.licenses"),
     },
     basic: {
@@ -143,6 +133,8 @@ export default async function ProfilePage() {
       phone: tBasic("phone"),
       email: tBasic("email"),
       altContact: tBasic("altContact"),
+      photo: tBasic("photo"),
+      photoAlt: tPhoto("previewAlt"),
     },
     japaneseHint: tField("hint"),
     education: {
@@ -150,12 +142,6 @@ export default async function ProfilePage() {
       school: tEducation("school"),
       event: tEducation("event"),
       yearMonth: tEducation("yearMonth"),
-    },
-    workHistory: {
-      empty: tWork("empty"),
-      workContent: tWork("workContent"),
-      event: tWork("event"),
-      yearMonth: tWork("yearMonth"),
     },
     licenses: {
       empty: tLicenses("empty"),
@@ -169,11 +155,6 @@ export default async function ProfilePage() {
         withdrawn: te("withdrawn"),
         completed: te("completed"),
       },
-      workHistory: {
-        joined: tw("joined"),
-        left: tw("left"),
-        transferred: tw("transferred"),
-      },
     },
   };
 
@@ -184,21 +165,15 @@ export default async function ProfilePage() {
     jobSummaryJa: jaOf(profile?.jobSummary as LocalizedText | null),
     strengthsText: parseStrengths(profile?.strengths).join("\n"),
     languages: parseLanguages(profile?.languages),
+    nationality: profile?.nationality ?? "",
     residenceStatus: profile?.residenceStatus ?? "",
-    residencePeriod: profile?.residencePeriod ?? "",
     residenceUntil: profile?.residenceUntil
       ? formatDateInputValue(profile.residenceUntil)
       : "",
     salaryAnnualMan:
       profile?.salaryAnnualMan != null ? String(profile.salaryAnnualMan) : "",
-    salaryBonusMan:
-      profile?.salaryBonusMan != null ? String(profile.salaryBonusMan) : "",
     salaryMonthlyMan:
       profile?.salaryMonthlyMan != null ? String(profile.salaryMonthlyMan) : "",
-    salaryOvertimeMan:
-      profile?.salaryOvertimeMan != null
-        ? String(profile.salaryOvertimeMan)
-        : "",
     salaryHope: profile?.salaryHope ?? "",
     personalHopeJa: jaOf(profile?.personalHope as LocalizedText | null),
   };
@@ -215,6 +190,13 @@ export default async function ProfilePage() {
       yearMonth: e.yearMonth,
       company: e.company as LocalizedText,
       eventCode: e.eventCode,
+    })),
+    employers: employers.map((e) => ({
+      id: e.id,
+      companyName: e.companyName as LocalizedText,
+      title: e.title,
+      startYm: e.startYm,
+      endYm: e.endYm,
     })),
     licenses: licenseEntries.map((e) => ({
       id: e.id,
@@ -332,7 +314,6 @@ export default async function ProfilePage() {
       invalid: tCareer("errors.invalid"),
       saveFailed: tCareer("errors.saveFailed"),
     },
-    profileBanner: tCareer("profileBanner"),
     workSub: tCareer("workSub"),
     projectsSub: tCareer("projectsSub"),
     projectsPendingHint: tCareer("projectsPendingHint"),
@@ -359,19 +340,21 @@ export default async function ProfilePage() {
     recentSub: tCareer("recentSub"),
     resumeSectionTitle: tCareer("resumeSectionTitle"),
     resumeSectionSub: tCareer("resumeSectionSub"),
+    nationalityBlock: tCareer("nationalityBlock"),
+    japaneseLocksHint: tCareer("japaneseLocksHint"),
     fields: {
       headline: tCareer("fields.headline"),
+      headlinePlaceholder: tCareer("fields.headlinePlaceholder"),
       directionTags: tCareer("fields.directionTags"),
+      directionTagsPlaceholder: tCareer("fields.directionTagsPlaceholder"),
       selfPr: tCareer("fields.selfPr"),
       jobSummary: tCareer("fields.jobSummary"),
       strengths: tCareer("fields.strengths"),
+      nationality: tCareer("fields.nationality"),
       residenceStatus: tCareer("fields.residenceStatus"),
-      residencePeriod: tCareer("fields.residencePeriod"),
       residenceUntil: tCareer("fields.residenceUntil"),
       salaryAnnual: tCareer("fields.salaryAnnual"),
-      salaryBonus: tCareer("fields.salaryBonus"),
       salaryMonthly: tCareer("fields.salaryMonthly"),
-      salaryOvertime: tCareer("fields.salaryOvertime"),
       salaryHope: tCareer("fields.salaryHope"),
       personalHope: tCareer("fields.personalHope"),
       language: tCareer("fields.language"),

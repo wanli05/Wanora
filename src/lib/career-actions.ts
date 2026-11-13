@@ -28,6 +28,7 @@ import { getProfileByUserId } from "@/lib/data/profiles";
 import {
   careerGoalKindSchema,
   careerProjectStatusSchema,
+  isJapaneseNationality,
   parseDirectionTags,
   parseLanguages,
   parseStrengths,
@@ -87,6 +88,9 @@ export async function saveCareerProfileExtrasAction(
         .map((s) => s.trim())
         .filter(Boolean),
     );
+    const nationality =
+      formData.get("nationality")?.toString().trim() || null;
+    const japanese = isJapaneseNationality(nationality);
     const residenceUntilRaw = formData.get("residenceUntil")?.toString().trim();
     await upsertProfile(db, userId, {
       fullName: (existing?.fullName as LocalizedText) ?? {},
@@ -106,13 +110,18 @@ export async function saveCareerProfileExtrasAction(
       jobSummary: optionalJapaneseFromForm(formData, "jobSummary"),
       strengths,
       languages,
-      residenceStatus: formData.get("residenceStatus")?.toString().trim() || null,
-      residencePeriod: formData.get("residencePeriod")?.toString().trim() || null,
-      residenceUntil: residenceUntilRaw ? parseDateInput(residenceUntilRaw) : null,
+      nationality,
+      // 在留期間 UI 已移除：保留既有列值。日本人则清空在留資格・期限日。
+      residenceStatus: japanese
+        ? null
+        : formData.get("residenceStatus")?.toString().trim() || null,
+      residenceUntil: japanese
+        ? null
+        : residenceUntilRaw
+          ? parseDateInput(residenceUntilRaw)
+          : null,
       salaryAnnualMan: optionalInt(formData.get("salaryAnnualMan")),
-      salaryBonusMan: optionalInt(formData.get("salaryBonusMan")),
       salaryMonthlyMan: optionalInt(formData.get("salaryMonthlyMan")),
-      salaryOvertimeMan: optionalInt(formData.get("salaryOvertimeMan")),
       salaryHope: formData.get("salaryHope")?.toString().trim() || null,
       personalHope: optionalJapaneseFromForm(formData, "personalHope"),
     });

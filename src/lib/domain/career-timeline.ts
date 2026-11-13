@@ -12,6 +12,14 @@ function ymLabel(d: Date): string {
 export function buildCareerTimeline(input: {
   education: { id: string; yearMonth: Date; school: LocalizedText; eventCode: string }[];
   workHistory: { id: string; yearMonth: Date; company: LocalizedText; eventCode: string }[];
+  /** Prefer Work History module when present; else fall back to legacy workHistory. */
+  employers?: {
+    id: string;
+    companyName: LocalizedText;
+    title: string | null;
+    startYm: Date;
+    endYm: Date | null;
+  }[];
   licenses: { id: string; acquiredYm: Date; name: LocalizedText }[];
   projects: {
     id: string;
@@ -34,15 +42,40 @@ export function buildCareerTimeline(input: {
       module: "profile",
     });
   }
-  for (const row of input.workHistory) {
-    items.push({
-      id: `work-${row.id}`,
-      kind: "work",
-      at: ymLabel(row.yearMonth),
-      title: jaOf(row.company),
-      summary: row.eventCode,
-      module: "work",
-    });
+  if (input.employers && input.employers.length > 0) {
+    for (const row of input.employers) {
+      const company = jaOf(row.companyName);
+      const title = row.title?.trim() ?? "";
+      items.push({
+        id: `emp-${row.id}-join`,
+        kind: "work",
+        at: ymLabel(row.startYm),
+        title: title ? `${company}　${title}` : company,
+        summary: "joined",
+        module: "work",
+      });
+      if (row.endYm) {
+        items.push({
+          id: `emp-${row.id}-leave`,
+          kind: "work",
+          at: ymLabel(row.endYm),
+          title: company,
+          summary: "left",
+          module: "work",
+        });
+      }
+    }
+  } else {
+    for (const row of input.workHistory) {
+      items.push({
+        id: `work-${row.id}`,
+        kind: "work",
+        at: ymLabel(row.yearMonth),
+        title: jaOf(row.company),
+        summary: row.eventCode,
+        module: "work",
+      });
+    }
   }
   for (const row of input.licenses) {
     items.push({

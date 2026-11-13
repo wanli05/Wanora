@@ -45,7 +45,6 @@ const labels: MyCareerLabels = {
     invalid: "invalid",
     saveFailed: "fail",
   },
-  profileBanner: "banner",
   workSub: "work",
   projectsSub: "projects",
   projectsPendingHint: "pending hint",
@@ -72,19 +71,21 @@ const labels: MyCareerLabels = {
   recentSub: "recent sub",
   resumeSectionTitle: "resume",
   resumeSectionSub: "resume sub",
+  nationalityBlock: "国籍・在留",
+  japaneseLocksHint: "日本国籍ロック",
   fields: {
     headline: "headline",
+    headlinePlaceholder: "headline ph",
     directionTags: "tags",
+    directionTagsPlaceholder: "tags ph",
     selfPr: "pr",
     jobSummary: "summary",
     strengths: "strengths",
+    nationality: "nationality",
     residenceStatus: "status",
-    residencePeriod: "period",
     residenceUntil: "until",
     salaryAnnual: "annual",
-    salaryBonus: "bonus",
     salaryMonthly: "monthly",
-    salaryOvertime: "ot",
     salaryHope: "hope salary",
     personalHope: "personal",
     language: "lang",
@@ -142,9 +143,9 @@ describe("MyCareerCenter", () => {
             email: "",
             altContact: {},
             education: [],
-            workHistory: [],
             licenses: [],
             storageReady: false,
+            hasPhoto: false,
           },
           labels: {
             edit: "e",
@@ -162,7 +163,6 @@ describe("MyCareerCenter", () => {
             sections: {
               basic: "",
               education: "",
-              workHistory: "",
               licenses: "",
             },
             basic: {
@@ -180,15 +180,11 @@ describe("MyCareerCenter", () => {
               phone: "",
               email: "",
               altContact: "",
+              photo: "",
+              photoAlt: "",
             },
             japaneseHint: "",
             education: { empty: "", school: "", event: "", yearMonth: "" },
-            workHistory: {
-              empty: "",
-              workContent: "",
-              event: "",
-              yearMonth: "",
-            },
             licenses: { empty: "", name: "", yearMonth: "" },
             events: {
               education: {
@@ -197,7 +193,6 @@ describe("MyCareerCenter", () => {
                 withdrawn: "",
                 completed: "",
               },
-              workHistory: { joined: "", left: "", transferred: "" },
             },
           },
         }}
@@ -208,13 +203,11 @@ describe("MyCareerCenter", () => {
           jobSummaryJa: "",
           strengthsText: "",
           languages: [],
+          nationality: "",
           residenceStatus: "",
-          residencePeriod: "",
           residenceUntil: "",
           salaryAnnualMan: "",
-          salaryBonusMan: "",
           salaryMonthlyMan: "",
-          salaryOvertimeMan: "",
           salaryHope: "",
           personalHopeJa: "",
         }}
@@ -232,8 +225,7 @@ describe("MyCareerCenter", () => {
     expect(screen.getByText("プロジェクト")).toBeInTheDocument();
     expect(screen.getByText("タイムライン")).toBeInTheDocument();
     expect(screen.getByText("导出")).toBeInTheDocument();
-    expect(screen.getByText("banner")).toBeInTheDocument();
-    expect(screen.getByText("在留")).toBeInTheDocument();
+    expect(screen.getByText("国籍・在留")).toBeInTheDocument();
     expect(screen.getByText("給与")).toBeInTheDocument();
     expect(screen.getByText("山田")).toBeInTheDocument();
     expect(document.querySelector(".mc-identity")).not.toBeNull();

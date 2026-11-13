@@ -28,10 +28,14 @@ import {
   saveCareerSkillAction,
   type CareerSaveState,
 } from "@/lib/career-actions";
-import type { CareerLanguage, CareerTimelineItem } from "@/lib/domain/career";
+import {
+  isJapaneseNationality,
+  jaOf,
+  type CareerLanguage,
+  type CareerTimelineItem,
+} from "@/lib/domain/career";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import { formatYearMonthInputValue } from "@/lib/domain/dates";
-import { jaOf } from "@/lib/domain/career";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 
 export type MyCareerModule =
@@ -52,7 +56,6 @@ export type MyCareerLabels = {
   cancel: string;
   saved: string;
   errors: Record<NonNullable<CareerSaveState["error"]>, string>;
-  profileBanner: string;
   workSub: string;
   projectsSub: string;
   projectsPendingHint: string;
@@ -79,19 +82,21 @@ export type MyCareerLabels = {
   recentSub: string;
   resumeSectionTitle: string;
   resumeSectionSub: string;
+  nationalityBlock: string;
+  japaneseLocksHint: string;
   fields: {
     headline: string;
+    headlinePlaceholder: string;
     directionTags: string;
+    directionTagsPlaceholder: string;
     selfPr: string;
     jobSummary: string;
     strengths: string;
+    nationality: string;
     residenceStatus: string;
-    residencePeriod: string;
     residenceUntil: string;
     salaryAnnual: string;
-    salaryBonus: string;
     salaryMonthly: string;
-    salaryOvertime: string;
     salaryHope: string;
     personalHope: string;
     language: string;
@@ -150,13 +155,11 @@ export type CareerExtrasInitial = {
   jobSummaryJa: string;
   strengthsText: string;
   languages: CareerLanguage[];
+  nationality: string;
   residenceStatus: string;
-  residencePeriod: string;
   residenceUntil: string;
   salaryAnnualMan: string;
-  salaryBonusMan: string;
   salaryMonthlyMan: string;
-  salaryOvertimeMan: string;
   salaryHope: string;
   personalHopeJa: string;
 };
@@ -288,6 +291,8 @@ function ProfileModule({
   );
   const wasPending = useRef(false);
   const [langs, setLangs] = useState(extras.languages);
+  const [nationality, setNationality] = useState(extras.nationality);
+  const japanese = isJapaneseNationality(nationality);
   const recent = timeline.slice(0, 4);
 
   useEffect(() => {
@@ -306,33 +311,15 @@ function ProfileModule({
   const confirmedProjects = projects.filter((p) => p.status === "confirmed");
   const salaryNow =
     extras.salaryAnnualMan.trim() !== ""
-      ? `${extras.salaryAnnualMan}万円${
-          extras.salaryBonusMan.trim()
-            ? `（賞与 ${extras.salaryBonusMan}万）`
-            : ""
-        }`
+      ? `${extras.salaryAnnualMan}万円`
       : "—";
   const salaryMonth =
     extras.salaryMonthlyMan.trim() !== ""
-      ? `${extras.salaryMonthlyMan}万円${
-          extras.salaryOvertimeMan.trim()
-            ? `（時間外 ${extras.salaryOvertimeMan}万）`
-            : ""
-        }`
+      ? `${extras.salaryMonthlyMan}万円`
       : "—";
-  const residencePeriodLine = [
-    extras.residencePeriod.trim(),
-    extras.residenceUntil.trim()
-      ? `（至 ${extras.residenceUntil}）`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("");
 
   return (
     <div className="mc-stack">
-      <div className="mc-banner mc-banner-ok">{labels.profileBanner}</div>
-
       <div className="mc-panel-actions mc-no-print">
         {editing ? (
           <button
@@ -340,6 +327,7 @@ function ProfileModule({
             className="mc-btn mc-btn-ghost"
             onClick={() => {
               setLangs(extras.languages);
+              setNationality(extras.nationality);
               setEditing(false);
             }}
           >
@@ -351,6 +339,7 @@ function ProfileModule({
             className="mc-btn"
             onClick={() => {
               setLangs(extras.languages);
+              setNationality(extras.nationality);
               setEditing(true);
             }}
           >
@@ -401,12 +390,22 @@ function ProfileModule({
 
           <div className="mc-meta-grid">
             <div className="mc-card">
-              <h3>{labels.residence}</h3>
+              <h3>{labels.nationalityBlock}</h3>
               <dl className="mc-dl">
+                <dt>{labels.fields.nationality}</dt>
+                <dd>{dash(extras.nationality)}</dd>
                 <dt>{labels.fields.residenceStatus}</dt>
-                <dd>{dash(extras.residenceStatus)}</dd>
-                <dt>{labels.fields.residencePeriod}</dt>
-                <dd>{dash(residencePeriodLine)}</dd>
+                <dd>
+                  {isJapaneseNationality(extras.nationality)
+                    ? "—"
+                    : dash(extras.residenceStatus)}
+                </dd>
+                <dt>{labels.fields.residenceUntil}</dt>
+                <dd>
+                  {isJapaneseNationality(extras.nationality)
+                    ? "—"
+                    : dash(extras.residenceUntil)}
+                </dd>
               </dl>
             </div>
             <div className="mc-card">
@@ -456,11 +455,19 @@ function ProfileModule({
             <h3>{labels.modules.profile}</h3>
             <label className="mc-field">
               {labels.fields.headline}
-              <input name="headline" defaultValue={extras.headline} />
+              <input
+                name="headline"
+                defaultValue={extras.headline}
+                placeholder={labels.fields.headlinePlaceholder}
+              />
             </label>
             <label className="mc-field">
               {labels.fields.directionTags}
-              <input name="directionTags" defaultValue={extras.directionTags} />
+              <input
+                name="directionTags"
+                defaultValue={extras.directionTags}
+                placeholder={labels.fields.directionTagsPlaceholder}
+              />
             </label>
             <label className="mc-field">
               {labels.fields.selfPr}
@@ -498,27 +505,37 @@ function ProfileModule({
 
           <div className="mc-meta-grid">
             <div className="mc-card">
-              <h3>{labels.residence}</h3>
+              <h3>{labels.nationalityBlock}</h3>
+              <label className="mc-field">
+                {labels.fields.nationality}
+                <input
+                  name="nationality"
+                  value={nationality}
+                  onChange={(e) => setNationality(e.target.value)}
+                />
+              </label>
+              {japanese ? (
+                <p className="mc-empty" style={{ marginBottom: 10 }}>
+                  {labels.japaneseLocksHint}
+                </p>
+              ) : null}
               <label className="mc-field">
                 {labels.fields.residenceStatus}
                 <input
+                  key={japanese ? "status-jp" : "status-other"}
                   name="residenceStatus"
-                  defaultValue={extras.residenceStatus}
-                />
-              </label>
-              <label className="mc-field">
-                {labels.fields.residencePeriod}
-                <input
-                  name="residencePeriod"
-                  defaultValue={extras.residencePeriod}
+                  defaultValue={japanese ? "" : extras.residenceStatus}
+                  disabled={japanese}
                 />
               </label>
               <label className="mc-field">
                 {labels.fields.residenceUntil}
                 <input
+                  key={japanese ? "until-jp" : "until-other"}
                   type="date"
                   name="residenceUntil"
-                  defaultValue={extras.residenceUntil}
+                  defaultValue={japanese ? "" : extras.residenceUntil}
+                  disabled={japanese}
                 />
               </label>
             </div>
@@ -532,24 +549,10 @@ function ProfileModule({
                 />
               </label>
               <label className="mc-field">
-                {labels.fields.salaryBonus}
-                <input
-                  name="salaryBonusMan"
-                  defaultValue={extras.salaryBonusMan}
-                />
-              </label>
-              <label className="mc-field">
                 {labels.fields.salaryMonthly}
                 <input
                   name="salaryMonthlyMan"
                   defaultValue={extras.salaryMonthlyMan}
-                />
-              </label>
-              <label className="mc-field">
-                {labels.fields.salaryOvertime}
-                <input
-                  name="salaryOvertimeMan"
-                  defaultValue={extras.salaryOvertimeMan}
                 />
               </label>
               <label className="mc-field">

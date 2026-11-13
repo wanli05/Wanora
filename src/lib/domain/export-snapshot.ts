@@ -187,6 +187,39 @@ function moneyLine(
   return lines;
 }
 
+/**
+ * Prefer Work History (career_employers) for 履歴書 職歴 lines.
+ * Fall back to legacy work_history_entries when no employers exist.
+ */
+export function resolveExportWorkHistory(
+  employers: ExportEmployerRow[],
+  legacy: ExportWorkRow[],
+): ExportWorkRow[] {
+  if (employers.length === 0) return legacy;
+  const sorted = [...employers].sort(
+    (a, b) => a.startYm.getTime() - b.startYm.getTime(),
+  );
+  const rows: ExportWorkRow[] = [];
+  for (const e of sorted) {
+    const companyJa = jaOf(e.companyName);
+    const title = e.title?.trim() ?? "";
+    const joinedLabel = title ? `${companyJa}　${title}` : companyJa;
+    rows.push({
+      yearMonth: e.startYm,
+      company: { ja: joinedLabel },
+      eventCode: "joined",
+    });
+    if (e.endYm) {
+      rows.push({
+        yearMonth: e.endYm,
+        company: e.companyName,
+        eventCode: "left",
+      });
+    }
+  }
+  return rows;
+}
+
 export function buildExportSnapshot(input: {
   profile: ExportProfileSlice;
   education: ExportEducationRow[];
@@ -216,7 +249,11 @@ export function buildExportSnapshot(input: {
     };
   });
 
-  const workLines = input.workHistory.map((row) => {
+  const resolvedWork = resolveExportWorkHistory(
+    input.employers,
+    input.workHistory,
+  );
+  const workLines = resolvedWork.map((row) => {
     const { year, month } = ymParts(row.yearMonth);
     return {
       year,
@@ -259,7 +296,7 @@ export function buildExportSnapshot(input: {
     }));
 
   const firstEmployer = input.employers[0];
-  const firstJoined = input.workHistory.find((w) => w.eventCode === "joined");
+  const firstJoined = resolvedWork.find((w) => w.eventCode === "joined");
   const jobCareerLine = firstEmployer
     ? `${formatYm(firstEmployer.startYm)}　${jaOf(firstEmployer.companyName)}　入社\n現在に至る`
     : firstJoined

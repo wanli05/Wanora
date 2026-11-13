@@ -162,6 +162,7 @@ export const profiles = pgTable(
       .$type<{ language: string; level: string }[]>()
       .notNull()
       .default([]),
+    nationality: text("nationality"),
     residenceStatus: text("residence_status"),
     residencePeriod: text("residence_period"),
     residenceUntil: date("residence_until", { mode: "date" }),

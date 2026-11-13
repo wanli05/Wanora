@@ -21,7 +21,6 @@ import { getProfileByUserId, upsertProfile } from "@/lib/data/profiles";
 import {
   createWorkHistoryEntry,
   deleteWorkHistoryEntry,
-  listWorkHistoryEntries,
   updateWorkHistoryEntry,
 } from "@/lib/data/work-history-entries";
 import { parseDateInput, yearMonthFromInputValue, compareYearMonthDates } from "@/lib/domain/dates";
@@ -211,56 +210,6 @@ async function syncEducationFromForm(
   }
 }
 
-async function syncWorkHistoryFromForm(
-  db: ReturnType<typeof getDb>,
-  userId: string,
-  formData: FormData,
-): Promise<void> {
-  const existing = await listWorkHistoryEntries(db, userId);
-  const existingIds = new Set(existing.map((e) => e.id));
-  const keptIds = new Set<string>();
-
-  const parsed = [];
-  for (const i of indexedFormKeys(formData, "workHistory")) {
-    const id = formData.get(`workHistory.${i}.id`)?.toString() || undefined;
-    const companyJa = jaFromIndexedField(formData, "workHistory", i, "company");
-    if (!companyJa) continue;
-    const eventCode = z.enum(WORK_HISTORY_EVENT_CODES).parse(
-      formData.get(`workHistory.${i}.eventCode`)?.toString(),
-    );
-    parsed.push({
-      formIndex: i,
-      id,
-      yearMonth: yearMonthFromIndexedForm(formData, "workHistory", i),
-      companyJa,
-      eventCode,
-    });
-  }
-
-  for (const [sortOrder, row] of sortIndexedRowsByYearMonth(parsed).entries()) {
-    const input = {
-      yearMonth: row.yearMonth,
-      company: { ja: row.companyJa },
-      eventCode: row.eventCode,
-      note: null,
-      sortOrder,
-    };
-    if (row.id && existingIds.has(row.id)) {
-      await updateWorkHistoryEntry(db, userId, row.id, input);
-      keptIds.add(row.id);
-    } else {
-      const created = await createWorkHistoryEntry(db, userId, input);
-      keptIds.add(created.id);
-    }
-  }
-
-  for (const row of existing) {
-    if (!keptIds.has(row.id)) {
-      await deleteWorkHistoryEntry(db, userId, row.id);
-    }
-  }
-}
-
 async function syncLicensesFromForm(
   db: ReturnType<typeof getDb>,
   userId: string,
@@ -319,7 +268,7 @@ export async function saveFullProfileAction(
   try {
     const db = getDb();
     await syncEducationFromForm(db, userId, formData);
-    await syncWorkHistoryFromForm(db, userId, formData);
+    // 職歴は Work History（career_employers）が唯一編集源。履歴書フォームでは同期しない。
     await syncLicensesFromForm(db, userId, formData);
     revalidatePath("/profile", "layout");
     revalidatePath("/profile");

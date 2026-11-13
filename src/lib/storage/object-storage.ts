@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -36,6 +37,27 @@ export async function putUserObject(
       ContentType: contentType,
     }),
   );
+}
+
+export async function getUserObject(
+  key: string,
+): Promise<{ body: Buffer; contentType: string } | null> {
+  try {
+    const out = await getS3Client().send(
+      new GetObjectCommand({
+        Bucket: getServerEnv().S3_BUCKET!,
+        Key: key,
+      }),
+    );
+    if (!out.Body) return null;
+    const bytes = await out.Body.transformToByteArray();
+    return {
+      body: Buffer.from(bytes),
+      contentType: out.ContentType ?? "application/octet-stream",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteUserObject(key: string): Promise<void> {

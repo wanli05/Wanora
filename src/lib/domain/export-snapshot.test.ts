@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { yearMonthFromInput } from "@/lib/domain/dates";
-import { buildExportSnapshot } from "./export-snapshot";
+import {
+  buildExportSnapshot,
+  resolveExportWorkHistory,
+} from "./export-snapshot";
 
 describe("buildExportSnapshot", () => {
   it("projects locked fields without JIS commute/family columns", () => {
@@ -39,8 +42,8 @@ describe("buildExportSnapshot", () => {
       ],
       workHistory: [
         {
-          yearMonth: yearMonthFromInput(2024, 4),
-          company: { ja: "株式会社ジンズ" },
+          yearMonth: yearMonthFromInput(2020, 4),
+          company: { ja: "旧データ会社" },
           eventCode: "joined",
         },
       ],
@@ -113,6 +116,23 @@ describe("buildExportSnapshot", () => {
     expect(snap.selfStudyLinks).toEqual([
       { label: "サンプルPJ", url: "https://example.com" },
     ]);
-    expect(JSON.stringify(snap)).not.toMatch(/通勤|扶養|配偶者/);
+    // Prefer Work History employers over legacy resume-side rows.
+    expect(snap.workLines).toEqual([
+      { year: "2024", month: "4", text: "株式会社ジンズ　PL　入社" },
+    ]);
+    expect(JSON.stringify(snap)).not.toMatch(/通勤|扶養|配偶者|旧データ会社/);
+  });
+});
+
+describe("resolveExportWorkHistory", () => {
+  it("falls back to legacy work_history_entries when no employers", () => {
+    const legacy = [
+      {
+        yearMonth: yearMonthFromInput(2023, 1),
+        company: { ja: "レガシー社" },
+        eventCode: "joined" as const,
+      },
+    ];
+    expect(resolveExportWorkHistory([], legacy)).toEqual(legacy);
   });
 });

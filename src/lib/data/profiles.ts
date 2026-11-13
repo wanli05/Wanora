@@ -25,6 +25,7 @@ export type ProfileInput = {
   jobSummary?: LocalizedText | null;
   strengths?: string[];
   languages?: CareerLanguage[];
+  nationality?: string | null;
   residenceStatus?: string | null;
   residencePeriod?: string | null;
   residenceUntil?: Date | null;
@@ -73,6 +74,10 @@ function mergeProfileValues(input: ProfileInput, existing?: ProfileRow) {
       input.strengths !== undefined ? input.strengths : (existing?.strengths ?? []),
     languages:
       input.languages !== undefined ? input.languages : (existing?.languages ?? []),
+    nationality:
+      input.nationality !== undefined
+        ? input.nationality
+        : (existing?.nationality ?? null),
     residenceStatus:
       input.residenceStatus !== undefined
         ? input.residenceStatus

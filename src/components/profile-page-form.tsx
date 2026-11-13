@@ -6,15 +6,8 @@ import { JapaneseTextField } from "@/components/japanese-text-field";
 import { PhotoUpload } from "@/components/photo-upload";
 import { YearMonthField } from "@/app/[locale]/profile/form-fields";
 import type { EducationEventCode } from "@/lib/domain/resume-events";
-import type { WorkHistoryEventCode } from "@/lib/domain/resume-events";
-import {
-  EDUCATION_EVENT_CODES,
-  WORK_HISTORY_EVENT_CODES,
-} from "@/lib/domain/resume-events";
-import {
-  formatWorkHistoryYearMonthEvent,
-  formatYearMonthJa,
-} from "@/lib/domain/profile-display";
+import { EDUCATION_EVENT_CODES } from "@/lib/domain/resume-events";
+import { formatYearMonthJa } from "@/lib/domain/profile-display";
 import {
   formatYearMonthInputValue,
   parseYearMonthInputValue,
@@ -34,14 +27,6 @@ type EducationRow = {
   eventCode: EducationEventCode;
 };
 
-type WorkHistoryRow = {
-  clientKey: string;
-  id?: string;
-  yearMonth: string;
-  workContentJa: string;
-  eventCode: WorkHistoryEventCode;
-};
-
 type LicenseRow = {
   clientKey: string;
   id?: string;
@@ -59,7 +44,6 @@ export type ProfilePageFormLabels = {
   sections: {
     basic: string;
     education: string;
-    workHistory: string;
     licenses: string;
   };
   basic: {
@@ -77,17 +61,13 @@ export type ProfilePageFormLabels = {
     phone: string;
     email: string;
     altContact: string;
+    photo: string;
+    photoAlt: string;
   };
   japaneseHint: string;
   education: {
     empty: string;
     school: string;
-    event: string;
-    yearMonth: string;
-  };
-  workHistory: {
-    empty: string;
-    workContent: string;
     event: string;
     yearMonth: string;
   };
@@ -98,7 +78,6 @@ export type ProfilePageFormLabels = {
   };
   events: {
     education: Record<EducationEventCode, string>;
-    workHistory: Record<WorkHistoryEventCode, string>;
   };
 };
 
@@ -116,9 +95,9 @@ export type ProfilePageInitial = {
   email: string;
   altContact: LocalizedText;
   education: Omit<EducationRow, "clientKey">[];
-  workHistory: Omit<WorkHistoryRow, "clientKey">[];
   licenses: Omit<LicenseRow, "clientKey">[];
   storageReady: boolean;
+  hasPhoto: boolean;
 };
 
 function withClientKeys<T extends { id?: string; yearMonth: string }>(
@@ -211,9 +190,6 @@ export function ProfilePageForm({
   const [justSaved, setJustSaved] = useState(() => consumeProfileSavedFlash());
   const [educationRows, setEducationRows] = useState(() =>
     withClientKeys(initial.education),
-  );
-  const [workRows, setWorkRows] = useState(() =>
-    withClientKeys(initial.workHistory),
   );
   const [licenseRows, setLicenseRows] = useState(() =>
     withClientKeys(initial.licenses),
@@ -361,10 +337,31 @@ export function ProfilePageForm({
               multiline
               hint={labels.japaneseHint}
             />
-            <PhotoUpload disabled={!initial.storageReady} />
+            <PhotoUpload
+              disabled={!initial.storageReady}
+              hasPhoto={initial.hasPhoto}
+              initialUrl={
+                initial.hasPhoto ? "/api/profile/photo" : null
+              }
+            />
           </div>
         ) : (
           <RirekishoTable>
+            {initial.hasPhoto ? (
+              <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                <th className="w-36 py-2.5 pr-4 text-left align-top text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {labels.basic.photo}
+                </th>
+                <td className="py-2.5 text-sm text-zinc-900 dark:text-zinc-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- authenticated photo API */}
+                  <img
+                    src="/api/profile/photo"
+                    alt={labels.basic.photoAlt}
+                    className="h-28 w-[84px] rounded border border-zinc-200 object-cover dark:border-zinc-700"
+                  />
+                </td>
+              </tr>
+            ) : null}
             <ViewRow
               label={labels.basic.fullName}
               value={initial.fullName.ja}
@@ -558,154 +555,6 @@ export function ProfilePageForm({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{labels.sections.workHistory}</h2>
-        {editing ? (
-          <div className="space-y-4">
-            {workRows.map((row, index) => (
-              <div
-                key={row.clientKey}
-                className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
-              >
-                <input
-                  type="hidden"
-                  name={`workHistory.${index}.id`}
-                  value={row.id ?? ""}
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <YearMonthField
-                    name={`workHistory.${index}.yearMonth`}
-                    label={labels.workHistory.yearMonth}
-                    value={row.yearMonth}
-                    onChange={(yearMonth) =>
-                      setWorkRows((rows) =>
-                        sortByYearMonthInput(
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? { ...r, yearMonth }
-                              : r,
-                          ),
-                        ),
-                      )
-                    }
-                  />
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium">
-                      {labels.workHistory.event}
-                    </span>
-                    <select
-                      name={`workHistory.${index}.eventCode`}
-                      value={row.eventCode}
-                      onChange={(e) =>
-                        setWorkRows((rows) =>
-                          rows.map((r) =>
-                            r.clientKey === row.clientKey
-                              ? {
-                                  ...r,
-                                  eventCode: e.target
-                                    .value as WorkHistoryEventCode,
-                                }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={inputClass}
-                    >
-                      {WORK_HISTORY_EVENT_CODES.map((code) => (
-                        <option key={code} value={code}>
-                          {labels.events.workHistory[code]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium">
-                    {labels.workHistory.workContent}
-                  </span>
-                  <input
-                    name={`workHistory.${index}.company_ja`}
-                    required
-                    value={row.workContentJa}
-                    onChange={(e) =>
-                      setWorkRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey
-                            ? { ...r, workContentJa: e.target.value }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={inputClass}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() =>
-                    setWorkRows((rows) =>
-                      rows.filter((r) => r.clientKey !== row.clientKey),
-                    )
-                  }
-                >
-                  {labels.removeRow}
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
-              onClick={() =>
-                setWorkRows((rows) =>
-                  sortByYearMonthInput([
-                    ...rows,
-                    {
-                      clientKey: `new-${crypto.randomUUID()}`,
-                      yearMonth: defaultYearMonth(),
-                      workContentJa: "",
-                      eventCode: "joined",
-                    },
-                  ]),
-                )
-              }
-            >
-              {labels.addRow}
-            </button>
-          </div>
-        ) : workRows.length === 0 ? (
-          <p className="text-sm text-zinc-500">{labels.workHistory.empty}</p>
-        ) : (
-          <TimelineTableWithHead
-            head={
-              <>
-                <th className="py-2 pr-4 font-medium normal-case">
-                  {labels.workHistory.yearMonth}
-                </th>
-                <th className="py-2 font-medium normal-case">
-                  {labels.workHistory.workContent}
-                </th>
-              </>
-            }
-          >
-            {workRows.map((row) => {
-              const { year, month } = yearMonthParts(row.yearMonth);
-              return (
-                <tr key={row.clientKey}>
-                  <td className="whitespace-nowrap py-2.5 pr-4 align-top">
-                    {formatWorkHistoryYearMonthEvent(
-                      year,
-                      month,
-                      labels.events.workHistory[row.eventCode],
-                    )}
-                  </td>
-                  <td className="py-2.5">{row.workContentJa || "—"}</td>
-                </tr>
-              );
-            })}
-          </TimelineTableWithHead>
-        )}
-      </section>
-
-      <section className="space-y-3">
         <h2 className="text-lg font-semibold">{labels.sections.licenses}</h2>
         {editing ? (
           <div className="space-y-4">
@@ -824,7 +673,6 @@ export function ProfilePageForm({
             onClick={() => {
               setJustSaved(false);
               setEducationRows(withClientKeys(initial.education));
-              setWorkRows(withClientKeys(initial.workHistory));
               setLicenseRows(withClientKeys(initial.licenses));
               setEditing(true);
             }}

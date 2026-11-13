@@ -36,7 +36,6 @@ const labels: ProfilePageFormLabels = {
   sections: {
     basic: "基本信息",
     education: "学历",
-    workHistory: "职历",
     licenses: "免许",
   },
   basic: {
@@ -54,17 +53,13 @@ const labels: ProfilePageFormLabels = {
     phone: "电话",
     email: "邮箱",
     altContact: "其他联系",
+    photo: "证明写真",
+    photoAlt: "证明写真预览",
   },
   japaneseHint: "日语",
   education: {
     empty: "暂无学历",
     school: "学校",
-    event: "事项",
-    yearMonth: "年月",
-  },
-  workHistory: {
-    empty: "暂无职历",
-    workContent: "工作内容",
     event: "事项",
     yearMonth: "年月",
   },
@@ -79,11 +74,6 @@ const labels: ProfilePageFormLabels = {
       graduated: "毕业",
       withdrawn: "退学",
       completed: "结业",
-    },
-    workHistory: {
-      joined: "入职",
-      left: "离职",
-      transferred: "调动",
     },
   },
 };
@@ -102,9 +92,9 @@ const initial: ProfilePageInitial = {
   email: "",
   altContact: {},
   education: [],
-  workHistory: [],
   licenses: [],
   storageReady: false,
+  hasPhoto: false,
 };
 
 beforeEach(() => {
