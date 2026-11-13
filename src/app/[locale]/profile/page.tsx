@@ -1,4 +1,4 @@
-import { connection } from "next/server";
+import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import {
   MyCareerCenter,
@@ -38,8 +38,20 @@ import type { WorkHistoryEventCode } from "@/lib/domain/resume-events";
 import { isObjectStorageConfigured } from "@/lib/env";
 import { requireProfileAccess } from "@/lib/profile-actions";
 
-export default async function ProfilePage() {
-  await connection();
+/**
+ * cacheComponents：会话 / DB 等未缓存 IO 必须落在 Suspense 内，否则
+ * `/[locale]/profile` 无法 prerender，导航也会被 blocking-route 拦住。
+ * （layout 的 `instant = false` 只豁免 layout 段，管不到本 page。）
+ */
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfilePageContent />
+    </Suspense>
+  );
+}
+
+async function ProfilePageContent() {
   const userId = await requireProfileAccess();
   const db = getDb();
   const profile = await getProfileByUserId(db, userId);
