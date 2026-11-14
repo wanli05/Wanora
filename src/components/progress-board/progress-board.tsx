@@ -502,55 +502,33 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
 
   return (
     <div className="pb-shell flex flex-1 flex-col">
-      <div className="pb-nav" role="navigation" aria-label={t("title")}>
-        <h1 className="pb-nav-title">{t("title")}</h1>
-        <button
-          type="button"
-          className="pb-nav-link"
-          data-active={!calendarOpen && view === "kanban" ? "true" : "false"}
-          onClick={() => {
-            setCalendarOpen(false);
-            setView("kanban");
-          }}
-        >
-          {t("viewKanban")}
-        </button>
-        <button
-          type="button"
-          className="pb-nav-link"
-          data-active={!calendarOpen && view === "list" ? "true" : "false"}
-          onClick={() => {
-            setCalendarOpen(false);
-            setView("list");
-          }}
-        >
-          {t("viewList")}
-        </button>
-        <button
-          type="button"
-          data-testid="calendar-toggle"
-          aria-label={t("calendar")}
-          aria-expanded={calendarOpen}
-          aria-pressed={calendarOpen}
-          className="pb-nav-link relative"
-          data-active={calendarOpen ? "true" : "false"}
-          onClick={openCalendar}
-        >
-          {t("calendar")}
-          {monthCount > 0 ? (
-            <span className="ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-[var(--pb-teal-deep)] px-1 text-[10px] font-semibold text-white">
-              {monthCount}
-            </span>
-          ) : null}
-        </button>
-        <span className="pb-nav-spacer" />
-        <button
-          type="button"
-          className="pb-btn pb-btn-sm"
-          onClick={() => setAddingApp(true)}
-        >
-          {t("addApplication")}
-        </button>
+      <div className="pb-page-toolbar">
+        <h1 className="pb-page-title">{t("title")}</h1>
+        <div className="pb-page-actions">
+          <button
+            type="button"
+            data-testid="calendar-toggle"
+            aria-label={t("calendar")}
+            title={t("calendar")}
+            aria-expanded={calendarOpen}
+            aria-pressed={calendarOpen}
+            className="pb-icon-cal"
+            data-active={calendarOpen ? "true" : "false"}
+            onClick={openCalendar}
+          >
+            <CalendarGlyph />
+            {monthCount > 0 ? (
+              <span className="pb-icon-cal-badge">{monthCount}</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            className="pb-btn pb-btn-sm"
+            onClick={() => setAddingApp(true)}
+          >
+            {t("addApplication")}
+          </button>
+        </div>
       </div>
 
       <div className="pb-main">
@@ -587,7 +565,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
               </button>
               <button
                 type="button"
-                className="pb-nav-link"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
                 onClick={() => setCalendarOpen(false)}
               >
                 {t("calendarClose")}
@@ -603,6 +581,22 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       ) : (
         <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="flex overflow-hidden rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)]">
+          <button
+            type="button"
+            className={`px-3 py-1 ${view === "kanban" ? "bg-[var(--pb-teal-soft)] font-semibold text-[var(--pb-teal-deep)]" : ""}`}
+            onClick={() => setView("kanban")}
+          >
+            {t("viewKanban")}
+          </button>
+          <button
+            type="button"
+            className={`px-3 py-1 ${view === "list" ? "bg-[var(--pb-teal-soft)] font-semibold text-[var(--pb-teal-deep)]" : ""}`}
+            onClick={() => setView("list")}
+          >
+            {t("viewList")}
+          </button>
+        </div>
         {(["in_progress", "closed", "all"] as const).map((key) => (
           <button
             key={key}
@@ -2135,6 +2129,41 @@ function ApplicationTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** White square calendar with blue header — Demo / fig8 glyph. */
+function CalendarGlyph() {
+  return (
+    <svg
+      className="pb-icon-cal-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect
+        x="3.25"
+        y="4.5"
+        width="17.5"
+        height="16"
+        rx="2.75"
+        fill="#fff"
+        stroke="#c5d0cb"
+        strokeWidth="1.1"
+      />
+      <path
+        d="M3.25 7.25h17.5V7a2.75 2.75 0 0 0-2.75-2.5H6A2.75 2.75 0 0 0 3.25 7v.25Z"
+        fill="#3b82f6"
+      />
+      <rect x="7.4" y="3" width="1.7" height="3.4" rx="0.85" fill="#64748b" />
+      <rect x="14.9" y="3" width="1.7" height="3.4" rx="0.85" fill="#64748b" />
+      <circle cx="8.2" cy="12.2" r="1.05" fill="#94a3b8" />
+      <circle cx="12" cy="12.2" r="1.05" fill="#94a3b8" />
+      <circle cx="15.8" cy="12.2" r="1.05" fill="#94a3b8" />
+      <circle cx="8.2" cy="16" r="1.05" fill="#94a3b8" />
+      <circle cx="12" cy="16" r="1.05" fill="#94a3b8" />
+      <circle cx="15.8" cy="16" r="1.05" fill="#94a3b8" />
+    </svg>
   );
 }
 

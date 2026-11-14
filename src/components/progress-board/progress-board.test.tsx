@@ -210,11 +210,29 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    fireEvent.click(screen.getByTestId("calendar-toggle"));
+    const toggle = screen.getByTestId("calendar-toggle");
+    expect(toggle).toHaveClass("pb-icon-cal");
+    expect(toggle.querySelector(".pb-icon-cal-glyph")).not.toBeNull();
+    fireEvent.click(toggle);
     expect(screen.getByTestId("calendar-panel")).toBeInTheDocument();
     expect(screen.getByTestId("month-calendar")).toBeInTheDocument();
     expect(screen.queryByTestId("task-bar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("calendar-backdrop")).not.toBeInTheDocument();
+    expect(toggle).toHaveAttribute("data-active", "true");
+  });
+
+  it("places the calendar icon button left of add on the page toolbar", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    const actions = document.querySelector(".pb-page-actions");
+    expect(actions).not.toBeNull();
+    const kids = Array.from(actions!.children);
+    expect(kids[0]).toHaveAttribute("data-testid", "calendar-toggle");
+    expect(kids[1]?.textContent).toMatch(/添加投递|応募を追加/);
   });
 
   it("shows undo on rejected cards and after a pass", async () => {
