@@ -3,6 +3,7 @@ import {
   BorderStyle,
   Document,
   HeadingLevel,
+  HeightRule,
   ImageRun,
   Packer,
   Paragraph,
@@ -53,6 +54,11 @@ function cell(
     right?: boolean;
     shade?: string;
     colspan?: number;
+    size?: number;
+    vAlign?:
+      | typeof VerticalAlign.CENTER
+      | typeof VerticalAlign.TOP
+      | typeof VerticalAlign.BOTTOM;
   },
 ): TableCell {
   const alignment = opts.center
@@ -64,6 +70,7 @@ function cell(
     borders,
     width: { size: opts.width, type: WidthType.DXA },
     columnSpan: opts.colspan,
+    verticalAlign: opts.vAlign,
     shading: opts.shade ? { fill: opts.shade } : undefined,
     children: text.split("\n").map(
       (line) =>
@@ -73,7 +80,7 @@ function cell(
             new TextRun({
               text: line,
               bold: opts.bold,
-              size: 18,
+              size: opts.size ?? 18,
               font: { eastAsia: "游明朝", ascii: "Times New Roman" },
             }),
           ],
@@ -161,6 +168,7 @@ function photoCell(photoPrintJpeg: Buffer | null | undefined, width: number) {
   return new TableCell({
     borders,
     width: { size: width, type: WidthType.DXA },
+    rowSpan: 3,
     verticalAlign: VerticalAlign.CENTER,
     children,
   });
@@ -174,8 +182,6 @@ function buildRirekisho(
   const wId = CONTENT - wPhoto - 80;
   const wLab = Math.round(wId * 0.22);
   const wRest = wId - wLab;
-  const wLabFull = Math.round(CONTENT * 0.18);
-  const wRestFull = CONTENT - wLabFull;
   const wYm = Math.round(CONTENT * 0.1);
   const wMm = Math.round(CONTENT * 0.08);
   const wBody = CONTENT - wYm - wMm;
@@ -267,130 +273,165 @@ function buildRirekisho(
           },
         },
         children: [
-          p("履　歴　書", { bold: true, center: true, size: 32 }),
-          p(snapshot.asOfRirekisho, { right: true }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [wId, wPhoto],
+            columnWidths: [Math.round(CONTENT * 0.55), Math.round(CONTENT * 0.45)],
             rows: [
               new TableRow({
                 children: [
                   new TableCell({
                     borders: noBorders,
-                    width: { size: wId, type: WidthType.DXA },
+                    width: { size: Math.round(CONTENT * 0.55), type: WidthType.DXA },
                     children: [
-                      new Table({
-                        width: { size: wId, type: WidthType.DXA },
-                        columnWidths: [wLab, wBirth, wGender],
-                        rows: [
-                          new TableRow({
-                            children: [
-                              cell("ふりがな", {
-                                width: wLab,
-                                bold: true,
-                                shade: "F3F3F3",
-                              }),
-                              cell(snapshot.fullNameKana, {
-                                width: wBirth + wGender,
-                                colspan: 2,
-                              }),
-                            ],
-                          }),
-                          new TableRow({
-                            children: [
-                              cell("氏　名", {
-                                width: wLab,
-                                bold: true,
-                                shade: "F3F3F3",
-                              }),
-                              cell(snapshot.fullName, {
-                                width: wBirth + wGender,
-                                colspan: 2,
-                              }),
-                            ],
-                          }),
-                          new TableRow({
-                            children: [
-                              cell("生年月日", {
-                                width: wLab,
-                                bold: true,
-                                shade: "F3F3F3",
-                              }),
-                              cell(snapshot.birthLine, { width: wBirth }),
-                              cell(
-                                snapshot.gender
-                                  ? `性別　${snapshot.gender}`
-                                  : "",
-                                { width: wGender },
-                              ),
-                            ],
+                      new Paragraph({
+                        alignment: AlignmentType.LEFT,
+                        spacing: { after: 40 },
+                        children: [
+                          new TextRun({
+                            text: "履　歴　書",
+                            bold: true,
+                            size: 32,
+                            font: {
+                              eastAsia: "游明朝",
+                              ascii: "Times New Roman",
+                            },
                           }),
                         ],
                       }),
                     ],
                   }),
+                  new TableCell({
+                    borders: noBorders,
+                    width: { size: Math.round(CONTENT * 0.45), type: WidthType.DXA },
+                    verticalAlign: VerticalAlign.BOTTOM,
+                    children: [
+                      new Paragraph({
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 40 },
+                        children: [
+                          new TextRun({
+                            text: snapshot.asOfRirekisho,
+                            size: 20,
+                            font: {
+                              eastAsia: "游明朝",
+                              ascii: "Times New Roman",
+                            },
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: [wLab, wBirth, wGender, wPhoto],
+            rows: [
+              new TableRow({
+                height: { value: 400, rule: HeightRule.ATLEAST },
+                children: [
+                  cell("ふりがな", {
+                    width: wLab,
+                    bold: true,
+                    shade: "F3F3F3",
+                    size: 16,
+                    vAlign: VerticalAlign.CENTER,
+                  }),
+                  cell(snapshot.fullNameKana, {
+                    width: wBirth + wGender,
+                    colspan: 2,
+                    size: 16,
+                    vAlign: VerticalAlign.CENTER,
+                  }),
                   photoCell(photoPrintJpeg, wPhoto),
+                ],
+              }),
+              new TableRow({
+                height: { value: 900, rule: HeightRule.ATLEAST },
+                children: [
+                  cell("氏　名", {
+                    width: wLab,
+                    bold: true,
+                    shade: "F3F3F3",
+                    size: 24,
+                    vAlign: VerticalAlign.CENTER,
+                  }),
+                  cell(snapshot.fullName, {
+                    width: wBirth + wGender,
+                    colspan: 2,
+                    size: 24,
+                    vAlign: VerticalAlign.CENTER,
+                  }),
+                ],
+              }),
+              new TableRow({
+                height: { value: 720, rule: HeightRule.ATLEAST },
+                children: [
+                  cell("生年月日", {
+                    width: wLab,
+                    bold: true,
+                    shade: "F3F3F3",
+                    vAlign: VerticalAlign.CENTER,
+                  }),
+                  cell(snapshot.birthLine, {
+                    width: wBirth,
+                    vAlign: VerticalAlign.CENTER,
+                  }),
+                  cell(
+                    snapshot.gender ? `※性別　${snapshot.gender}` : "",
+                    { width: wGender, vAlign: VerticalAlign.CENTER },
+                  ),
                 ],
               }),
             ],
           }),
           new Paragraph({ children: [] }),
-          new Table({
-            width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [wLabFull, wRestFull],
-            rows: [
-              new TableRow({
-                children: [
-                  cell("ふりがな", {
-                    width: wLabFull,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.addressKana, { width: wRestFull }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell("現住所", {
-                    width: wLabFull,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.address, { width: wRestFull }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell("電話", {
-                    width: wLabFull,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.phone, { width: wRestFull }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell("E-mail", {
-                    width: wLabFull,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.email, { width: wRestFull }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell("最寄り", {
-                    width: wLabFull,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.nearestStation, { width: wRestFull }),
-                ],
-              }),
-            ],
-          }),
+          (() => {
+            const wAddrLab = Math.round(CONTENT * 0.12);
+            const wAddrBody = Math.round(CONTENT * 0.46);
+            const wSideLab = Math.round(CONTENT * 0.1);
+            const wSideVal = CONTENT - wAddrLab - wAddrBody - wSideLab;
+            return new Table({
+              width: { size: CONTENT, type: WidthType.DXA },
+              columnWidths: [wAddrLab, wAddrBody, wSideLab, wSideVal],
+              rows: [
+                new TableRow({
+                  children: [
+                    cell("ふりがな", {
+                      width: wAddrLab,
+                      bold: true,
+                      shade: "F3F3F3",
+                    }),
+                    cell(snapshot.addressKana, { width: wAddrBody }),
+                    cell("電話", {
+                      width: wSideLab,
+                      bold: true,
+                      shade: "F3F3F3",
+                    }),
+                    cell(snapshot.phone, { width: wSideVal }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    cell("現住所", {
+                      width: wAddrLab,
+                      bold: true,
+                      shade: "F3F3F3",
+                    }),
+                    cell(snapshot.address, { width: wAddrBody }),
+                    cell("E-mail", {
+                      width: wSideLab,
+                      bold: true,
+                      shade: "F3F3F3",
+                    }),
+                    cell(snapshot.email, { width: wSideVal }),
+                  ],
+                }),
+              ],
+            });
+          })(),
           new Paragraph({ children: [] }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
@@ -451,7 +492,7 @@ function buildRirekisho(
                   new TableCell({
                     borders,
                     width: { size: wBikoLeft, type: WidthType.DXA },
-                    rowSpan: 3,
+                    rowSpan: 4,
                     children: [
                       new Paragraph({
                         children: [
@@ -480,6 +521,16 @@ function buildRirekisho(
                       ),
                     ],
                   }),
+                  cell("最寄り", { width: wBikoLab, center: true }),
+                  cell(snapshot.nearestStation, {
+                    width: wBikoVal + wBikoLabWide + wBikoValWide,
+                    colspan: 3,
+                    center: true,
+                  }),
+                ],
+              }),
+              new TableRow({
+                children: [
                   cell("通勤時間", { width: wBikoLab, center: true }),
                   cell(commuteText, {
                     width: wBikoVal + wBikoLabWide + wBikoValWide,

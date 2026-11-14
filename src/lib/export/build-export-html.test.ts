@@ -108,16 +108,22 @@ describe("buildExportHtml", () => {
     expect(html).toContain("配偶者の扶養義務");
     expect(html).toContain("備考");
     // WN-58: commute/family sit beside 備考 (not in address block).
-    const nearestIdx = html.indexOf("最寄り");
     const licensesIdx = html.indexOf("免許・資格");
     const bikoIdx = html.indexOf("備考：");
+    const nearestIdx = html.indexOf("最寄り");
     const commuteIdx = html.indexOf("通勤時間");
-    expect(nearestIdx).toBeGreaterThan(-1);
-    expect(licensesIdx).toBeGreaterThan(nearestIdx);
+    expect(licensesIdx).toBeGreaterThan(-1);
     expect(bikoIdx).toBeGreaterThan(licensesIdx);
-    expect(commuteIdx).toBeGreaterThan(licensesIdx);
+    expect(nearestIdx).toBeGreaterThan(bikoIdx);
+    expect(commuteIdx).toBeGreaterThan(nearestIdx);
     expect(html).toContain('class="biko-wrap"');
-    expect(html).toContain('rowspan="3"');
+    expect(html).toContain('rowspan="4"');
+    expect(html).toContain('class="rk-top"');
+    expect(html).toContain('class="rk-title"');
+    expect(html).toContain('class="rk-addr"');
+    // 最寄り must not appear in the address block (before 学歴・職歴).
+    const addressBlock = html.slice(0, html.indexOf("学歴・職歴"));
+    expect(addressBlock).not.toContain("最寄り");
   });
 
   it("embeds 証明写真 JPEG in the rirekisho photo frame", () => {

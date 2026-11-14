@@ -636,40 +636,94 @@ body {
   color: #0a4d8c;
   word-break: break-all;
 }
-.mc-rk-head {
+.mc-rk-top {
   display: grid;
-  grid-template-columns: 1fr 28mm;
-  gap: 8px;
-  margin-bottom: 8px;
+  grid-template-columns: 1fr 30mm;
+  gap: 6px 8px;
+  margin-bottom: 6px;
   align-items: start;
+}
+.mc-rk-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 4px;
+  grid-column: 1;
 }
 .mc-rk-title {
   font-size: 22px;
   letter-spacing: 0.45em;
   font-weight: 600;
-  margin: 0 0 6px;
-  text-align: center;
+  margin: 0;
+  text-align: left;
+  color: #000;
 }
 .mc-rk-date {
   text-align: right;
   font-size: 12px;
-  margin: 0 0 8px;
+  margin: 0;
+  white-space: nowrap;
+  color: #000;
+}
+.mc-rk-id {
+  grid-column: 1;
+  width: 100%;
+  margin: 0 !important;
+  table-layout: fixed;
+}
+.mc-rk-id td {
+  padding: 3px 6px;
+  vertical-align: middle;
+}
+.mc-rk-id .mc-lab {
+  width: 16%;
+  font-size: 11px;
+}
+.mc-rk-kana td {
+  height: 7mm;
+  font-size: 10.5px;
+}
+.mc-rk-name td {
+  height: 14mm;
+  font-size: 15px;
+}
+.mc-rk-birth td {
+  height: 9mm;
+}
+.mc-rk-gender {
+  width: 22%;
+  white-space: nowrap;
 }
 .mc-photo {
-  width: 28mm;
-  height: 36mm;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 30mm;
+  height: 40mm;
   border: 1px solid #000;
   display: grid;
   place-items: center;
   font-size: 10px;
-  color: #888;
+  color: #666;
   background: #fafafa;
   overflow: hidden;
+  align-self: start;
+  box-sizing: border-box;
 }
 .mc-photo img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.mc-rk-addr {
+  table-layout: fixed;
+}
+.mc-rk-addr .mc-lab {
+  width: 12%;
+  font-size: 11px;
+}
+.mc-lab-side {
+  width: 10%;
 }
 .mc-rk table,
 .mc-sk table {

@@ -27,14 +27,28 @@ const CSS = `
 @page { size: A4; margin: 12mm; }
 body { margin: 0; font-family: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: 11.5px; line-height: 1.45; color: #111; }
 .sheet { width: 100%; }
-.rk-head { display: grid; grid-template-columns: 1fr 28mm; gap: 8px; align-items: start; margin-bottom: 8px; }
+.rk-top { display: grid; grid-template-columns: 1fr 30mm; gap: 6px 8px; margin-bottom: 6px; align-items: start; }
+.rk-topline { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 4px; grid-column: 1; }
+.rk-title { margin: 0; text-align: left; font-size: 22px; letter-spacing: 0.45em; font-weight: 600; color: #000; }
+.rk-date { margin: 0; text-align: right; font-size: 12px; color: #000; white-space: nowrap; }
+.rk-id { grid-column: 1; width: 100%; margin: 0; table-layout: fixed; border-collapse: collapse; }
+.rk-id td { border: 1px solid #000; padding: 3px 6px; vertical-align: middle; color: #000; }
+.rk-id .lab { width: 16%; background: #f3f3f3; font-weight: 600; white-space: nowrap; font-size: 11px; }
+.rk-kana td { height: 7mm; font-size: 10.5px; }
+.rk-name td { height: 14mm; font-size: 15px; }
+.rk-birth td { height: 9mm; }
+.rk-gender { width: 22%; white-space: nowrap; }
 h1 { margin: 0 0 6px; text-align: center; font-size: 22px; letter-spacing: 0.45em; font-weight: 600; color: #000; }
 .meta { text-align: right; margin: 0 0 8px; font-size: 12px; color: #000; }
-.photo { width: 28mm; height: 36mm; border: 1px solid #000; display: grid; place-items: center; font-size: 10px; color: #888; background: #fafafa; overflow: hidden; }
+.photo { grid-column: 2; grid-row: 1 / span 2; width: 30mm; height: 40mm; border: 1px solid #000; display: grid; place-items: center; font-size: 10px; color: #666; background: #fafafa; overflow: hidden; align-self: start; box-sizing: border-box; }
 .photo img { width: 100%; height: 100%; object-fit: cover; }
 table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 th, td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; color: #000; }
 .lab { width: 18%; background: #f3f3f3; font-weight: 600; white-space: nowrap; }
+.rk-addr { table-layout: fixed; }
+.rk-addr .lab { width: 12%; font-size: 11px; }
+.lab-side { width: 10%; }
+.small { font-size: 10.5px; }
 .ym { width: 12mm; text-align: center; }
 .mm { width: 10mm; text-align: center; }
 .center { text-align: center; font-weight: 600; letter-spacing: 0.4em; }
@@ -81,22 +95,31 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
 
   return `
   <article class="sheet">
-    <h1>履　歴　書</h1>
-    <p class="meta">${esc(s.asOfRirekisho)}</p>
-    <div class="rk-head">
-      <table>
-        <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.fullNameKana)}</td></tr>
-        <tr><td class="lab">氏　名</td><td colspan="3">${esc(s.fullName)}</td></tr>
-        <tr><td class="lab">生年月日</td><td colspan="2">${esc(s.birthLine)}</td><td>${s.gender ? `性別　${esc(s.gender)}` : ""}</td></tr>
+    <div class="rk-top">
+      <div class="rk-topline">
+        <h1 class="rk-title">履　歴　書</h1>
+        <p class="rk-date">${esc(s.asOfRirekisho)}</p>
+      </div>
+      <table class="rk-id">
+        <tr class="rk-kana"><td class="lab">ふりがな</td><td colspan="3">${esc(s.fullNameKana)}</td></tr>
+        <tr class="rk-name"><td class="lab">氏　名</td><td colspan="3">${esc(s.fullName)}</td></tr>
+        <tr class="rk-birth"><td class="lab">生年月日</td><td colspan="2">${esc(s.birthLine)}</td><td class="rk-gender">${s.gender ? `※性別　${esc(s.gender)}` : ""}</td></tr>
       </table>
       ${photoBlock}
     </div>
-    <table>
-      <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.addressKana)}</td></tr>
-      <tr><td class="lab">現住所</td><td colspan="3">${nl(s.address)}</td></tr>
-      <tr><td class="lab">電話</td><td colspan="3">${esc(s.phone)}</td></tr>
-      <tr><td class="lab">E-mail</td><td colspan="3">${esc(s.email)}</td></tr>
-      <tr><td class="lab">最寄り</td><td colspan="3">${esc(s.nearestStation)}</td></tr>
+    <table class="rk-addr">
+      <tr>
+        <td class="lab">ふりがな</td>
+        <td class="small" colspan="2">${esc(s.addressKana)}</td>
+        <td class="lab lab-side">電話</td>
+        <td>${esc(s.phone)}</td>
+      </tr>
+      <tr>
+        <td class="lab">現住所</td>
+        <td colspan="2">${nl(s.address)}</td>
+        <td class="lab lab-side">E-mail</td>
+        <td class="small">${esc(s.email)}</td>
+      </tr>
     </table>
     <table>
       <tr><th class="ym">年</th><th class="mm">月</th><th>学歴・職歴</th></tr>
@@ -113,10 +136,14 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
     </table>
     <table class="biko-wrap">
       <tr>
-        <td class="biko-left" rowspan="3">
+        <td class="biko-left" rowspan="4">
           <div class="biko-title">備考：</div>
           ${nl(s.residenceLines.join("\n"))}
         </td>
+        <td class="biko-lab">最寄り</td>
+        <td class="biko-val-wide" colspan="3">${esc(s.nearestStation)}</td>
+      </tr>
+      <tr>
         <td class="biko-lab">通勤時間</td>
         <td class="biko-val-wide" colspan="3">${esc(commuteCell)}</td>
       </tr>

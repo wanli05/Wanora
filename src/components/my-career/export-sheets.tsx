@@ -35,24 +35,27 @@ function RirekishoSheet({
 }) {
   return (
     <article className="mc-a4 mc-rk">
-      <h2 className="mc-rk-title">履　歴　書</h2>
-      <p className="mc-rk-date">{snapshot.asOfRirekisho}</p>
-
-      <div className="mc-rk-head">
-        <table>
+      <div className="mc-rk-top">
+        <div className="mc-rk-topline">
+          <h2 className="mc-rk-title">履　歴　書</h2>
+          <p className="mc-rk-date">{snapshot.asOfRirekisho}</p>
+        </div>
+        <table className="mc-rk-id">
           <tbody>
-            <tr>
+            <tr className="mc-rk-kana">
               <td className="mc-lab">ふりがな</td>
               <td colSpan={3}>{snapshot.fullNameKana}</td>
             </tr>
-            <tr>
+            <tr className="mc-rk-name">
               <td className="mc-lab">氏　名</td>
               <td colSpan={3}>{snapshot.fullName}</td>
             </tr>
-            <tr>
+            <tr className="mc-rk-birth">
               <td className="mc-lab">生年月日</td>
               <td colSpan={2}>{snapshot.birthLine}</td>
-              <td>{snapshot.gender ? `性別　${snapshot.gender}` : ""}</td>
+              <td className="mc-rk-gender">
+                {snapshot.gender ? `※性別　${snapshot.gender}` : ""}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -66,29 +69,21 @@ function RirekishoSheet({
         </div>
       </div>
 
-      <table>
+      <table className="mc-rk-addr">
         <tbody>
           <tr>
             <td className="mc-lab">ふりがな</td>
-            <td colSpan={3} className="mc-small">
+            <td colSpan={2} className="mc-small">
               {snapshot.addressKana}
             </td>
+            <td className="mc-lab mc-lab-side">電話</td>
+            <td>{snapshot.phone}</td>
           </tr>
           <tr>
             <td className="mc-lab">現住所</td>
-            <td colSpan={3}>{nl(snapshot.address)}</td>
-          </tr>
-          <tr>
-            <td className="mc-lab">電話</td>
-            <td colSpan={3}>{snapshot.phone}</td>
-          </tr>
-          <tr>
-            <td className="mc-lab">E-mail</td>
-            <td colSpan={3}>{snapshot.email}</td>
-          </tr>
-          <tr>
-            <td className="mc-lab">最寄り</td>
-            <td colSpan={3}>{snapshot.nearestStation}</td>
+            <td colSpan={2}>{nl(snapshot.address)}</td>
+            <td className="mc-lab mc-lab-side">E-mail</td>
+            <td className="mc-small">{snapshot.email}</td>
           </tr>
         </tbody>
       </table>
@@ -164,10 +159,16 @@ function RirekishoSheet({
       <table className="mc-biko-wrap">
         <tbody>
           <tr>
-            <td className="mc-biko-left" rowSpan={3}>
+            <td className="mc-biko-left" rowSpan={4}>
               <div className="mc-biko-title">備考：</div>
               {nl(snapshot.residenceLines.join("\n"))}
             </td>
+            <td className="mc-biko-lab">最寄り</td>
+            <td className="mc-biko-val-wide" colSpan={3}>
+              {snapshot.nearestStation}
+            </td>
+          </tr>
+          <tr>
             <td className="mc-biko-lab">通勤時間</td>
             <td className="mc-biko-val-wide" colSpan={3}>
               {snapshot.commuteLine || "約　　時間　　分"}
