@@ -6,7 +6,7 @@ import {
 } from "./export-snapshot";
 
 describe("buildExportSnapshot", () => {
-  it("projects locked fields without JIS commute/family columns", () => {
+  it("projects locked fields including 最寄り／通勤／扶养／配偶者", () => {
     const snap = buildExportSnapshot({
       now: new Date("2026-11-13T03:00:00.000Z"),
       profile: {
@@ -32,6 +32,12 @@ describe("buildExportSnapshot", () => {
         salaryOvertimeMan: 5,
         salaryHope: "460〜500万円",
         personalHope: { ja: "貴社規定に従います。" },
+        nearestStation: "JR京浜東北線　浦和駅",
+        commuteHours: 1,
+        commuteMinutes: 20,
+        dependentsCount: 0,
+        hasSpouse: false,
+        spouseDependent: false,
       },
       education: [
         {
@@ -120,7 +126,12 @@ describe("buildExportSnapshot", () => {
     expect(snap.workLines).toEqual([
       { year: "2024", month: "4", text: "株式会社ジンズ　PL　入社" },
     ]);
-    expect(JSON.stringify(snap)).not.toMatch(/通勤|扶養|配偶者|旧データ会社/);
+    expect(snap.nearestStation).toBe("JR京浜東北線　浦和駅");
+    expect(snap.commuteLine).toBe("約　1　時間　20　分");
+    expect(snap.dependentsLine).toBe("0　人");
+    expect(snap.hasSpouseLabel).toBe("無");
+    expect(snap.spouseDependentLabel).toBe("無");
+    expect(JSON.stringify(snap)).not.toMatch(/旧データ会社/);
   });
 });
 

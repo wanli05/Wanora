@@ -35,6 +35,12 @@ export type ProfileInput = {
   salaryOvertimeMan?: number | null;
   salaryHope?: string | null;
   personalHope?: LocalizedText | null;
+  nearestStation?: string | null;
+  commuteHours?: number | null;
+  commuteMinutes?: number | null;
+  dependentsCount?: number | null;
+  hasSpouse?: boolean | null;
+  spouseDependent?: boolean | null;
 };
 
 export async function getProfileByUserId(
@@ -112,6 +118,30 @@ function mergeProfileValues(input: ProfileInput, existing?: ProfileRow) {
       input.personalHope !== undefined
         ? input.personalHope
         : (existing?.personalHope ?? null),
+    nearestStation:
+      input.nearestStation !== undefined
+        ? input.nearestStation
+        : (existing?.nearestStation ?? null),
+    commuteHours:
+      input.commuteHours !== undefined
+        ? input.commuteHours
+        : (existing?.commuteHours ?? null),
+    commuteMinutes:
+      input.commuteMinutes !== undefined
+        ? input.commuteMinutes
+        : (existing?.commuteMinutes ?? null),
+    dependentsCount:
+      input.dependentsCount !== undefined
+        ? input.dependentsCount
+        : (existing?.dependentsCount ?? null),
+    hasSpouse:
+      input.hasSpouse !== undefined
+        ? input.hasSpouse
+        : (existing?.hasSpouse ?? null),
+    spouseDependent:
+      input.spouseDependent !== undefined
+        ? input.spouseDependent
+        : (existing?.spouseDependent ?? null),
   };
 }
 

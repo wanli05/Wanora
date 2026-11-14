@@ -29,6 +29,12 @@ function sampleSnapshot() {
       salaryOvertimeMan: 5,
       salaryHope: "460〜500万円",
       personalHope: { ja: "貴社規定に従います。" },
+      nearestStation: "浦和駅",
+      commuteHours: 1,
+      commuteMinutes: 10,
+      dependentsCount: 0,
+      hasSpouse: false,
+      spouseDependent: false,
     },
     education: [
       {
@@ -89,11 +95,18 @@ describe("buildExportHtml", () => {
     const html = buildExportHtml(sampleSnapshot(), "rirekisho");
     expect(html).toContain("履　歴　書");
     expect(html).toContain("楊　万里");
-    expect(html).toContain("現在の給与条件");
+    expect(html).not.toContain("現在の給与条件");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
     expect(html).toContain('class="photo"');
     expect(html).toContain(">写真</div>");
+    expect(html).toContain("最寄り");
+    expect(html).toContain("浦和駅");
+    expect(html).toContain("通勤時間");
+    expect(html).toContain("約　1　時間　10　分");
+    expect(html).toContain("扶養家族数（配偶者を除く）");
+    expect(html).toContain("配偶者の扶養義務");
+    expect(html).toContain("備考");
   });
 
   it("embeds 証明写真 JPEG in the rirekisho photo frame", () => {

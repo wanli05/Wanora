@@ -56,6 +56,12 @@ export async function loadExportSnapshotForUser(
       salaryOvertimeMan: profile?.salaryOvertimeMan ?? null,
       salaryHope: profile?.salaryHope ?? null,
       personalHope: (profile?.personalHope ?? null) as LocalizedText | null,
+      nearestStation: profile?.nearestStation ?? null,
+      commuteHours: profile?.commuteHours ?? null,
+      commuteMinutes: profile?.commuteMinutes ?? null,
+      dependentsCount: profile?.dependentsCount ?? null,
+      hasSpouse: profile?.hasSpouse ?? null,
+      spouseDependent: profile?.spouseDependent ?? null,
     },
     education: educationEntries.map((e) => ({
       yearMonth: e.yearMonth,

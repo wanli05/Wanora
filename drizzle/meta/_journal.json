@@ -71,6 +71,13 @@
       "when": 1794592990764,
       "tag": "0009_feedback_qa_items",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794672254036,
+      "tag": "0010_profile_rirekisho_fields",
+      "breakpoints": true
     }
   ]
 }

@@ -91,6 +91,23 @@ async function ProfilePageContent() {
     phone: profile?.phone ?? "",
     email: profile?.email ?? "",
     altContact: (profile?.altContact ?? {}) as LocalizedText,
+    nearestStation: profile?.nearestStation ?? "",
+    commuteHours:
+      profile?.commuteHours != null ? String(profile.commuteHours) : "",
+    commuteMinutes:
+      profile?.commuteMinutes != null ? String(profile.commuteMinutes) : "",
+    dependentsCount:
+      profile?.dependentsCount != null ? String(profile.dependentsCount) : "",
+    hasSpouse: (profile?.hasSpouse === true
+      ? "yes"
+      : profile?.hasSpouse === false
+        ? "no"
+        : "") as "" | "yes" | "no",
+    spouseDependent: (profile?.spouseDependent === true
+      ? "yes"
+      : profile?.spouseDependent === false
+        ? "no"
+        : "") as "" | "yes" | "no",
     education: educationEntries.map((entry) => {
       const ym = formatYearMonthDate(entry.yearMonth);
       return {
@@ -147,6 +164,17 @@ async function ProfilePageContent() {
       phone: tBasic("phone"),
       email: tBasic("email"),
       altContact: tBasic("altContact"),
+      nearestStation: tBasic("nearestStation"),
+      commuteTime: tBasic("commuteTime"),
+      commuteHours: tBasic("commuteHours"),
+      commuteMinutes: tBasic("commuteMinutes"),
+      commuteApprox: tBasic("commuteApprox"),
+      dependentsCount: tBasic("dependentsCount"),
+      dependentsUnit: tBasic("dependentsUnit"),
+      hasSpouse: tBasic("hasSpouse"),
+      spouseDependent: tBasic("spouseDependent"),
+      yesNoYes: tBasic("yesNoYes"),
+      yesNoNo: tBasic("yesNoNo"),
       photo: tBasic("photo"),
       photoAlt: tPhoto("previewAlt"),
       postalLookupHint: tBasic("postalLookupHint"),

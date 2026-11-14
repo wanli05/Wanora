@@ -28,18 +28,18 @@ const CSS = `
 body { margin: 0; font-family: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: 11.5px; line-height: 1.45; color: #111; }
 .sheet { width: 100%; }
 .rk-head { display: grid; grid-template-columns: 1fr 28mm; gap: 8px; align-items: start; margin-bottom: 8px; }
-h1 { margin: 0 0 6px; text-align: center; font-size: 20px; letter-spacing: 0.4em; font-weight: 600; }
-.meta { text-align: right; margin: 0 0 2px; font-size: 12px; }
-.photo { width: 28mm; height: 36mm; border: 1px solid #444; display: grid; place-items: center; font-size: 10px; color: #888; background: #fafafa; overflow: hidden; }
+h1 { margin: 0 0 6px; text-align: center; font-size: 22px; letter-spacing: 0.45em; font-weight: 600; }
+.meta { text-align: right; margin: 0 0 8px; font-size: 12px; }
+.photo { width: 28mm; height: 36mm; border: 1px solid #000; display: grid; place-items: center; font-size: 10px; color: #888; background: #fafafa; overflow: hidden; }
 .photo img { width: 100%; height: 100%; object-fit: cover; }
 table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-th, td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
+th, td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
 .lab { width: 18%; background: #f3f3f3; font-weight: 600; white-space: nowrap; }
 .ym { width: 12mm; text-align: center; }
 .mm { width: 10mm; text-align: center; }
 .center { text-align: center; font-weight: 600; letter-spacing: 0.4em; }
 .right { text-align: right; }
-h2 { margin: 14px 0 6px; font-size: 13px; font-weight: 700; border-bottom: 1px solid #222; padding-bottom: 2px; }
+h2 { margin: 14px 0 6px; font-size: 13px; font-weight: 700; border-bottom: 1px solid #000; padding-bottom: 2px; }
 .company { font-weight: 700; margin: 8px 0 2px; }
 .subh { font-weight: 700; margin-top: 4px; }
 a { color: #0a4d8c; word-break: break-all; }
@@ -65,36 +65,40 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
         `<tr><td class="ym">${esc(r.year)}</td><td class="mm">${esc(r.month)}</td><td>${esc(r.text)}</td></tr>`,
     )
     .join("");
-  const salary = s.salaryLines
-    .map((line) => `<tr><td colspan="2">${esc(line)}</td></tr>`)
-    .join("");
-  const langs = s.languages
-    .map((l) => `${esc(l.language)}（${esc(l.level)}）`)
-    .join("　／　");
   const dataUrl = photoDataUrl(photoJpeg);
   const photoBlock = dataUrl
     ? `<div class="photo"><img src="${dataUrl}" alt="証明写真"/></div>`
     : `<div class="photo">写真</div>`;
+  const commuteCell = s.commuteLine
+    ? `（ドアからドアまで）${esc(s.commuteLine)}`
+    : "（ドアからドアまで）";
 
   return `
   <article class="sheet">
+    <h1>履　歴　書</h1>
+    <p class="meta">${esc(s.asOfRirekisho)}</p>
     <div class="rk-head">
-      <div>
-        <h1>履　歴　書</h1>
-        <p class="meta">${esc(s.asOfRirekisho)}</p>
-        <table>
-          <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.fullNameKana)}</td></tr>
-          <tr><td class="lab">氏　名</td><td colspan="3">${esc(s.fullName)}</td></tr>
-          <tr><td class="lab">生年月日</td><td>${esc(s.birthLine)}</td><td class="lab">性別</td><td>${esc(s.gender)}</td></tr>
-        </table>
-      </div>
+      <table>
+        <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.fullNameKana)}</td></tr>
+        <tr><td class="lab">氏　名</td><td colspan="3">${esc(s.fullName)}</td></tr>
+        <tr><td class="lab">生年月日</td><td colspan="2">${esc(s.birthLine)}</td><td>${s.gender ? `性別　${esc(s.gender)}` : ""}</td></tr>
+      </table>
       ${photoBlock}
     </div>
     <table>
       <tr><td class="lab">ふりがな</td><td colspan="3">${esc(s.addressKana)}</td></tr>
       <tr><td class="lab">現住所</td><td colspan="3">${nl(s.address)}</td></tr>
-      <tr><td class="lab">電話</td><td></td><td class="lab">携帯</td><td>${esc(s.phone)}</td></tr>
+      <tr><td class="lab">電話</td><td colspan="3">${esc(s.phone)}</td></tr>
       <tr><td class="lab">E-mail</td><td colspan="3">${esc(s.email)}</td></tr>
+      <tr><td class="lab">最寄り</td><td colspan="3">${esc(s.nearestStation)}</td></tr>
+      <tr><td class="lab">通勤時間</td><td colspan="3">${commuteCell}</td></tr>
+    </table>
+    <table>
+      <tr>
+        <td class="lab">扶養家族数（配偶者を除く）</td><td>${esc(s.dependentsLine)}</td>
+        <td class="lab">配偶者</td><td>${esc(s.hasSpouseLabel)}</td>
+        <td class="lab">配偶者の扶養義務</td><td>${esc(s.spouseDependentLabel)}</td>
+      </tr>
     </table>
     <table>
       <tr><th class="ym">年</th><th class="mm">月</th><th>学歴・職歴</th></tr>
@@ -108,19 +112,9 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
     <table>
       <tr><th class="ym">年</th><th class="mm">月</th><th>免許・資格</th></tr>
       ${licenses}
-      <tr><td class="lab">備考</td><td colspan="2">${nl(s.residenceLines.join("\n"))}</td></tr>
     </table>
     <table>
-      <tr><td class="lab" colspan="2">現在の給与条件</td></tr>
-      ${salary}
-    </table>
-    <table>
-      <tr><td class="lab">語学レベル</td></tr>
-      <tr><td>${langs}</td></tr>
-    </table>
-    <table>
-      <tr><td class="lab">本人希望記入欄（特に給料・職種・勤務時間・勤務地・その他についての希望などがあれば記入）</td></tr>
-      <tr><td>${nl(s.personalHope)}</td></tr>
+      <tr><td class="lab">備考</td><td>${nl(s.residenceLines.join("\n"))}</td></tr>
     </table>
   </article>`;
 }
@@ -173,7 +167,7 @@ function shokumuHtml(s: ExportSnapshot): string {
 
   return `
   <article class="sheet">
-    <h1>職　務　経　歴　書</h1>
+    <h1 style="letter-spacing:0.4em;font-size:20px">職　務　経　歴　書</h1>
     <p class="meta">${esc(s.asOfShokumu)}</p>
     <p class="meta">氏名　　${esc(s.fullName)}</p>
     <h2>■職務経歴</h2>
@@ -204,7 +198,6 @@ function shokumuHtml(s: ExportSnapshot): string {
   </article>`;
 }
 
-/** Self-contained HTML aligned to export-final / ExportSheets for PDF printing. */
 export function buildExportHtml(
   snapshot: ExportSnapshot,
   doc: ExportDocKind,
@@ -214,5 +207,5 @@ export function buildExportHtml(
     doc === "rirekisho"
       ? rirekishoHtml(snapshot, options?.photoPrintJpeg)
       : shokumuHtml(snapshot);
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"/><style>${CSS}</style></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><style>${CSS}</style></head><body>${body}</body></html>`;
 }

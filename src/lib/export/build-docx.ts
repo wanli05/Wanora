@@ -29,9 +29,20 @@ const CONTENT = PAGE_WIDTH - MARGIN * 2;
 const thin = {
   style: BorderStyle.SINGLE,
   size: 8,
-  color: "333333",
+  color: "000000",
 };
 const borders = { top: thin, bottom: thin, left: thin, right: thin };
+const noBorder = {
+  style: BorderStyle.NONE,
+  size: 0,
+  color: "FFFFFF",
+};
+const noBorders = {
+  top: noBorder,
+  bottom: noBorder,
+  left: noBorder,
+  right: noBorder,
+};
 
 function cell(
   text: string,
@@ -39,10 +50,16 @@ function cell(
     width: number;
     bold?: boolean;
     center?: boolean;
+    right?: boolean;
     shade?: string;
     colspan?: number;
   },
 ): TableCell {
+  const alignment = opts.center
+    ? AlignmentType.CENTER
+    : opts.right
+      ? AlignmentType.RIGHT
+      : AlignmentType.LEFT;
   const options: ITableCellOptions = {
     borders,
     width: { size: opts.width, type: WidthType.DXA },
@@ -51,7 +68,7 @@ function cell(
     children: text.split("\n").map(
       (line) =>
         new Paragraph({
-          alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+          alignment,
           children: [
             new TextRun({
               text: line,
@@ -66,9 +83,17 @@ function cell(
   return new TableCell(options);
 }
 
-function p(text: string, opts?: { bold?: boolean; center?: boolean; size?: number }) {
+function p(
+  text: string,
+  opts?: { bold?: boolean; center?: boolean; right?: boolean; size?: number },
+) {
+  const alignment = opts?.center
+    ? AlignmentType.CENTER
+    : opts?.right
+      ? AlignmentType.RIGHT
+      : AlignmentType.LEFT;
   return new Paragraph({
-    alignment: opts?.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+    alignment,
     spacing: { after: 80 },
     children: [
       new TextRun({
@@ -86,7 +111,7 @@ function h(text: string) {
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 200, after: 80 },
     border: {
-      bottom: { style: BorderStyle.SINGLE, size: 6, color: "222222", space: 4 },
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000", space: 4 },
     },
     children: [
       new TextRun({
@@ -212,10 +237,24 @@ function buildRirekisho(
       children: [
         cell("", { width: wYm }),
         cell("", { width: wMm }),
-        cell("以上", { width: wBody }),
+        cell("以上", { width: wBody, right: true }),
       ],
     }),
   ];
+
+  const wBirth = Math.round(wRest * 0.72);
+  const wGender = wRest - wBirth;
+  const wFam = [
+    Math.round(CONTENT * 0.22),
+    Math.round(CONTENT * 0.1),
+    Math.round(CONTENT * 0.12),
+    Math.round(CONTENT * 0.1),
+    Math.round(CONTENT * 0.22),
+  ];
+  wFam.push(CONTENT - wFam.reduce((a, b) => a + b, 0));
+  const commuteText = snapshot.commuteLine
+    ? `（ドアからドアまで）${snapshot.commuteLine}`
+    : "（ドアからドアまで）";
 
   return new Document({
     sections: [
@@ -233,7 +272,7 @@ function buildRirekisho(
         },
         children: [
           p("履　歴　書", { bold: true, center: true, size: 32 }),
-          p(snapshot.asOfRirekisho, { center: true }),
+          p(snapshot.asOfRirekisho, { right: true }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
             columnWidths: [wId, wPhoto],
@@ -241,29 +280,12 @@ function buildRirekisho(
               new TableRow({
                 children: [
                   new TableCell({
-                    borders: {
-                      top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                      bottom: {
-                        style: BorderStyle.NONE,
-                        size: 0,
-                        color: "FFFFFF",
-                      },
-                      left: {
-                        style: BorderStyle.NONE,
-                        size: 0,
-                        color: "FFFFFF",
-                      },
-                      right: {
-                        style: BorderStyle.NONE,
-                        size: 0,
-                        color: "FFFFFF",
-                      },
-                    },
+                    borders: noBorders,
                     width: { size: wId, type: WidthType.DXA },
                     children: [
                       new Table({
                         width: { size: wId, type: WidthType.DXA },
-                        columnWidths: [wLab, wRest],
+                        columnWidths: [wLab, wBirth, wGender],
                         rows: [
                           new TableRow({
                             children: [
@@ -272,7 +294,10 @@ function buildRirekisho(
                                 bold: true,
                                 shade: "F3F3F3",
                               }),
-                              cell(snapshot.fullNameKana, { width: wRest }),
+                              cell(snapshot.fullNameKana, {
+                                width: wBirth + wGender,
+                                colspan: 2,
+                              }),
                             ],
                           }),
                           new TableRow({
@@ -282,7 +307,10 @@ function buildRirekisho(
                                 bold: true,
                                 shade: "F3F3F3",
                               }),
-                              cell(snapshot.fullName, { width: wRest }),
+                              cell(snapshot.fullName, {
+                                width: wBirth + wGender,
+                                colspan: 2,
+                              }),
                             ],
                           }),
                           new TableRow({
@@ -292,9 +320,12 @@ function buildRirekisho(
                                 bold: true,
                                 shade: "F3F3F3",
                               }),
+                              cell(snapshot.birthLine, { width: wBirth }),
                               cell(
-                                `${snapshot.birthLine}${snapshot.gender ? `　／　性別 ${snapshot.gender}` : ""}`,
-                                { width: wRest },
+                                snapshot.gender
+                                  ? `性別　${snapshot.gender}`
+                                  : "",
+                                { width: wGender },
                               ),
                             ],
                           }),
@@ -314,17 +345,22 @@ function buildRirekisho(
             rows: [
               new TableRow({
                 children: [
+                  cell("ふりがな", {
+                    width: wLabFull,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.addressKana, { width: wRestFull }),
+                ],
+              }),
+              new TableRow({
+                children: [
                   cell("現住所", {
                     width: wLabFull,
                     bold: true,
                     shade: "F3F3F3",
                   }),
-                  cell(
-                    [snapshot.addressKana, snapshot.address]
-                      .filter(Boolean)
-                      .join("\n"),
-                    { width: wRestFull },
-                  ),
+                  cell(snapshot.address, { width: wRestFull }),
                 ],
               }),
               new TableRow({
@@ -345,6 +381,55 @@ function buildRirekisho(
                     shade: "F3F3F3",
                   }),
                   cell(snapshot.email, { width: wRestFull }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("最寄り", {
+                    width: wLabFull,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.nearestStation, { width: wRestFull }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("通勤時間", {
+                    width: wLabFull,
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(commuteText, { width: wRestFull }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [] }),
+          new Table({
+            width: { size: CONTENT, type: WidthType.DXA },
+            columnWidths: wFam,
+            rows: [
+              new TableRow({
+                children: [
+                  cell("扶養家族数（配偶者を除く）", {
+                    width: wFam[0],
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.dependentsLine, { width: wFam[1] }),
+                  cell("配偶者", {
+                    width: wFam[2],
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.hasSpouseLabel, { width: wFam[3] }),
+                  cell("配偶者の扶養義務", {
+                    width: wFam[4],
+                    bold: true,
+                    shade: "F3F3F3",
+                  }),
+                  cell(snapshot.spouseDependentLabel, { width: wFam[5] }),
                 ],
               }),
             ],
@@ -391,66 +476,24 @@ function buildRirekisho(
                     ],
                   }),
               ),
-              new TableRow({
-                children: [
-                  cell("備考", { width: wYm, bold: true, shade: "F3F3F3" }),
-                  cell(snapshot.residenceLines.join("\n"), {
-                    width: wMm + wBody,
-                    colspan: 2,
-                  }),
-                ],
-              }),
             ],
           }),
           new Paragraph({ children: [] }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [CONTENT],
+            columnWidths: [wLabFull, wRestFull],
             rows: [
               new TableRow({
                 children: [
-                  cell("現在の給与条件", {
-                    width: CONTENT,
+                  cell("備考", {
+                    width: wLabFull,
                     bold: true,
                     shade: "F3F3F3",
                   }),
-                ],
-              }),
-              ...snapshot.salaryLines.map(
-                (line) =>
-                  new TableRow({
-                    children: [cell(line, { width: CONTENT })],
-                  }),
-              ),
-              new TableRow({
-                children: [
-                  cell("語学レベル", {
-                    width: CONTENT,
-                    bold: true,
-                    shade: "F3F3F3",
+                  cell(snapshot.residenceLines.join("\n"), {
+                    width: wRestFull,
                   }),
                 ],
-              }),
-              new TableRow({
-                children: [
-                  cell(
-                    snapshot.languages
-                      .map((l) => `${l.language}（${l.level}）`)
-                      .join("　／　"),
-                    { width: CONTENT },
-                  ),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  cell(
-                    "本人希望記入欄（特に給料・職種・勤務時間・勤務地・その他についての希望などがあれば記入）",
-                    { width: CONTENT, bold: true, shade: "F3F3F3" },
-                  ),
-                ],
-              }),
-              new TableRow({
-                children: [cell(snapshot.personalHope, { width: CONTENT })],
               }),
             ],
           }),
@@ -472,8 +515,8 @@ function buildShokumu(snapshot: ExportSnapshot): Document {
 
   const children: (Paragraph | Table)[] = [
     p("職　務　経　歴　書", { bold: true, center: true, size: 32 }),
-    p(snapshot.asOfShokumu),
-    p(`氏名　　${snapshot.fullName}`),
+    p(snapshot.asOfShokumu, { right: true }),
+    p(`氏名　　${snapshot.fullName}`, { right: true }),
     h("■職務経歴"),
     p(snapshot.jobCareerLine),
     h("■職務要約"),

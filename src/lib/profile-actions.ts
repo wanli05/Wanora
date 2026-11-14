@@ -39,6 +39,22 @@ import { getSessionUser } from "@/lib/session";
 const dateFormatSchema = z.enum(["wareki", "seireki"]);
 const optionalEmailSchema = z.union([z.literal(""), z.string().email()]);
 
+function optionalNonNegInt(raw: FormDataEntryValue | null): number | null {
+  const text = raw?.toString().trim() ?? "";
+  if (!text) return null;
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < 0) return null;
+  return n;
+}
+
+/** Radio 有／無 → boolean；未选 → null */
+function optionalYesNo(raw: FormDataEntryValue | null): boolean | null {
+  const v = raw?.toString();
+  if (v === "yes") return true;
+  if (v === "no") return false;
+  return null;
+}
+
 export type ProfileSaveError =
   | "unauthenticated"
   | "fullNameRequired"
@@ -107,6 +123,13 @@ export async function saveProfileAction(
       email: emailParsed.data || null,
       altContact: optionalJapaneseFromForm(formData, "altContact"),
       dateFormat,
+      nearestStation:
+        formData.get("nearestStation")?.toString().trim() || null,
+      commuteHours: optionalNonNegInt(formData.get("commuteHours")),
+      commuteMinutes: optionalNonNegInt(formData.get("commuteMinutes")),
+      dependentsCount: optionalNonNegInt(formData.get("dependentsCount")),
+      hasSpouse: optionalYesNo(formData.get("hasSpouse")),
+      spouseDependent: optionalYesNo(formData.get("spouseDependent")),
     });
     revalidatePath("/profile", "layout");
     revalidatePath("/profile");

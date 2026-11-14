@@ -62,6 +62,17 @@ export type ProfilePageFormLabels = {
     phone: string;
     email: string;
     altContact: string;
+    nearestStation: string;
+    commuteTime: string;
+    commuteHours: string;
+    commuteMinutes: string;
+    commuteApprox: string;
+    dependentsCount: string;
+    dependentsUnit: string;
+    hasSpouse: string;
+    spouseDependent: string;
+    yesNoYes: string;
+    yesNoNo: string;
     photo: string;
     photoAlt: string;
     postalLookupHint: string;
@@ -100,6 +111,12 @@ export type ProfilePageInitial = {
   phone: string;
   email: string;
   altContact: LocalizedText;
+  nearestStation: string;
+  commuteHours: string;
+  commuteMinutes: string;
+  dependentsCount: string;
+  hasSpouse: "" | "yes" | "no";
+  spouseDependent: "" | "yes" | "no";
   education: Omit<EducationRow, "clientKey">[];
   licenses: Omit<LicenseRow, "clientKey">[];
   storageReady: boolean;
@@ -341,6 +358,110 @@ export function ProfilePageForm({
               multiline
               hint={labels.japaneseHint}
             />
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">{labels.basic.nearestStation}</span>
+              <input
+                name="nearestStation"
+                lang="ja"
+                defaultValue={initial.nearestStation}
+                className={inputClass}
+              />
+            </label>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {labels.basic.commuteTime}
+              </legend>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span>{labels.basic.commuteApprox}</span>
+                <input
+                  name="commuteHours"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  defaultValue={initial.commuteHours}
+                  className={`${inputClass} w-20`}
+                  aria-label={labels.basic.commuteHours}
+                />
+                <span>{labels.basic.commuteHours}</span>
+                <input
+                  name="commuteMinutes"
+                  type="number"
+                  min={0}
+                  max={59}
+                  inputMode="numeric"
+                  defaultValue={initial.commuteMinutes}
+                  className={`${inputClass} w-20`}
+                  aria-label={labels.basic.commuteMinutes}
+                />
+                <span>{labels.basic.commuteMinutes}</span>
+              </div>
+            </fieldset>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">
+                {labels.basic.dependentsCount}
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  name="dependentsCount"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  defaultValue={initial.dependentsCount}
+                  className={`${inputClass} w-24`}
+                />
+                <span>{labels.basic.dependentsUnit}</span>
+              </div>
+            </label>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {labels.basic.hasSpouse}
+              </legend>
+              <div className="flex gap-4 text-sm">
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="hasSpouse"
+                    value="yes"
+                    defaultChecked={initial.hasSpouse === "yes"}
+                  />
+                  {labels.basic.yesNoYes}
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="hasSpouse"
+                    value="no"
+                    defaultChecked={initial.hasSpouse === "no"}
+                  />
+                  {labels.basic.yesNoNo}
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {labels.basic.spouseDependent}
+              </legend>
+              <div className="flex gap-4 text-sm">
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="spouseDependent"
+                    value="yes"
+                    defaultChecked={initial.spouseDependent === "yes"}
+                  />
+                  {labels.basic.yesNoYes}
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="spouseDependent"
+                    value="no"
+                    defaultChecked={initial.spouseDependent === "no"}
+                  />
+                  {labels.basic.yesNoNo}
+                </label>
+              </div>
+            </fieldset>
             <PhotoUpload
               disabled={!initial.storageReady}
               hasPhoto={initial.hasPhoto}
@@ -413,6 +534,46 @@ export function ProfilePageForm({
             <ViewRow
               label={labels.basic.altContact}
               value={initial.altContact.ja}
+            />
+            <ViewRow
+              label={labels.basic.nearestStation}
+              value={initial.nearestStation}
+            />
+            <ViewRow
+              label={labels.basic.commuteTime}
+              value={
+                initial.commuteHours || initial.commuteMinutes
+                  ? `${labels.basic.commuteApprox} ${initial.commuteHours || "0"} ${labels.basic.commuteHours} ${initial.commuteMinutes || "0"} ${labels.basic.commuteMinutes}`
+                  : null
+              }
+            />
+            <ViewRow
+              label={labels.basic.dependentsCount}
+              value={
+                initial.dependentsCount
+                  ? `${initial.dependentsCount}${labels.basic.dependentsUnit ? ` ${labels.basic.dependentsUnit}` : ""}`
+                  : null
+              }
+            />
+            <ViewRow
+              label={labels.basic.hasSpouse}
+              value={
+                initial.hasSpouse === "yes"
+                  ? labels.basic.yesNoYes
+                  : initial.hasSpouse === "no"
+                    ? labels.basic.yesNoNo
+                    : null
+              }
+            />
+            <ViewRow
+              label={labels.basic.spouseDependent}
+              value={
+                initial.spouseDependent === "yes"
+                  ? labels.basic.yesNoYes
+                  : initial.spouseDependent === "no"
+                    ? labels.basic.yesNoNo
+                    : null
+              }
             />
           </RirekishoTable>
         )}

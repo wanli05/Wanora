@@ -38,6 +38,12 @@ export type ExportProfileSlice = {
   salaryOvertimeMan: number | null;
   salaryHope: string | null;
   personalHope: LocalizedText | null;
+  nearestStation?: string | null;
+  commuteHours?: number | null;
+  commuteMinutes?: number | null;
+  dependentsCount?: number | null;
+  hasSpouse?: boolean | null;
+  spouseDependent?: boolean | null;
 };
 
 export type ExportEducationRow = {
@@ -112,6 +118,11 @@ export type ExportSnapshot = {
   salaryLines: string[];
   languages: CareerLanguage[];
   personalHope: string;
+  nearestStation: string;
+  commuteLine: string;
+  dependentsLine: string;
+  hasSpouseLabel: string;
+  spouseDependentLabel: string;
   jobCareerLine: string;
   jobSummary: string;
   strengths: string[];
@@ -163,6 +174,22 @@ function formatPeriod(start: Date, end: Date | null): string {
   const startLabel = formatYm(start);
   if (!end) return `${startLabel}\n～\n現在`;
   return `${startLabel}\n～\n${formatYm(end)}`;
+}
+
+function yesNoLabel(value: boolean | null | undefined): string {
+  if (value === true) return "有";
+  if (value === false) return "無";
+  return "";
+}
+
+function formatCommuteLine(
+  hours: number | null | undefined,
+  minutes: number | null | undefined,
+): string {
+  if (hours == null && minutes == null) return "";
+  const h = hours ?? 0;
+  const m = minutes ?? 0;
+  return `約　${h}　時間　${m}　分`;
 }
 
 function moneyLine(
@@ -335,6 +362,12 @@ export function buildExportSnapshot(input: {
     ),
     languages: parseLanguages(p.languages),
     personalHope: jaOf(p.personalHope) || "貴社規定に従います。",
+    nearestStation: p.nearestStation?.trim() ?? "",
+    commuteLine: formatCommuteLine(p.commuteHours, p.commuteMinutes),
+    dependentsLine:
+      p.dependentsCount != null ? `${p.dependentsCount}　人` : "",
+    hasSpouseLabel: yesNoLabel(p.hasSpouse),
+    spouseDependentLabel: yesNoLabel(p.spouseDependent),
     jobCareerLine,
     jobSummary: jaOf(p.jobSummary),
     strengths: parseStrengths(p.strengths),

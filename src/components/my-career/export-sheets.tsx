@@ -9,7 +9,7 @@ function nl(text: string) {
   ));
 }
 
-/** Visual isomorphic sheets aligned to docs/demos/my-career/export-final.html */
+/** Visual isomorphic sheets aligned to sample + export-final (2026-11-15). */
 export function ExportSheets({
   snapshot,
   doc,
@@ -35,29 +35,27 @@ function RirekishoSheet({
 }) {
   return (
     <article className="mc-a4 mc-rk">
+      <h2 className="mc-rk-title">履　歴　書</h2>
+      <p className="mc-rk-date">{snapshot.asOfRirekisho}</p>
+
       <div className="mc-rk-head">
-        <div>
-          <h2 className="mc-rk-title">履　歴　書</h2>
-          <p className="mc-rk-date">{snapshot.asOfRirekisho}</p>
-          <table>
-            <tbody>
-              <tr>
-                <td className="mc-lab">ふりがな</td>
-                <td colSpan={3}>{snapshot.fullNameKana}</td>
-              </tr>
-              <tr>
-                <td className="mc-lab">氏　名</td>
-                <td colSpan={3}>{snapshot.fullName}</td>
-              </tr>
-              <tr>
-                <td className="mc-lab">生年月日</td>
-                <td>{snapshot.birthLine}</td>
-                <td className="mc-lab">性別</td>
-                <td>{snapshot.gender}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <table>
+          <tbody>
+            <tr>
+              <td className="mc-lab">ふりがな</td>
+              <td colSpan={3}>{snapshot.fullNameKana}</td>
+            </tr>
+            <tr>
+              <td className="mc-lab">氏　名</td>
+              <td colSpan={3}>{snapshot.fullName}</td>
+            </tr>
+            <tr>
+              <td className="mc-lab">生年月日</td>
+              <td colSpan={2}>{snapshot.birthLine}</td>
+              <td>{snapshot.gender ? `性別　${snapshot.gender}` : ""}</td>
+            </tr>
+          </tbody>
+        </table>
         <div className="mc-photo">
           {photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- authenticated photo API
@@ -82,13 +80,36 @@ function RirekishoSheet({
           </tr>
           <tr>
             <td className="mc-lab">電話</td>
-            <td></td>
-            <td className="mc-lab">携帯</td>
-            <td>{snapshot.phone}</td>
+            <td colSpan={3}>{snapshot.phone}</td>
           </tr>
           <tr>
             <td className="mc-lab">E-mail</td>
             <td colSpan={3}>{snapshot.email}</td>
+          </tr>
+          <tr>
+            <td className="mc-lab">最寄り</td>
+            <td colSpan={3}>{snapshot.nearestStation}</td>
+          </tr>
+          <tr>
+            <td className="mc-lab">通勤時間</td>
+            <td colSpan={3}>
+              {snapshot.commuteLine
+                ? `（ドアからドアまで）${snapshot.commuteLine}`
+                : "（ドアからドアまで）"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table>
+        <tbody>
+          <tr>
+            <td className="mc-lab">扶養家族数（配偶者を除く）</td>
+            <td>{snapshot.dependentsLine}</td>
+            <td className="mc-lab">配偶者</td>
+            <td>{snapshot.hasSpouseLabel}</td>
+            <td className="mc-lab">配偶者の扶養義務</td>
+            <td>{snapshot.spouseDependentLabel}</td>
           </tr>
         </tbody>
       </table>
@@ -139,11 +160,6 @@ function RirekishoSheet({
           <tr>
             <td></td>
             <td></td>
-            <td></td>
-          </tr>
-          <tr>
-            <td></td>
-            <td></td>
             <td className="mc-right">以上</td>
           </tr>
         </tbody>
@@ -163,54 +179,14 @@ function RirekishoSheet({
               <td>{row.text}</td>
             </tr>
           ))}
-          <tr>
-            <td className="mc-lab" colSpan={1}>
-              備考
-            </td>
-            <td colSpan={2}>{nl(snapshot.residenceLines.join("\n"))}</td>
-          </tr>
         </tbody>
       </table>
 
       <table>
         <tbody>
           <tr>
-            <td className="mc-lab" colSpan={2}>
-              現在の給与条件
-            </td>
-          </tr>
-          {snapshot.salaryLines.map((line, i) => (
-            <tr key={`s-${i}`}>
-              <td colSpan={2}>{line}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <table>
-        <tbody>
-          <tr>
-            <td className="mc-lab">語学レベル</td>
-          </tr>
-          <tr>
-            <td>
-              {snapshot.languages
-                .map((l) => `${l.language}（${l.level}）`)
-                .join("　／　")}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <table>
-        <tbody>
-          <tr>
-            <td className="mc-lab mc-small">
-              本人希望記入欄（特に給料・職種・勤務時間・勤務地・その他についての希望などがあれば記入）
-            </td>
-          </tr>
-          <tr>
-            <td>{snapshot.personalHope}</td>
+            <td className="mc-lab">備考</td>
+            <td>{nl(snapshot.residenceLines.join("\n"))}</td>
           </tr>
         </tbody>
       </table>

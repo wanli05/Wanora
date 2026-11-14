@@ -172,6 +172,18 @@ export const profiles = pgTable(
     salaryOvertimeMan: integer("salary_overtime_man"),
     salaryHope: text("salary_hope"),
     personalHope: jsonb("personal_hope"),
+    /** 履歴書フィールド：最寄り駅など */
+    nearestStation: text("nearest_station"),
+    /** 通勤時間（ドアからドアまで）・時間 */
+    commuteHours: integer("commute_hours"),
+    /** 通勤時間・分 */
+    commuteMinutes: integer("commute_minutes"),
+    /** 扶養家族数（配偶者を除く） */
+    dependentsCount: integer("dependents_count"),
+    /** 配偶者：true=有 / false=無 / null=未設定 */
+    hasSpouse: boolean("has_spouse"),
+    /** 配偶者の扶養義務：true=有 / false=無 / null=未設定 */
+    spouseDependent: boolean("spouse_dependent"),
     ...timestamps,
   },
   (t) => [
