@@ -1,7 +1,32 @@
+import { inflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { yearMonthFromInput } from "@/lib/domain/dates";
 import { buildExportSnapshot } from "@/lib/domain/export-snapshot";
 import { buildExportDocx } from "@/lib/export/build-docx";
+
+/** Extract word/document.xml from a DOCX (ZIP) without extra deps. */
+function documentXmlFromDocx(buf: Buffer): string {
+  const name = "word/document.xml";
+  let offset = 0;
+  while (offset + 30 < buf.length) {
+    if (buf.readUInt32LE(offset) !== 0x04034b50) break;
+    const method = buf.readUInt16LE(offset + 8);
+    const compSize = buf.readUInt32LE(offset + 18);
+    const nameLen = buf.readUInt16LE(offset + 26);
+    const extraLen = buf.readUInt16LE(offset + 28);
+    const entryName = buf
+      .subarray(offset + 30, offset + 30 + nameLen)
+      .toString("utf8");
+    const dataStart = offset + 30 + nameLen + extraLen;
+    const data = buf.subarray(dataStart, dataStart + compSize);
+    if (entryName === name) {
+      const raw = method === 0 ? data : inflateRawSync(data);
+      return raw.toString("utf8");
+    }
+    offset = dataStart + compSize;
+  }
+  throw new Error("word/document.xml not found in docx");
+}
 
 function sampleSnapshot() {
   return buildExportSnapshot({
@@ -71,5 +96,40 @@ describe("buildExportDocx", () => {
     });
     const without = await buildExportDocx(sampleSnapshot(), "rirekisho");
     expect(withPhoto.byteLength).toBeGreaterThan(without.byteLength);
+  });
+
+  it("keeps rirekisho title left and photo beside identity (not below)", async () => {
+    const xml = documentXmlFromDocx(
+      await buildExportDocx(sampleSnapshot(), "rirekisho"),
+    );
+    // Title paragraph is left-aligned (not center).
+    expect(xml).toMatch(/<w:jc w:val="left"\/>[\s\S]{0,200}履　歴　書/);
+    expect(xml).toMatch(
+      /履　歴　書[\s\S]{0,400}<w:jc w:val="right"\/>[\s\S]{0,200}日現在/,
+    );
+    // Outer header tblGrid is 2 columns: identity stack | photo.
+    expect(xml).toMatch(
+      /<w:tblGrid><w:gridCol[^/]*\/>\s*<w:gridCol[^/]*\/><\/w:tblGrid><w:tr>[\s\S]*?ふりがな[\s\S]*?写真/,
+    );
+    // Photo cell must not use vMerge (rowspan) — that dropped it bottom-left in Word.
+    const photoIdx = xml.indexOf(">写真<");
+    expect(photoIdx).toBeGreaterThan(-1);
+    const photoCellStart = xml.lastIndexOf("<w:tc>", photoIdx);
+    const photoCell = xml.slice(photoCellStart, photoIdx);
+    expect(photoCell).not.toContain("w:vMerge");
+  });
+
+  it("forces shokumu section titles black without Word Heading styles", async () => {
+    const xml = documentXmlFromDocx(
+      await buildExportDocx(sampleSnapshot(), "shokumu"),
+    );
+    expect(xml).toContain("■職務経歴");
+    expect(xml).not.toMatch(/w:pStyle[^>]*Heading/i);
+    expect(xml).not.toMatch(/w:outlineLvl/);
+    // Section label run must pin theme-independent black.
+    expect(xml).toMatch(
+      /<w:color w:val="000000"\/>[\s\S]{0,120}■職務経歴/,
+    );
+    expect(xml).toMatch(/<w:color w:val="000000"\/>[\s\S]{0,80}職　務　経　歴　書/);
   });
 });

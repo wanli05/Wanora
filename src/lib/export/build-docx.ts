@@ -2,7 +2,6 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
-  HeadingLevel,
   HeightRule,
   ImageRun,
   Packer,
@@ -15,6 +14,22 @@ import {
   WidthType,
   type ITableCellOptions,
 } from "docx";
+
+const BLACK = "000000";
+const FONT = { eastAsia: "游明朝", ascii: "Times New Roman" } as const;
+
+function run(
+  text: string,
+  opts?: { bold?: boolean; size?: number },
+): TextRun {
+  return new TextRun({
+    text,
+    bold: opts?.bold,
+    size: opts?.size ?? 20,
+    color: BLACK,
+    font: FONT,
+  });
+}
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import {
   PHOTO_DISPLAY_HEIGHT_PX,
@@ -30,7 +45,7 @@ const CONTENT = PAGE_WIDTH - MARGIN * 2;
 const thin = {
   style: BorderStyle.SINGLE,
   size: 8,
-  color: "000000",
+  color: BLACK,
 };
 const borders = { top: thin, bottom: thin, left: thin, right: thin };
 const noBorder = {
@@ -76,14 +91,7 @@ function cell(
       (line) =>
         new Paragraph({
           alignment,
-          children: [
-            new TextRun({
-              text: line,
-              bold: opts.bold,
-              size: opts.size ?? 18,
-              font: { eastAsia: "游明朝", ascii: "Times New Roman" },
-            }),
-          ],
+          children: [run(line, { bold: opts.bold, size: opts.size ?? 18 })],
         }),
     ),
   };
@@ -102,32 +110,18 @@ function p(
   return new Paragraph({
     alignment,
     spacing: { after: 80 },
-    children: [
-      new TextRun({
-        text,
-        bold: opts?.bold,
-        size: opts?.size ?? 20,
-        font: { eastAsia: "游明朝", ascii: "Times New Roman" },
-      }),
-    ],
+    children: [run(text, { bold: opts?.bold, size: opts?.size ?? 20 })],
   });
 }
 
+/** Section label — plain black run (never HeadingLevel; Word theme turns H2 blue). */
 function h(text: string) {
   return new Paragraph({
-    heading: HeadingLevel.HEADING_2,
     spacing: { before: 200, after: 80 },
     border: {
-      bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000", space: 4 },
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: BLACK, space: 4 },
     },
-    children: [
-      new TextRun({
-        text,
-        bold: true,
-        size: 22,
-        font: { eastAsia: "游明朝", ascii: "Times New Roman" },
-      }),
-    ],
+    children: [run(text, { bold: true, size: 22 })],
   });
 }
 
@@ -156,20 +150,16 @@ function photoCell(photoPrintJpeg: Buffer | null | undefined, width: number) {
     : [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [
-            new TextRun({
-              text: "写真",
-              size: 18,
-              font: { eastAsia: "游明朝", ascii: "Times New Roman" },
-            }),
-          ],
+          spacing: { before: 120, after: 120 },
+          children: [run("写真", { size: 18 })],
         }),
       ];
+  // No rowSpan — Word mishandles rowspan+colspan and drops the photo
+  // under the identity table (see media/my-career/11-wrong-product-export-header.png).
   return new TableCell({
     borders,
     width: { size: width, type: WidthType.DXA },
-    rowSpan: 3,
-    verticalAlign: VerticalAlign.CENTER,
+    verticalAlign: VerticalAlign.TOP,
     children,
   });
 }
@@ -273,116 +263,155 @@ function buildRirekisho(
           },
         },
         children: [
+          // Outer 2-col: left = title/date + identity, right = photo.
+          // Avoid rowspan/colspan across photo — Word drops it bottom-left.
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [Math.round(CONTENT * 0.55), Math.round(CONTENT * 0.45)],
+            columnWidths: [wId, wPhoto],
+            borders: {
+              top: noBorder,
+              bottom: noBorder,
+              left: noBorder,
+              right: noBorder,
+              insideHorizontal: noBorder,
+              insideVertical: noBorder,
+            },
             rows: [
               new TableRow({
                 children: [
                   new TableCell({
                     borders: noBorders,
-                    width: { size: Math.round(CONTENT * 0.55), type: WidthType.DXA },
+                    width: { size: wId, type: WidthType.DXA },
                     children: [
-                      new Paragraph({
-                        alignment: AlignmentType.LEFT,
-                        spacing: { after: 40 },
-                        children: [
-                          new TextRun({
-                            text: "履　歴　書",
-                            bold: true,
-                            size: 32,
-                            font: {
-                              eastAsia: "游明朝",
-                              ascii: "Times New Roman",
+                      new Table({
+                        width: { size: wId, type: WidthType.DXA },
+                        columnWidths: [
+                          Math.round(wId * 0.55),
+                          Math.round(wId * 0.45),
+                        ],
+                        rows: [
+                          new TableRow({
+                            children: [
+                              new TableCell({
+                                borders: noBorders,
+                                width: {
+                                  size: Math.round(wId * 0.55),
+                                  type: WidthType.DXA,
+                                },
+                                children: [
+                                  new Paragraph({
+                                    alignment: AlignmentType.LEFT,
+                                    spacing: { after: 60 },
+                                    children: [
+                                      run("履　歴　書", {
+                                        bold: true,
+                                        size: 32,
+                                      }),
+                                    ],
+                                  }),
+                                ],
+                              }),
+                              new TableCell({
+                                borders: noBorders,
+                                width: {
+                                  size: Math.round(wId * 0.45),
+                                  type: WidthType.DXA,
+                                },
+                                verticalAlign: VerticalAlign.BOTTOM,
+                                children: [
+                                  new Paragraph({
+                                    alignment: AlignmentType.RIGHT,
+                                    spacing: { after: 60 },
+                                    children: [
+                                      run(snapshot.asOfRirekisho, {
+                                        size: 20,
+                                      }),
+                                    ],
+                                  }),
+                                ],
+                              }),
+                            ],
+                          }),
+                        ],
+                      }),
+                      new Table({
+                        width: { size: wId, type: WidthType.DXA },
+                        columnWidths: [wLab, wBirth, wGender],
+                        rows: [
+                          new TableRow({
+                            height: {
+                              value: 400,
+                              rule: HeightRule.ATLEAST,
                             },
+                            children: [
+                              cell("ふりがな", {
+                                width: wLab,
+                                bold: true,
+                                shade: "F3F3F3",
+                                size: 16,
+                                vAlign: VerticalAlign.CENTER,
+                              }),
+                              cell(snapshot.fullNameKana, {
+                                width: wBirth + wGender,
+                                colspan: 2,
+                                size: 16,
+                                vAlign: VerticalAlign.CENTER,
+                              }),
+                            ],
+                          }),
+                          new TableRow({
+                            height: {
+                              value: 900,
+                              rule: HeightRule.ATLEAST,
+                            },
+                            children: [
+                              cell("氏　名", {
+                                width: wLab,
+                                bold: true,
+                                shade: "F3F3F3",
+                                size: 24,
+                                vAlign: VerticalAlign.CENTER,
+                              }),
+                              cell(snapshot.fullName, {
+                                width: wBirth + wGender,
+                                colspan: 2,
+                                size: 24,
+                                vAlign: VerticalAlign.CENTER,
+                              }),
+                            ],
+                          }),
+                          new TableRow({
+                            height: {
+                              value: 720,
+                              rule: HeightRule.ATLEAST,
+                            },
+                            children: [
+                              cell("生年月日", {
+                                width: wLab,
+                                bold: true,
+                                shade: "F3F3F3",
+                                vAlign: VerticalAlign.CENTER,
+                              }),
+                              cell(snapshot.birthLine, {
+                                width: wBirth,
+                                vAlign: VerticalAlign.CENTER,
+                              }),
+                              cell(
+                                snapshot.gender
+                                  ? `※性別　${snapshot.gender}`
+                                  : "",
+                                {
+                                  width: wGender,
+                                  vAlign: VerticalAlign.CENTER,
+                                },
+                              ),
+                            ],
                           }),
                         ],
                       }),
                     ],
-                  }),
-                  new TableCell({
-                    borders: noBorders,
-                    width: { size: Math.round(CONTENT * 0.45), type: WidthType.DXA },
-                    verticalAlign: VerticalAlign.BOTTOM,
-                    children: [
-                      new Paragraph({
-                        alignment: AlignmentType.RIGHT,
-                        spacing: { after: 40 },
-                        children: [
-                          new TextRun({
-                            text: snapshot.asOfRirekisho,
-                            size: 20,
-                            font: {
-                              eastAsia: "游明朝",
-                              ascii: "Times New Roman",
-                            },
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
-          }),
-          new Table({
-            width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [wLab, wBirth, wGender, wPhoto],
-            rows: [
-              new TableRow({
-                height: { value: 400, rule: HeightRule.ATLEAST },
-                children: [
-                  cell("ふりがな", {
-                    width: wLab,
-                    bold: true,
-                    shade: "F3F3F3",
-                    size: 16,
-                    vAlign: VerticalAlign.CENTER,
-                  }),
-                  cell(snapshot.fullNameKana, {
-                    width: wBirth + wGender,
-                    colspan: 2,
-                    size: 16,
-                    vAlign: VerticalAlign.CENTER,
                   }),
                   photoCell(photoPrintJpeg, wPhoto),
-                ],
-              }),
-              new TableRow({
-                height: { value: 900, rule: HeightRule.ATLEAST },
-                children: [
-                  cell("氏　名", {
-                    width: wLab,
-                    bold: true,
-                    shade: "F3F3F3",
-                    size: 24,
-                    vAlign: VerticalAlign.CENTER,
-                  }),
-                  cell(snapshot.fullName, {
-                    width: wBirth + wGender,
-                    colspan: 2,
-                    size: 24,
-                    vAlign: VerticalAlign.CENTER,
-                  }),
-                ],
-              }),
-              new TableRow({
-                height: { value: 720, rule: HeightRule.ATLEAST },
-                children: [
-                  cell("生年月日", {
-                    width: wLab,
-                    bold: true,
-                    shade: "F3F3F3",
-                    vAlign: VerticalAlign.CENTER,
-                  }),
-                  cell(snapshot.birthLine, {
-                    width: wBirth,
-                    vAlign: VerticalAlign.CENTER,
-                  }),
-                  cell(
-                    snapshot.gender ? `※性別　${snapshot.gender}` : "",
-                    { width: wGender, vAlign: VerticalAlign.CENTER },
-                  ),
                 ],
               }),
             ],
@@ -495,28 +524,12 @@ function buildRirekisho(
                     rowSpan: 4,
                     children: [
                       new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: "備考：",
-                            bold: true,
-                            size: 18,
-                            font: { eastAsia: "游明朝", ascii: "Times New Roman" },
-                          }),
-                        ],
+                        children: [run("備考：", { bold: true, size: 18 })],
                       }),
                       ...snapshot.residenceLines.map(
                         (line) =>
                           new Paragraph({
-                            children: [
-                              new TextRun({
-                                text: line,
-                                size: 18,
-                                font: {
-                                  eastAsia: "游明朝",
-                                  ascii: "Times New Roman",
-                                },
-                              }),
-                            ],
+                            children: [run(line, { size: 18 })],
                           }),
                       ),
                     ],
