@@ -228,11 +228,16 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    const actions = document.querySelector(".pb-page-actions");
+    const toolbar = screen.getByTestId("page-toolbar");
+    expect(toolbar.className).toMatch(/justify-between/);
+    const actions = toolbar.querySelector(".pb-page-actions");
     expect(actions).not.toBeNull();
+    expect(actions!.className).toMatch(/ml-auto/);
     const kids = Array.from(actions!.children);
     expect(kids[0]).toHaveAttribute("data-testid", "calendar-toggle");
-    expect(kids[1]?.textContent).toMatch(/添加投递|応募を追加/);
+    expect(kids[0]).toBeVisible();
+    expect(kids[0]!.querySelector("svg")).not.toBeNull();
+    expect(kids[1]).toHaveAttribute("data-testid", "add-application");
   });
 
   it("shows undo on rejected cards and after a pass", async () => {

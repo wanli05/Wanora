@@ -797,7 +797,8 @@ body {
   border-radius: 16px;
   padding: 0;
   min-height: 640px;
-  overflow: hidden;
+  /* Keep badge/overflow visible on the page toolbar row */
+  overflow: visible;
   position: relative;
   box-shadow: 0 12px 40px rgba(28, 43, 42, 0.12);
 }
@@ -812,48 +813,62 @@ body {
   background-size: 14px 14px;
   pointer-events: none;
 }
+/* Demo .page-toolbar — title left, calendar+add right (must stay visible) */
 .pb-page-toolbar {
   position: relative;
   z-index: 2;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   padding: 12px 18px 14px;
   border-bottom: 1px solid rgba(13, 107, 99, 0.14);
   background: rgba(255, 253, 248, 0.35);
+  overflow: visible;
 }
 .pb-page-title {
   margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 22px;
   font-weight: 700;
   color: var(--pb-teal-deep);
   letter-spacing: 0.01em;
 }
 .pb-page-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
 }
 .pb-icon-cal {
   position: relative;
+  box-sizing: border-box;
   width: 40px;
   height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: 10px;
   border: 1px solid var(--pb-line);
-  background: var(--pb-card);
+  background: #fff;
   cursor: pointer;
   display: grid;
   place-items: center;
-  color: var(--pb-teal-deep);
   padding: 0;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 .pb-icon-cal:hover,
 .pb-icon-cal[data-active="true"] {
   background: var(--pb-teal-soft);
   border-color: #b7d8cf;
 }
+.pb-icon-cal svg,
 .pb-icon-cal-glyph {
   width: 22px;
   height: 22px;
@@ -863,6 +878,7 @@ body {
   position: absolute;
   top: -5px;
   right: -5px;
+  z-index: 1;
   min-width: 18px;
   height: 18px;
   padding: 0 4px;

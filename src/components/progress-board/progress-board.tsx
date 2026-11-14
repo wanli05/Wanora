@@ -501,10 +501,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   }
 
   return (
-    <div className="pb-shell flex flex-1 flex-col">
-      <div className="pb-page-toolbar">
+    <div className="pb-shell flex w-full flex-1 flex-col">
+      <div
+        className="pb-page-toolbar flex w-full flex-nowrap items-center justify-between"
+        data-testid="page-toolbar"
+      >
         <h1 className="pb-page-title">{t("title")}</h1>
-        <div className="pb-page-actions">
+        <div className="pb-page-actions ml-auto flex shrink-0 items-center gap-2">
           <button
             type="button"
             data-testid="calendar-toggle"
@@ -524,6 +527,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           <button
             type="button"
             className="pb-btn pb-btn-sm"
+            data-testid="add-application"
             onClick={() => setAddingApp(true)}
           >
             {t("addApplication")}
@@ -2132,7 +2136,7 @@ function ApplicationTable({
   );
 }
 
-/** White square calendar with blue header — Demo / fig8 glyph. */
+/** White square + blue-top calendar — Demo / fig8 / fig9 glyph. */
 function CalendarGlyph() {
   return (
     <svg
@@ -2142,27 +2146,25 @@ function CalendarGlyph() {
       focusable="false"
     >
       <rect
-        x="3.25"
-        y="4.5"
-        width="17.5"
-        height="16"
-        rx="2.75"
-        fill="#fff"
-        stroke="#c5d0cb"
-        strokeWidth="1.1"
+        x="3"
+        y="4"
+        width="18"
+        height="17"
+        rx="3"
+        fill="#eef0f8"
+        stroke="#c5c9d6"
+        strokeWidth="1"
       />
-      <path
-        d="M3.25 7.25h17.5V7a2.75 2.75 0 0 0-2.75-2.5H6A2.75 2.75 0 0 0 3.25 7v.25Z"
-        fill="#3b82f6"
-      />
-      <rect x="7.4" y="3" width="1.7" height="3.4" rx="0.85" fill="#64748b" />
-      <rect x="14.9" y="3" width="1.7" height="3.4" rx="0.85" fill="#64748b" />
-      <circle cx="8.2" cy="12.2" r="1.05" fill="#94a3b8" />
-      <circle cx="12" cy="12.2" r="1.05" fill="#94a3b8" />
-      <circle cx="15.8" cy="12.2" r="1.05" fill="#94a3b8" />
-      <circle cx="8.2" cy="16" r="1.05" fill="#94a3b8" />
-      <circle cx="12" cy="16" r="1.05" fill="#94a3b8" />
-      <circle cx="15.8" cy="16" r="1.05" fill="#94a3b8" />
+      <rect x="3" y="4" width="18" height="5" rx="2.5" fill="#3b82f6" />
+      <rect x="3" y="7.5" width="18" height="2" fill="#3b82f6" />
+      <circle cx="8" cy="6.2" r="0.9" fill="#fff" />
+      <circle cx="16" cy="6.2" r="0.9" fill="#fff" />
+      <rect x="6" y="11" width="3.2" height="3.2" rx="0.6" fill="#c4b5fd" />
+      <rect x="10.4" y="11" width="3.2" height="3.2" rx="0.6" fill="#ddd6fe" />
+      <rect x="14.8" y="11" width="3.2" height="3.2" rx="0.6" fill="#c4b5fd" />
+      <rect x="6" y="15.2" width="3.2" height="3.2" rx="0.6" fill="#ddd6fe" />
+      <rect x="10.4" y="15.2" width="3.2" height="3.2" rx="0.6" fill="#c4b5fd" />
+      <rect x="14.8" y="15.2" width="3.2" height="3.2" rx="0.6" fill="#2563eb" />
     </svg>
   );
 }
