@@ -501,54 +501,108 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   }
 
   return (
-    <div className="pb-shell flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="relative z-20 flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--pb-teal-deep)]">
-          {t("title")}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            data-testid="calendar-toggle"
-            aria-label={t("calendar")}
-            aria-expanded={calendarOpen}
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)]"
-            onClick={openCalendar}
-          >
-            <CalendarIcon />
-            {monthCount > 0 ? (
-              <span className="absolute -right-1 -top-1 rounded-full bg-[var(--pb-teal-deep)] px-1 text-[10px] text-white">
-                {monthCount}
-              </span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className="pb-btn pb-btn-sm"
-            onClick={() => setAddingApp(true)}
-          >
-            {t("addApplication")}
-          </button>
-        </div>
+    <div className="pb-shell flex flex-1 flex-col">
+      <div className="pb-nav" role="navigation" aria-label={t("title")}>
+        <h1 className="pb-nav-title">{t("title")}</h1>
+        <button
+          type="button"
+          className="pb-nav-link"
+          data-active={!calendarOpen && view === "kanban" ? "true" : "false"}
+          onClick={() => {
+            setCalendarOpen(false);
+            setView("kanban");
+          }}
+        >
+          {t("viewKanban")}
+        </button>
+        <button
+          type="button"
+          className="pb-nav-link"
+          data-active={!calendarOpen && view === "list" ? "true" : "false"}
+          onClick={() => {
+            setCalendarOpen(false);
+            setView("list");
+          }}
+        >
+          {t("viewList")}
+        </button>
+        <button
+          type="button"
+          data-testid="calendar-toggle"
+          aria-label={t("calendar")}
+          aria-expanded={calendarOpen}
+          aria-pressed={calendarOpen}
+          className="pb-nav-link relative"
+          data-active={calendarOpen ? "true" : "false"}
+          onClick={openCalendar}
+        >
+          {t("calendar")}
+          {monthCount > 0 ? (
+            <span className="ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-[var(--pb-teal-deep)] px-1 text-[10px] font-semibold text-white">
+              {monthCount}
+            </span>
+          ) : null}
+        </button>
+        <span className="pb-nav-spacer" />
+        <button
+          type="button"
+          className="pb-btn pb-btn-sm"
+          onClick={() => setAddingApp(true)}
+        >
+          {t("addApplication")}
+        </button>
       </div>
 
+      <div className="pb-main">
+      {calendarOpen ? (
+        <section
+          className="pb-board-slot pb-cal-panel"
+          data-testid="calendar-panel"
+          aria-label={t("calendar")}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2>{t("calendarTitle", { year: calYear, month: calMonth })}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                onClick={() => {
+                  const next = calMonth === 1 ? 12 : calMonth - 1;
+                  setCalMonth(next);
+                  if (calMonth === 1) setCalYear(calYear - 1);
+                }}
+              >
+                {t("calendarPrev")}
+              </button>
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                onClick={() => {
+                  const next = calMonth === 12 ? 1 : calMonth + 1;
+                  setCalMonth(next);
+                  if (calMonth === 12) setCalYear(calYear + 1);
+                }}
+              >
+                {t("calendarNext")}
+              </button>
+              <button
+                type="button"
+                className="pb-nav-link"
+                onClick={() => setCalendarOpen(false)}
+              >
+                {t("calendarClose")}
+              </button>
+            </div>
+          </div>
+          <MonthCalendar
+            occupancy={board.occupancy}
+            year={calYear}
+            monthIndex={calMonth - 1}
+          />
+        </section>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <div className="flex overflow-hidden rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)]">
-          <button
-            type="button"
-            className={`px-3 py-1 ${view === "kanban" ? "bg-[var(--pb-teal-soft)] font-semibold text-[var(--pb-teal-deep)]" : ""}`}
-            onClick={() => setView("kanban")}
-          >
-            {t("viewKanban")}
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1 ${view === "list" ? "bg-[var(--pb-teal-soft)] font-semibold text-[var(--pb-teal-deep)]" : ""}`}
-            onClick={() => setView("list")}
-          >
-            {t("viewList")}
-          </button>
-        </div>
         {(["in_progress", "closed", "all"] as const).map((key) => (
           <button
             key={key}
@@ -674,7 +728,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           onRecruiter={() => setAddingRecruiter(true)}
         />
       ) : view === "kanban" ? (
-        <div data-testid="kanban-row" className="pb-board w-full pb-4">
+        <div data-testid="kanban-row" className="pb-board pb-board-slot w-full">
           {visibleBoardColumns(visible).map((kind) => {
             const cards = visible.filter((app) => app.currentStageKind === kind);
             const vacant = cards.length === 0;
@@ -762,6 +816,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           }}
         />
       )}
+        </>
+      )}
 
       {addingApp ? (
         <Modal title={t("addApplication")} closeLabel={t("cancel")} onClose={() => setAddingApp(false)}>
@@ -843,62 +899,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             </div>
           </form>
         </Modal>
-      ) : null}
-
-      {calendarOpen ? (
-        <>
-          <button
-            type="button"
-            data-testid="calendar-backdrop"
-            aria-label={t("calendarClose")}
-            className="fixed inset-0 z-10 bg-black/30"
-            onClick={() => setCalendarOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("calendar")}
-            className="relative z-20 rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">
-                {t("calendarTitle", { year: calYear, month: calMonth })}
-              </h2>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700"
-                  onClick={() => {
-                    const next = calMonth === 1 ? 12 : calMonth - 1;
-                    setCalMonth(next);
-                    if (calMonth === 1) setCalYear(calYear - 1);
-                  }}
-                >
-                  {t("calendarPrev")}
-                </button>
-                <button
-                  type="button"
-                  className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700"
-                  onClick={() => {
-                    const next = calMonth === 12 ? 1 : calMonth + 1;
-                    setCalMonth(next);
-                    if (calMonth === 12) setCalYear(calYear + 1);
-                  }}
-                >
-                  {t("calendarNext")}
-                </button>
-                <button
-                  type="button"
-                  className="text-sm text-zinc-500"
-                  onClick={() => setCalendarOpen(false)}
-                >
-                  {t("calendarClose")}
-                </button>
-              </div>
-            </div>
-            <MonthCalendar occupancy={board.occupancy} year={calYear} monthIndex={calMonth - 1} />
-          </div>
-        </>
       ) : null}
 
       {interviewFor ? (
@@ -1107,6 +1107,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           </div>
         </>
       ) : null}
+      </div>
     </div>
   );
 }
@@ -2171,24 +2172,6 @@ function EmptyState({
       </button>
       <p className="text-xs text-zinc-500">{t("addRecruiterHint")}</p>
     </div>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <rect
-        x="3"
-        y="5"
-        width="18"
-        height="16"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path d="M3 9h18M8 3v4M16 3v4" fill="none" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
   );
 }
 

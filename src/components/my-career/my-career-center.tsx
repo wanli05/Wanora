@@ -29,14 +29,25 @@ import {
   type CareerSaveState,
 } from "@/lib/career-actions";
 import {
+  deleteLicenseAction,
+  saveLicenseAction,
+} from "@/lib/profile-actions";
+import {
   isJapaneseNationality,
   jaOf,
   type CareerLanguage,
   type CareerTimelineItem,
 } from "@/lib/domain/career";
+import { groupCareerTimelineByAt } from "@/lib/domain/career-timeline";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import { formatYearMonthInputValue } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
+
+export type CareerLicenseDto = {
+  id: string;
+  yearMonth: string;
+  nameJa: string;
+};
 
 export type MyCareerModule =
   | "profile"
@@ -61,6 +72,8 @@ export type MyCareerLabels = {
   projectsPendingHint: string;
   confirmDraft: string;
   skillsSub: string;
+  skillsLicensesSub: string;
+  skillsLicensesEmpty: string;
   goalsSub: string;
   goalShort: string;
   goalLong: string;
@@ -178,7 +191,7 @@ type Props = {
   projects: CareerProjectDto[];
   skills: CareerSkillDto[];
   goals: CareerGoalDto[];
-  licenses: { yearMonth: string; nameJa: string }[];
+  licenses: CareerLicenseDto[];
   timeline: CareerTimelineItem[];
   exportSnapshot: ExportSnapshot;
 };
@@ -299,7 +312,10 @@ function ProfileModule({
   const [langs, setLangs] = useState(extras.languages);
   const [nationality, setNationality] = useState(extras.nationality);
   const japanese = isJapaneseNationality(nationality);
-  const recent = timeline.slice(0, 4);
+  const recentGroups = useMemo(
+    () => groupCareerTimelineByAt(timeline).slice(0, 4),
+    [timeline],
+  );
 
   useEffect(() => {
     if (wasPending.current && !pending && state.ok) {
@@ -596,6 +612,7 @@ function ProfileModule({
         <ProfilePageForm
           initial={profileForm.initial}
           labels={profileForm.labels}
+          includeLicenses={false}
         />
       </div>
 
@@ -606,14 +623,18 @@ function ProfileModule({
         </div>
       </div>
       <div className="mc-timeline">
-        {recent.map((item) => (
-          <div key={item.id} className="mc-tl-row">
-            <p className="mc-tl-at">{item.at}</p>
+        {recentGroups.map((group) => (
+          <div key={group.at} className="mc-tl-row">
+            <p className="mc-tl-at">{group.at}</p>
             <div className="mc-tl-rail" aria-hidden />
-            <div className="mc-tl-item">
-              <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
-                {item.title}
-              </h3>
+            <div className="mc-tl-cluster">
+              {group.items.map((item) => (
+                <div key={item.id} className="mc-tl-item">
+                  <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
+                    {item.title}
+                  </h3>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -716,7 +737,19 @@ function WorkModule({
       </div>
       <div className="mc-stack">
         {employers.map((row) => (
-          <article key={row.id} className="mc-card">
+          <article
+            key={row.id}
+            className="mc-card mc-card-clickable"
+            role="button"
+            tabIndex={0}
+            onClick={() => setEditing(row)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setEditing(row);
+              }
+            }}
+          >
             <h3 className="font-semibold text-[var(--mc-teal-deep)]">
               {row.companyNameJa}
             </h3>
@@ -732,7 +765,10 @@ function WorkModule({
               <button
                 type="button"
                 className="mc-btn mc-btn-ghost"
-                onClick={() => setEditing(row)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(row);
+                }}
               >
                 編集
               </button>
@@ -740,12 +776,13 @@ function WorkModule({
                 type="button"
                 className="mc-btn mc-btn-danger"
                 disabled={isPending}
-                onClick={() =>
+                onClick={(e) => {
+                  e.stopPropagation();
                   startTransition(async () => {
                     await deleteCareerEmployerAction(row.id);
                     router.refresh();
-                  })
-                }
+                  });
+                }}
               >
                 {labels.remove}
               </button>
@@ -868,7 +905,19 @@ function ProjectsModule({
       <div className="mc-banner">{labels.projectsPendingHint}</div>
       <div className="mc-stack">
         {projects.map((row) => (
-          <article key={row.id} className="mc-card">
+          <article
+            key={row.id}
+            className="mc-card mc-card-clickable"
+            role="button"
+            tabIndex={0}
+            onClick={() => setEditing(row)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setEditing(row);
+              }
+            }}
+          >
             <h3 className="font-semibold text-[var(--mc-teal-deep)]">
               {row.titleUrl ? (
                 <a
@@ -877,6 +926,7 @@ function ProjectsModule({
                   rel="noopener noreferrer"
                   className="underline"
                   style={{ color: "var(--mc-link)" }}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {row.titleJa}
                 </a>
@@ -895,7 +945,10 @@ function ProjectsModule({
               <button
                 type="button"
                 className="mc-btn mc-btn-ghost"
-                onClick={() => setEditing(row)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(row);
+                }}
               >
                 編集
               </button>
@@ -904,12 +957,13 @@ function ProjectsModule({
                   type="button"
                   className="mc-btn"
                   disabled={isPending}
-                  onClick={() =>
+                  onClick={(e) => {
+                    e.stopPropagation();
                     startTransition(async () => {
                       await confirmPendingProjectAction(row.id);
                       router.refresh();
-                    })
-                  }
+                    });
+                  }}
                 >
                   {labels.confirmDraft}
                 </button>
@@ -918,12 +972,13 @@ function ProjectsModule({
                 type="button"
                 className="mc-btn mc-btn-danger"
                 disabled={isPending}
-                onClick={() =>
+                onClick={(e) => {
+                  e.stopPropagation();
                   startTransition(async () => {
                     await deleteCareerProjectAction(row.id);
                     router.refresh();
-                  })
-                }
+                  });
+                }}
               >
                 {labels.remove}
               </button>
@@ -1038,9 +1093,11 @@ function SkillsModule({
 }: {
   labels: MyCareerLabels;
   skills: CareerSkillDto[];
-  licenses: { yearMonth: string; nameJa: string }[];
+  licenses: CareerLicenseDto[];
 }) {
   const [state, action, pending] = useActionState(saveCareerSkillAction, {});
+  const [editingLic, setEditingLic] = useState<CareerLicenseDto | null>(null);
+  const [licPending, setLicPending] = useState(false);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -1103,16 +1160,121 @@ function SkillsModule({
         </button>
         <Feedback state={state} labels={labels} />
       </form>
-      <article className="mc-card">
-        <h3 className="font-semibold text-[var(--mc-teal-deep)]">資格</h3>
-        <ul className="mt-2 list-disc pl-5 text-sm">
-          {licenses.map((lic, i) => (
-            <li key={i}>
-              {lic.yearMonth} {lic.nameJa}
-            </li>
-          ))}
-        </ul>
-      </article>
+
+      <div className="mc-sec-head">
+        <div>
+          <h3 className="m-0 text-base font-semibold text-[var(--mc-teal-deep)]">
+            免許・資格
+          </h3>
+          <p>{labels.skillsLicensesSub}</p>
+        </div>
+        <button
+          type="button"
+          className="mc-btn"
+          onClick={() =>
+            setEditingLic({
+              id: "",
+              yearMonth: formatYearMonthInputValue(
+                new Date().getFullYear(),
+                12,
+              ),
+              nameJa: "",
+            })
+          }
+        >
+          {labels.add}
+        </button>
+      </div>
+      <div className="mc-stack">
+        {licenses.length === 0 ? (
+          <p className="mc-empty">{labels.skillsLicensesEmpty}</p>
+        ) : (
+          licenses.map((lic) => (
+            <article key={lic.id} className="mc-card">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-[var(--mc-teal-deep)]">
+                    {lic.nameJa}
+                  </p>
+                  <p className="text-xs text-[var(--mc-muted)]">{lic.yearMonth}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="mc-btn mc-btn-ghost"
+                    onClick={() => setEditingLic(lic)}
+                  >
+                    {labels.edit}
+                  </button>
+                  <button
+                    type="button"
+                    className="mc-btn mc-btn-danger"
+                    disabled={isPending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await deleteLicenseAction(lic.id);
+                        router.refresh();
+                      })
+                    }
+                  >
+                    {labels.remove}
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+      {editingLic ? (
+        <form
+          className="mc-card mc-stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            setLicPending(true);
+            startTransition(async () => {
+              try {
+                await saveLicenseAction(formData);
+                setEditingLic(null);
+                router.refresh();
+              } finally {
+                setLicPending(false);
+              }
+            });
+          }}
+        >
+          <input type="hidden" name="id" value={editingLic.id} />
+          <label className="mc-field">
+            名称
+            <input
+              name="name_ja"
+              defaultValue={editingLic.nameJa}
+              required
+            />
+          </label>
+          <label className="mc-field">
+            取得年月
+            <input
+              type="month"
+              name="yearMonth"
+              defaultValue={editingLic.yearMonth}
+              required
+            />
+          </label>
+          <div className="flex gap-2">
+            <button className="mc-btn" type="submit" disabled={licPending}>
+              {labels.save}
+            </button>
+            <button
+              type="button"
+              className="mc-btn mc-btn-ghost"
+              onClick={() => setEditingLic(null)}
+            >
+              閉じる
+            </button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }
@@ -1226,6 +1388,11 @@ function TimelineModule({
   timeline: CareerTimelineItem[];
   onJump: (m: MyCareerModule) => void;
 }) {
+  const groups = useMemo(
+    () => groupCareerTimelineByAt(timeline),
+    [timeline],
+  );
+
   return (
     <div className="mc-stack">
       <div className="mc-sec-head">
@@ -1235,22 +1402,29 @@ function TimelineModule({
         </div>
       </div>
       <div className="mc-timeline">
-        {timeline.map((item) => (
-          <div key={item.id} className="mc-tl-row">
-            <p className="mc-tl-at">{item.at}</p>
+        {groups.map((group) => (
+          <div key={group.at} className="mc-tl-row">
+            <p className="mc-tl-at">{group.at}</p>
             <div className="mc-tl-rail" aria-hidden />
-            <button
-              type="button"
-              className="mc-tl-item text-left"
-              onClick={() => onJump(item.module)}
-            >
-              <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
-                {item.title}
-              </h3>
-              {item.summary ? (
-                <p className="text-sm text-[var(--mc-muted)]">{item.summary}</p>
-              ) : null}
-            </button>
+            <div className="mc-tl-cluster">
+              {group.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="mc-tl-item text-left"
+                  onClick={() => onJump(item.module)}
+                >
+                  <h3 className="text-sm font-semibold text-[var(--mc-teal-deep)]">
+                    {item.title}
+                  </h3>
+                  {item.summary ? (
+                    <p className="text-sm text-[var(--mc-muted)]">
+                      {item.summary}
+                    </p>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           </div>
         ))}
       </div>

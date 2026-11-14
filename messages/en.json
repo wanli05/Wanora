@@ -361,6 +361,8 @@
     "projectsPendingHint": "pending_confirm becomes confirmed after review (manual cards this round; no model).",
     "confirmDraft": "Pending confirm",
     "skillsSub": "Years + note (shokumu skill matrix).",
+    "skillsLicensesSub": "Rirekisho / shokumu licenses. Edit them here.",
+    "skillsLicensesEmpty": "No licenses yet.",
     "goalsSub": "Short/long term. Desired salary lives under Profile salary.",
     "goalShort": "Short term",
     "goalLong": "Long term",
@@ -384,7 +386,7 @@
     "recentTitle": "Recent",
     "recentSub": "Top of the timeline.",
     "resumeSectionTitle": "Rirekisho fields",
-    "resumeSectionSub": "Basics, ID photo, education, licenses (edit work history in the Work module)",
+    "resumeSectionSub": "Basics, ID photo, education (edit work in Work; licenses in Skills & growth)",
     "nationalityBlock": "Nationality & residence",
     "japaneseLocksHint": "Japanese nationals do not need status of residence or expiry date.",
     "fields": {

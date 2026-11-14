@@ -361,6 +361,8 @@
     "projectsPendingHint": "pending_confirm 确认后写入（本轮手工卡片，不接模型）。",
     "confirmDraft": "待确认",
     "skillsSub": "年数 + 说明（对齐職務経歴書技能矩阵）。",
+    "skillsLicensesSub": "履歴書・職務経歴書的免许／资格。此处为编辑源。",
+    "skillsLicensesEmpty": "尚无免许・资格。",
     "goalsSub": "短期/长期；希望年収在档案总览給与。",
     "goalShort": "短期",
     "goalLong": "長期",
@@ -384,7 +386,7 @@
     "recentTitle": "最近动态",
     "recentSub": "时间线开头。",
     "resumeSectionTitle": "履歴書字段",
-    "resumeSectionSub": "基本信息・证明写真・学历・免许／资格（职历请在「職歴」模块编辑）",
+    "resumeSectionSub": "基本信息・证明写真・学历（职历在「職歴」、免许／资格在「スキルと成長」编辑）",
     "nationalityBlock": "国籍・在留",
     "japaneseLocksHint": "日本国籍时无需填写在留资格与期限日。",
     "fields": {

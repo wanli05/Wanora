@@ -203,12 +203,14 @@ async function ProfilePageContent() {
       yearMonth: e.yearMonth,
       school: e.school as LocalizedText,
       eventCode: e.eventCode,
+      createdAt: e.createdAt,
     })),
     workHistory: workEntries.map((e) => ({
       id: e.id,
       yearMonth: e.yearMonth,
       company: e.company as LocalizedText,
       eventCode: e.eventCode,
+      createdAt: e.createdAt,
     })),
     employers: employers.map((e) => ({
       id: e.id,
@@ -216,17 +218,20 @@ async function ProfilePageContent() {
       title: e.title,
       startYm: e.startYm,
       endYm: e.endYm,
+      createdAt: e.createdAt,
     })),
     licenses: licenseEntries.map((e) => ({
       id: e.id,
       acquiredYm: e.acquiredYm,
       name: e.name as LocalizedText,
+      createdAt: e.createdAt,
     })),
     projects: projects.map((p) => ({
       id: p.id,
       startYm: p.startYm,
       title: p.title as LocalizedText,
       status: p.status,
+      createdAt: p.createdAt,
     })),
     skills: skills.map((s) => ({
       id: s.id,
@@ -334,6 +339,8 @@ async function ProfilePageContent() {
     projectsPendingHint: tCareer("projectsPendingHint"),
     confirmDraft: tCareer("confirmDraft"),
     skillsSub: tCareer("skillsSub"),
+    skillsLicensesSub: tCareer("skillsLicensesSub"),
+    skillsLicensesEmpty: tCareer("skillsLicensesEmpty"),
     goalsSub: tCareer("goalsSub"),
     goalShort: tCareer("goalShort"),
     goalLong: tCareer("goalLong"),
@@ -432,6 +439,7 @@ async function ProfilePageContent() {
       licenses={licenseEntries.map((e) => {
         const ym = formatYearMonthDate(e.acquiredYm);
         return {
+          id: e.id,
           yearMonth: formatYearMonthInputValue(ym.year, ym.month),
           nameJa: localizedJa(e.name as LocalizedText),
         };

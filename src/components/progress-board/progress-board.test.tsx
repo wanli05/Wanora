@@ -203,6 +203,20 @@ describe("ProgressBoard", () => {
     );
   });
 
+  it("opens the calendar as an in-shell panel aligned with the board slot", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    fireEvent.click(screen.getByTestId("calendar-toggle"));
+    expect(screen.getByTestId("calendar-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("month-calendar")).toBeInTheDocument();
+    expect(screen.queryByTestId("task-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("calendar-backdrop")).not.toBeInTheDocument();
+  });
+
   it("shows undo on rejected cards and after a pass", async () => {
     const { unmount } = renderWithIntl(
       <ProgressBoard

@@ -190,9 +190,12 @@ function consumeProfileSavedFlash(): boolean {
 export function ProfilePageForm({
   initial,
   labels,
+  includeLicenses = true,
 }: {
   initial: ProfilePageInitial;
   labels: ProfilePageFormLabels;
+  /** When false (My Career), licenses are edited in Skills; form skips sync. */
+  includeLicenses?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [justSaved, setJustSaved] = useState(() => consumeProfileSavedFlash());
@@ -563,113 +566,117 @@ export function ProfilePageForm({
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{labels.sections.licenses}</h2>
-        {editing ? (
-          <div className="space-y-4">
-            {licenseRows.map((row, index) => (
-              <div
-                key={row.clientKey}
-                className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
-              >
-                <input
-                  type="hidden"
-                  name={`licenses.${index}.id`}
-                  value={row.id ?? ""}
-                />
-                <YearMonthField
-                  name={`licenses.${index}.yearMonth`}
-                  label={labels.licenses.yearMonth}
-                  value={row.yearMonth}
-                  onChange={(yearMonth) =>
-                    setLicenseRows((rows) =>
-                      sortByYearMonthInput(
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
-                        ),
-                      ),
-                    )
-                  }
-                />
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium">{labels.licenses.name}</span>
+      {includeLicenses ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">{labels.sections.licenses}</h2>
+          {editing ? (
+            <div className="space-y-4">
+              {licenseRows.map((row, index) => (
+                <div
+                  key={row.clientKey}
+                  className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
+                >
                   <input
-                    name={`licenses.${index}.name_ja`}
-                    required
-                    value={row.nameJa}
-                    onChange={(e) =>
+                    type="hidden"
+                    name={`licenses.${index}.id`}
+                    value={row.id ?? ""}
+                  />
+                  <YearMonthField
+                    name={`licenses.${index}.yearMonth`}
+                    label={labels.licenses.yearMonth}
+                    value={row.yearMonth}
+                    onChange={(yearMonth) =>
                       setLicenseRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey
-                            ? { ...r, nameJa: e.target.value }
-                            : r,
+                        sortByYearMonthInput(
+                          rows.map((r) =>
+                            r.clientKey === row.clientKey
+                              ? { ...r, yearMonth }
+                              : r,
+                          ),
                         ),
                       )
                     }
-                    className={inputClass}
                   />
-                </label>
-                <button
-                  type="button"
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() =>
-                    setLicenseRows((rows) =>
-                      rows.filter((r) => r.clientKey !== row.clientKey),
-                    )
-                  }
-                >
-                  {labels.removeRow}
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
-              onClick={() =>
-                setLicenseRows((rows) =>
-                  sortByYearMonthInput([
-                    ...rows,
-                    {
-                      clientKey: `new-${crypto.randomUUID()}`,
-                      yearMonth: defaultYearMonth(12),
-                      nameJa: "",
-                    },
-                  ]),
-                )
+                  <label className="block space-y-1 text-sm">
+                    <span className="font-medium">{labels.licenses.name}</span>
+                    <input
+                      name={`licenses.${index}.name_ja`}
+                      required
+                      value={row.nameJa}
+                      onChange={(e) =>
+                        setLicenseRows((rows) =>
+                          rows.map((r) =>
+                            r.clientKey === row.clientKey
+                              ? { ...r, nameJa: e.target.value }
+                              : r,
+                          ),
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="text-sm text-red-600 hover:underline"
+                    onClick={() =>
+                      setLicenseRows((rows) =>
+                        rows.filter((r) => r.clientKey !== row.clientKey),
+                      )
+                    }
+                  >
+                    {labels.removeRow}
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
+                onClick={() =>
+                  setLicenseRows((rows) =>
+                    sortByYearMonthInput([
+                      ...rows,
+                      {
+                        clientKey: `new-${crypto.randomUUID()}`,
+                        yearMonth: defaultYearMonth(12),
+                        nameJa: "",
+                      },
+                    ]),
+                  )
+                }
+              >
+                {labels.addRow}
+              </button>
+            </div>
+          ) : licenseRows.length === 0 ? (
+            <p className="text-sm text-zinc-500">{labels.licenses.empty}</p>
+          ) : (
+            <TimelineTableWithHead
+              head={
+                <>
+                  <th className="py-2 pr-4 font-medium normal-case">
+                    {labels.licenses.name}
+                  </th>
+                  <th className="py-2 font-medium normal-case">
+                    {labels.licenses.yearMonth}
+                  </th>
+                </>
               }
             >
-              {labels.addRow}
-            </button>
-          </div>
-        ) : licenseRows.length === 0 ? (
-          <p className="text-sm text-zinc-500">{labels.licenses.empty}</p>
-        ) : (
-          <TimelineTableWithHead
-            head={
-              <>
-                <th className="py-2 pr-4 font-medium normal-case">
-                  {labels.licenses.name}
-                </th>
-                <th className="py-2 font-medium normal-case">
-                  {labels.licenses.yearMonth}
-                </th>
-              </>
-            }
-          >
-            {licenseRows.map((row) => {
-              const { year, month } = yearMonthParts(row.yearMonth);
-              return (
-                <tr key={row.clientKey}>
-                  <td className="py-2.5 pr-4">{row.nameJa || "—"}</td>
-                  <td className="py-2.5 whitespace-nowrap">
-                    {formatYearMonthJa(year, month)}
-                  </td>
-                </tr>
-              );
-            })}
-          </TimelineTableWithHead>
-        )}
-      </section>
+              {licenseRows.map((row) => {
+                const { year, month } = yearMonthParts(row.yearMonth);
+                return (
+                  <tr key={row.clientKey}>
+                    <td className="py-2.5 pr-4">{row.nameJa || "—"}</td>
+                    <td className="py-2.5 whitespace-nowrap">
+                      {formatYearMonthJa(year, month)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </TimelineTableWithHead>
+          )}
+        </section>
+      ) : null}
     </>
   );
 
@@ -711,6 +718,9 @@ export function ProfilePageForm({
 
       {editing ? (
         <form action={formAction} className="space-y-8">
+          {!includeLicenses ? (
+            <input type="hidden" name="omitLicenses" value="1" />
+          ) : null}
           {sections}
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
             {saveButton}

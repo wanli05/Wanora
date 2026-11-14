@@ -361,6 +361,8 @@
     "projectsPendingHint": "pending_confirm は確認後に確定（本ラウンドは手工カード、モデル未接続）。",
     "confirmDraft": "確認待ち",
     "skillsSub": "年数 + 説明（職務経歴書スキル行列）。",
+    "skillsLicensesSub": "履歴書・職務経歴書の免許／資格。ここが編集源。",
+    "skillsLicensesEmpty": "まだ免許・資格がありません。",
     "goalsSub": "短期／長期。希望年収はプロフィールの給与へ。",
     "goalShort": "短期",
     "goalLong": "長期",
@@ -384,7 +386,7 @@
     "recentTitle": "最近の出来事",
     "recentSub": "タイムラインの先頭。",
     "resumeSectionTitle": "履歴書フィールド",
-    "resumeSectionSub": "基本情報・証明写真・学歴・免許／資格（職歴は「職歴」モジュールで編集）",
+    "resumeSectionSub": "基本情報・証明写真・学歴（職歴は「職歴」、免許／資格は「スキルと成長」で編集）",
     "nationalityBlock": "国籍・在留",
     "japaneseLocksHint": "日本国籍の場合、在留資格と期限日は入力不要です。",
     "fields": {

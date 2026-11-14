@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { yearMonthFromInput } from "@/lib/domain/dates";
-import { buildCareerTimeline } from "./career-timeline";
+import { buildCareerTimeline, groupCareerTimelineByAt } from "./career-timeline";
 
 describe("buildCareerTimeline", () => {
   it("aggregates modules and skips pending projects", () => {
@@ -84,5 +84,51 @@ describe("buildCareerTimeline", () => {
 
     expect(items.some((i) => i.title.includes("新会社"))).toBe(true);
     expect(items.some((i) => i.title === "旧会社")).toBe(false);
+  });
+
+  it("orders same-month events left-to-right by entry time", () => {
+    const items = buildCareerTimeline({
+      education: [
+        {
+          id: "e1",
+          yearMonth: yearMonthFromInput(2024, 4),
+          school: { ja: "後录入学歴" },
+          eventCode: "graduated",
+          createdAt: new Date("2024-06-02T00:00:00Z"),
+        },
+      ],
+      workHistory: [],
+      employers: [
+        {
+          id: "emp1",
+          companyName: { ja: "先录入会社" },
+          title: null,
+          startYm: yearMonthFromInput(2024, 4),
+          endYm: null,
+          createdAt: new Date("2024-06-01T00:00:00Z"),
+        },
+      ],
+      licenses: [
+        {
+          id: "l1",
+          acquiredYm: yearMonthFromInput(2024, 4),
+          name: { ja: "中录入資格" },
+          createdAt: new Date("2024-06-01T12:00:00Z"),
+        },
+      ],
+      projects: [],
+      skills: [],
+    });
+
+    const april = items.filter((i) => i.at.includes("2024"));
+    expect(april.map((i) => i.title)).toEqual([
+      "先录入会社",
+      "中录入資格",
+      "後录入学歴",
+    ]);
+
+    const groups = groupCareerTimelineByAt(items);
+    const aprilGroup = groups.find((g) => g.at.includes("2024"));
+    expect(aprilGroup?.items).toHaveLength(3);
   });
 });

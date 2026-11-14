@@ -34,6 +34,8 @@ export type CareerTimelineItem = {
   title: string;
   summary?: string;
   module: "profile" | "work" | "projects" | "skills" | "goals";
+  /** User entry order (earlier = smaller). Same-`at` items render L→R by this. */
+  entryOrder: number;
 };
 
 export function parseDirectionTags(raw: unknown): string[] {

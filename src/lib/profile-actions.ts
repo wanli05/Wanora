@@ -269,7 +269,10 @@ export async function saveFullProfileAction(
     const db = getDb();
     await syncEducationFromForm(db, userId, formData);
     // 職歴は Work History（career_employers）が唯一編集源。履歴書フォームでは同期しない。
-    await syncLicensesFromForm(db, userId, formData);
+    // 免許・資格の編集源はスキルモジュール；履歴書フォームは omitLicenses でスキップ。
+    if (formData.get("omitLicenses") !== "1") {
+      await syncLicensesFromForm(db, userId, formData);
+    }
     revalidatePath("/profile", "layout");
     revalidatePath("/profile");
     revalidatePath("/profile/education");
@@ -390,6 +393,8 @@ export async function saveLicenseAction(formData: FormData): Promise<void> {
     } else {
       await createLicense(db, userId, input);
     }
+    revalidatePath("/profile", "layout");
+    revalidatePath("/profile");
     revalidatePath("/profile/licenses");
   } catch {
     /* invalid form */
@@ -400,6 +405,8 @@ export async function deleteLicenseAction(id: string): Promise<void> {
   const userId = await requireUserId();
   if (!userId) return;
   await deleteLicense(getDb(), userId, id);
+  revalidatePath("/profile", "layout");
+  revalidatePath("/profile");
   revalidatePath("/profile/licenses");
 }
 
