@@ -161,39 +161,31 @@ function RirekishoSheet({
         </tbody>
       </table>
 
-      <table className="mc-biko-split">
+      <table className="mc-biko-wrap">
         <tbody>
           <tr>
-            <td className="mc-lab">備考</td>
-            <td className="mc-biko-body">
+            <td className="mc-biko-left" rowSpan={3}>
+              <div className="mc-biko-title">備考：</div>
               {nl(snapshot.residenceLines.join("\n"))}
             </td>
-            <td className="mc-biko-side">
-              <table>
-                <tbody>
-                  <tr>
-                    <td className="mc-lab">通勤時間</td>
-                    <td>
-                      {snapshot.commuteLine
-                        ? `（ドアからドアまで）${snapshot.commuteLine}`
-                        : "（ドアからドアまで）"}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="mc-lab">扶養家族数（配偶者を除く）</td>
-                    <td>{snapshot.dependentsLine}</td>
-                  </tr>
-                  <tr>
-                    <td className="mc-lab">配偶者</td>
-                    <td>{snapshot.hasSpouseLabel}</td>
-                  </tr>
-                  <tr>
-                    <td className="mc-lab">配偶者の扶養義務</td>
-                    <td>{snapshot.spouseDependentLabel}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <td className="mc-biko-lab">通勤時間</td>
+            <td className="mc-biko-val-wide" colSpan={3}>
+              {snapshot.commuteLine || "約　　時間　　分"}
             </td>
+          </tr>
+          <tr>
+            <td className="mc-biko-lab-wide" colSpan={2}>
+              扶養家族数（配偶者を除く）
+            </td>
+            <td className="mc-biko-val-wide" colSpan={2}>
+              {snapshot.dependentsLine}
+            </td>
+          </tr>
+          <tr>
+            <td className="mc-biko-lab">配偶者</td>
+            <td className="mc-biko-val">{snapshot.hasSpouseLabel}</td>
+            <td className="mc-biko-lab-wide">配偶者の扶養義務</td>
+            <td className="mc-biko-val">{snapshot.spouseDependentLabel}</td>
           </tr>
         </tbody>
       </table>

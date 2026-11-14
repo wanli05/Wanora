@@ -110,12 +110,14 @@ describe("buildExportHtml", () => {
     // WN-58: commute/family sit beside 備考 (not in address block).
     const nearestIdx = html.indexOf("最寄り");
     const licensesIdx = html.indexOf("免許・資格");
-    const bikoIdx = html.indexOf(">備考<");
+    const bikoIdx = html.indexOf("備考：");
     const commuteIdx = html.indexOf("通勤時間");
     expect(nearestIdx).toBeGreaterThan(-1);
     expect(licensesIdx).toBeGreaterThan(nearestIdx);
     expect(bikoIdx).toBeGreaterThan(licensesIdx);
-    expect(commuteIdx).toBeGreaterThan(bikoIdx);
+    expect(commuteIdx).toBeGreaterThan(licensesIdx);
+    expect(html).toContain('class="biko-wrap"');
+    expect(html).toContain('rowspan="3"');
   });
 
   it("embeds 証明写真 JPEG in the rirekisho photo frame", () => {

@@ -741,34 +741,40 @@ body {
   font-weight: 700;
   color: #000;
 }
-.mc-biko-split > tbody > tr > td {
+.mc-biko-wrap {
+  table-layout: fixed;
+}
+.mc-biko-wrap td {
+  vertical-align: middle;
+  text-align: center;
+  border: 1px solid #000;
+  padding: 6px 5px;
+}
+.mc-biko-left {
+  width: 52%;
+  text-align: left;
   vertical-align: top;
+  padding: 8px 10px;
 }
-.mc-biko-body {
-  width: 38%;
+.mc-biko-title {
+  font-weight: 700;
+  margin-bottom: 4px;
 }
-.mc-biko-side {
-  width: 44%;
-  padding: 0;
+.mc-biko-lab {
+  font-size: 10.5px;
+  width: 18%;
 }
-.mc-biko-side > table {
-  margin: 0;
-  width: 100%;
+.mc-biko-val {
+  font-size: 12px;
+  width: 14%;
 }
-.mc-biko-side > table td {
-  border-top: 0;
-  border-bottom: 1px solid #000;
-  border-left: 0;
-  border-right: 1px solid #000;
+.mc-biko-lab-wide {
+  font-size: 10.5px;
+  width: 22%;
 }
-.mc-biko-side > table tr:last-child td {
-  border-bottom: 0;
-}
-.mc-biko-side > table td:last-child {
-  border-right: 0;
-}
-.mc-biko-side > table td.mc-lab {
-  width: 48%;
+.mc-biko-val-wide {
+  font-size: 12px;
+  width: 26%;
 }
 .mc-c0 {
   width: 14%;

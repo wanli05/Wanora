@@ -44,13 +44,14 @@ h2 { margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: #000; border-
 .subh { font-weight: 700; margin-top: 4px; }
 a { color: #0a4d8c; word-break: break-all; }
 ul { margin: 0 0 8px; padding-left: 1.2em; }
-.biko-body { width: 38%; }
-.biko-side { width: 44%; padding: 0; }
-.biko-side table { margin: 0; width: 100%; }
-.biko-side td { border-top: 0; border-left: 0; }
-.biko-side tr:last-child td { border-bottom: 0; }
-.biko-side td:last-child { border-right: 0; }
-.biko-side .lab { width: 48%; }
+.biko-wrap { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
+.biko-wrap td { border: 1px solid #000; padding: 6px 5px; vertical-align: middle; text-align: center; }
+.biko-left { width: 52%; text-align: left; vertical-align: top; padding: 8px 10px; }
+.biko-title { font-weight: 700; margin-bottom: 4px; }
+.biko-lab { font-size: 10.5px; width: 18%; }
+.biko-val { font-size: 12px; width: 14%; }
+.biko-lab-wide { font-size: 10.5px; width: 22%; }
+.biko-val-wide { font-size: 12px; width: 26%; }
 `;
 
 function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
@@ -76,9 +77,7 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
   const photoBlock = dataUrl
     ? `<div class="photo"><img src="${dataUrl}" alt="証明写真"/></div>`
     : `<div class="photo">写真</div>`;
-  const commuteCell = s.commuteLine
-    ? `（ドアからドアまで）${esc(s.commuteLine)}`
-    : "（ドアからドアまで）";
+  const commuteCell = s.commuteLine || "約　　時間　　分";
 
   return `
   <article class="sheet">
@@ -112,18 +111,24 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
       <tr><th class="ym">年</th><th class="mm">月</th><th>免許・資格</th></tr>
       ${licenses}
     </table>
-    <table>
+    <table class="biko-wrap">
       <tr>
-        <td class="lab">備考</td>
-        <td class="biko-body">${nl(s.residenceLines.join("\n"))}</td>
-        <td class="biko-side">
-          <table>
-            <tr><td class="lab">通勤時間</td><td>${commuteCell}</td></tr>
-            <tr><td class="lab">扶養家族数（配偶者を除く）</td><td>${esc(s.dependentsLine)}</td></tr>
-            <tr><td class="lab">配偶者</td><td>${esc(s.hasSpouseLabel)}</td></tr>
-            <tr><td class="lab">配偶者の扶養義務</td><td>${esc(s.spouseDependentLabel)}</td></tr>
-          </table>
+        <td class="biko-left" rowspan="3">
+          <div class="biko-title">備考：</div>
+          ${nl(s.residenceLines.join("\n"))}
         </td>
+        <td class="biko-lab">通勤時間</td>
+        <td class="biko-val-wide" colspan="3">${esc(commuteCell)}</td>
+      </tr>
+      <tr>
+        <td class="biko-lab-wide" colspan="2">扶養家族数（配偶者を除く）</td>
+        <td class="biko-val-wide" colspan="2">${esc(s.dependentsLine)}</td>
+      </tr>
+      <tr>
+        <td class="biko-lab">配偶者</td>
+        <td class="biko-val">${esc(s.hasSpouseLabel)}</td>
+        <td class="biko-lab-wide">配偶者の扶養義務</td>
+        <td class="biko-val">${esc(s.spouseDependentLabel)}</td>
       </tr>
     </table>
   </article>`;

@@ -244,20 +244,13 @@ function buildRirekisho(
 
   const wBirth = Math.round(wRest * 0.72);
   const wGender = wRest - wBirth;
+  const wBikoLeft = Math.round(CONTENT * 0.52);
   const wBikoLab = Math.round(CONTENT * 0.12);
-  const wBikoBody = Math.round(CONTENT * 0.38);
-  const wBikoSide = CONTENT - wBikoLab - wBikoBody;
-  const wSideLab = Math.round(wBikoSide * 0.48);
-  const wSideVal = wBikoSide - wSideLab;
-  const commuteText = snapshot.commuteLine
-    ? `（ドアからドアまで）${snapshot.commuteLine}`
-    : "（ドアからドアまで）";
-  const sideFields = [
-    ["通勤時間", commuteText],
-    ["扶養家族数（配偶者を除く）", snapshot.dependentsLine],
-    ["配偶者", snapshot.hasSpouseLabel],
-    ["配偶者の扶養義務", snapshot.spouseDependentLabel],
-  ] as const;
+  const wBikoVal = Math.round(CONTENT * 0.12);
+  const wBikoLabWide = Math.round(CONTENT * 0.14);
+  const wBikoValWide =
+    CONTENT - wBikoLeft - wBikoLab - wBikoVal - wBikoLabWide;
+  const commuteText = snapshot.commuteLine || "約　　時間　　分";
 
   return new Document({
     sections: [
@@ -445,40 +438,84 @@ function buildRirekisho(
           new Paragraph({ children: [] }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [wBikoLab, wBikoBody, wBikoSide],
+            columnWidths: [
+              wBikoLeft,
+              wBikoLab,
+              wBikoVal,
+              wBikoLabWide,
+              wBikoValWide,
+            ],
             rows: [
               new TableRow({
                 children: [
-                  cell("備考", {
-                    width: wBikoLab,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.residenceLines.join("\n"), {
-                    width: wBikoBody,
-                  }),
                   new TableCell({
                     borders,
-                    width: { size: wBikoSide, type: WidthType.DXA },
+                    width: { size: wBikoLeft, type: WidthType.DXA },
+                    rowSpan: 3,
                     children: [
-                      new Table({
-                        width: { size: wBikoSide, type: WidthType.DXA },
-                        columnWidths: [wSideLab, wSideVal],
-                        rows: sideFields.map(
-                          ([label, value]) =>
-                            new TableRow({
-                              children: [
-                                cell(label, {
-                                  width: wSideLab,
-                                  bold: true,
-                                  shade: "F3F3F3",
-                                }),
-                                cell(value, { width: wSideVal }),
-                              ],
-                            }),
-                        ),
+                      new Paragraph({
+                        children: [
+                          new TextRun({
+                            text: "備考：",
+                            bold: true,
+                            size: 18,
+                            font: { eastAsia: "游明朝", ascii: "Times New Roman" },
+                          }),
+                        ],
                       }),
+                      ...snapshot.residenceLines.map(
+                        (line) =>
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: line,
+                                size: 18,
+                                font: {
+                                  eastAsia: "游明朝",
+                                  ascii: "Times New Roman",
+                                },
+                              }),
+                            ],
+                          }),
+                      ),
                     ],
+                  }),
+                  cell("通勤時間", { width: wBikoLab, center: true }),
+                  cell(commuteText, {
+                    width: wBikoVal + wBikoLabWide + wBikoValWide,
+                    colspan: 3,
+                    center: true,
+                  }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("扶養家族数（配偶者を除く）", {
+                    width: wBikoLab + wBikoVal,
+                    colspan: 2,
+                    center: true,
+                  }),
+                  cell(snapshot.dependentsLine, {
+                    width: wBikoLabWide + wBikoValWide,
+                    colspan: 2,
+                    center: true,
+                  }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("配偶者", { width: wBikoLab, center: true }),
+                  cell(snapshot.hasSpouseLabel, {
+                    width: wBikoVal,
+                    center: true,
+                  }),
+                  cell("配偶者の扶養義務", {
+                    width: wBikoLabWide,
+                    center: true,
+                  }),
+                  cell(snapshot.spouseDependentLabel, {
+                    width: wBikoValWide,
+                    center: true,
                   }),
                 ],
               }),
