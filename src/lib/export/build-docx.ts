@@ -244,17 +244,20 @@ function buildRirekisho(
 
   const wBirth = Math.round(wRest * 0.72);
   const wGender = wRest - wBirth;
-  const wFam = [
-    Math.round(CONTENT * 0.22),
-    Math.round(CONTENT * 0.1),
-    Math.round(CONTENT * 0.12),
-    Math.round(CONTENT * 0.1),
-    Math.round(CONTENT * 0.22),
-  ];
-  wFam.push(CONTENT - wFam.reduce((a, b) => a + b, 0));
+  const wBikoLab = Math.round(CONTENT * 0.12);
+  const wBikoBody = Math.round(CONTENT * 0.38);
+  const wBikoSide = CONTENT - wBikoLab - wBikoBody;
+  const wSideLab = Math.round(wBikoSide * 0.48);
+  const wSideVal = wBikoSide - wSideLab;
   const commuteText = snapshot.commuteLine
     ? `（ドアからドアまで）${snapshot.commuteLine}`
     : "（ドアからドアまで）";
+  const sideFields = [
+    ["通勤時間", commuteText],
+    ["扶養家族数（配偶者を除く）", snapshot.dependentsLine],
+    ["配偶者", snapshot.hasSpouseLabel],
+    ["配偶者の扶養義務", snapshot.spouseDependentLabel],
+  ] as const;
 
   return new Document({
     sections: [
@@ -393,45 +396,6 @@ function buildRirekisho(
                   cell(snapshot.nearestStation, { width: wRestFull }),
                 ],
               }),
-              new TableRow({
-                children: [
-                  cell("通勤時間", {
-                    width: wLabFull,
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(commuteText, { width: wRestFull }),
-                ],
-              }),
-            ],
-          }),
-          new Paragraph({ children: [] }),
-          new Table({
-            width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: wFam,
-            rows: [
-              new TableRow({
-                children: [
-                  cell("扶養家族数（配偶者を除く）", {
-                    width: wFam[0],
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.dependentsLine, { width: wFam[1] }),
-                  cell("配偶者", {
-                    width: wFam[2],
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.hasSpouseLabel, { width: wFam[3] }),
-                  cell("配偶者の扶養義務", {
-                    width: wFam[4],
-                    bold: true,
-                    shade: "F3F3F3",
-                  }),
-                  cell(snapshot.spouseDependentLabel, { width: wFam[5] }),
-                ],
-              }),
             ],
           }),
           new Paragraph({ children: [] }),
@@ -481,17 +445,40 @@ function buildRirekisho(
           new Paragraph({ children: [] }),
           new Table({
             width: { size: CONTENT, type: WidthType.DXA },
-            columnWidths: [wLabFull, wRestFull],
+            columnWidths: [wBikoLab, wBikoBody, wBikoSide],
             rows: [
               new TableRow({
                 children: [
                   cell("備考", {
-                    width: wLabFull,
+                    width: wBikoLab,
                     bold: true,
                     shade: "F3F3F3",
                   }),
                   cell(snapshot.residenceLines.join("\n"), {
-                    width: wRestFull,
+                    width: wBikoBody,
+                  }),
+                  new TableCell({
+                    borders,
+                    width: { size: wBikoSide, type: WidthType.DXA },
+                    children: [
+                      new Table({
+                        width: { size: wBikoSide, type: WidthType.DXA },
+                        columnWidths: [wSideLab, wSideVal],
+                        rows: sideFields.map(
+                          ([label, value]) =>
+                            new TableRow({
+                              children: [
+                                cell(label, {
+                                  width: wSideLab,
+                                  bold: true,
+                                  shade: "F3F3F3",
+                                }),
+                                cell(value, { width: wSideVal }),
+                              ],
+                            }),
+                        ),
+                      }),
+                    ],
                   }),
                 ],
               }),

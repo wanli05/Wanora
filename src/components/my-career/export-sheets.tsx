@@ -90,27 +90,6 @@ function RirekishoSheet({
             <td className="mc-lab">最寄り</td>
             <td colSpan={3}>{snapshot.nearestStation}</td>
           </tr>
-          <tr>
-            <td className="mc-lab">通勤時間</td>
-            <td colSpan={3}>
-              {snapshot.commuteLine
-                ? `（ドアからドアまで）${snapshot.commuteLine}`
-                : "（ドアからドアまで）"}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <table>
-        <tbody>
-          <tr>
-            <td className="mc-lab">扶養家族数（配偶者を除く）</td>
-            <td>{snapshot.dependentsLine}</td>
-            <td className="mc-lab">配偶者</td>
-            <td>{snapshot.hasSpouseLabel}</td>
-            <td className="mc-lab">配偶者の扶養義務</td>
-            <td>{snapshot.spouseDependentLabel}</td>
-          </tr>
         </tbody>
       </table>
 
@@ -182,11 +161,39 @@ function RirekishoSheet({
         </tbody>
       </table>
 
-      <table>
+      <table className="mc-biko-split">
         <tbody>
           <tr>
             <td className="mc-lab">備考</td>
-            <td>{nl(snapshot.residenceLines.join("\n"))}</td>
+            <td className="mc-biko-body">
+              {nl(snapshot.residenceLines.join("\n"))}
+            </td>
+            <td className="mc-biko-side">
+              <table>
+                <tbody>
+                  <tr>
+                    <td className="mc-lab">通勤時間</td>
+                    <td>
+                      {snapshot.commuteLine
+                        ? `（ドアからドアまで）${snapshot.commuteLine}`
+                        : "（ドアからドアまで）"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="mc-lab">扶養家族数（配偶者を除く）</td>
+                    <td>{snapshot.dependentsLine}</td>
+                  </tr>
+                  <tr>
+                    <td className="mc-lab">配偶者</td>
+                    <td>{snapshot.hasSpouseLabel}</td>
+                  </tr>
+                  <tr>
+                    <td className="mc-lab">配偶者の扶養義務</td>
+                    <td>{snapshot.spouseDependentLabel}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
           </tr>
         </tbody>
       </table>

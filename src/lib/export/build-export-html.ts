@@ -28,22 +28,29 @@ const CSS = `
 body { margin: 0; font-family: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif; font-size: 11.5px; line-height: 1.45; color: #111; }
 .sheet { width: 100%; }
 .rk-head { display: grid; grid-template-columns: 1fr 28mm; gap: 8px; align-items: start; margin-bottom: 8px; }
-h1 { margin: 0 0 6px; text-align: center; font-size: 22px; letter-spacing: 0.45em; font-weight: 600; }
-.meta { text-align: right; margin: 0 0 8px; font-size: 12px; }
+h1 { margin: 0 0 6px; text-align: center; font-size: 22px; letter-spacing: 0.45em; font-weight: 600; color: #000; }
+.meta { text-align: right; margin: 0 0 8px; font-size: 12px; color: #000; }
 .photo { width: 28mm; height: 36mm; border: 1px solid #000; display: grid; place-items: center; font-size: 10px; color: #888; background: #fafafa; overflow: hidden; }
 .photo img { width: 100%; height: 100%; object-fit: cover; }
 table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-th, td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+th, td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; color: #000; }
 .lab { width: 18%; background: #f3f3f3; font-weight: 600; white-space: nowrap; }
 .ym { width: 12mm; text-align: center; }
 .mm { width: 10mm; text-align: center; }
 .center { text-align: center; font-weight: 600; letter-spacing: 0.4em; }
 .right { text-align: right; }
-h2 { margin: 14px 0 6px; font-size: 13px; font-weight: 700; border-bottom: 1px solid #000; padding-bottom: 2px; }
+h2 { margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: #000; border-bottom: 1px solid #000; padding-bottom: 2px; }
 .company { font-weight: 700; margin: 8px 0 2px; }
 .subh { font-weight: 700; margin-top: 4px; }
 a { color: #0a4d8c; word-break: break-all; }
 ul { margin: 0 0 8px; padding-left: 1.2em; }
+.biko-body { width: 38%; }
+.biko-side { width: 44%; padding: 0; }
+.biko-side table { margin: 0; width: 100%; }
+.biko-side td { border-top: 0; border-left: 0; }
+.biko-side tr:last-child td { border-bottom: 0; }
+.biko-side td:last-child { border-right: 0; }
+.biko-side .lab { width: 48%; }
 `;
 
 function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
@@ -91,14 +98,6 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
       <tr><td class="lab">電話</td><td colspan="3">${esc(s.phone)}</td></tr>
       <tr><td class="lab">E-mail</td><td colspan="3">${esc(s.email)}</td></tr>
       <tr><td class="lab">最寄り</td><td colspan="3">${esc(s.nearestStation)}</td></tr>
-      <tr><td class="lab">通勤時間</td><td colspan="3">${commuteCell}</td></tr>
-    </table>
-    <table>
-      <tr>
-        <td class="lab">扶養家族数（配偶者を除く）</td><td>${esc(s.dependentsLine)}</td>
-        <td class="lab">配偶者</td><td>${esc(s.hasSpouseLabel)}</td>
-        <td class="lab">配偶者の扶養義務</td><td>${esc(s.spouseDependentLabel)}</td>
-      </tr>
     </table>
     <table>
       <tr><th class="ym">年</th><th class="mm">月</th><th>学歴・職歴</th></tr>
@@ -114,7 +113,18 @@ function rirekishoHtml(s: ExportSnapshot, photoJpeg?: Buffer | null): string {
       ${licenses}
     </table>
     <table>
-      <tr><td class="lab">備考</td><td>${nl(s.residenceLines.join("\n"))}</td></tr>
+      <tr>
+        <td class="lab">備考</td>
+        <td class="biko-body">${nl(s.residenceLines.join("\n"))}</td>
+        <td class="biko-side">
+          <table>
+            <tr><td class="lab">通勤時間</td><td>${commuteCell}</td></tr>
+            <tr><td class="lab">扶養家族数（配偶者を除く）</td><td>${esc(s.dependentsLine)}</td></tr>
+            <tr><td class="lab">配偶者</td><td>${esc(s.hasSpouseLabel)}</td></tr>
+            <tr><td class="lab">配偶者の扶養義務</td><td>${esc(s.spouseDependentLabel)}</td></tr>
+          </table>
+        </td>
+      </tr>
     </table>
   </article>`;
 }
@@ -167,7 +177,7 @@ function shokumuHtml(s: ExportSnapshot): string {
 
   return `
   <article class="sheet">
-    <h1 style="letter-spacing:0.4em;font-size:20px">職　務　経　歴　書</h1>
+    <h1 style="letter-spacing:0.4em;font-size:20px;color:#000">職　務　経　歴　書</h1>
     <p class="meta">${esc(s.asOfShokumu)}</p>
     <p class="meta">氏名　　${esc(s.fullName)}</p>
     <h2>■職務経歴</h2>

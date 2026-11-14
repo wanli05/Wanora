@@ -716,17 +716,20 @@ body {
   font-size: 20px;
   letter-spacing: 0.4em;
   font-weight: 600;
+  color: #000;
 }
 .mc-sk .mc-meta {
   text-align: right;
   margin: 0 0 2px;
   font-size: 12px;
+  color: #000;
 }
 .mc-sk h3 {
   margin: 14px 0 6px;
   font-size: 13px;
   font-weight: 700;
-  border-bottom: 1px solid #222;
+  color: #000;
+  border-bottom: 1px solid #000;
   padding-bottom: 2px;
 }
 .mc-sk ul {
@@ -736,6 +739,36 @@ body {
 .mc-sk th {
   background: #f0f0f0;
   font-weight: 700;
+  color: #000;
+}
+.mc-biko-split > tbody > tr > td {
+  vertical-align: top;
+}
+.mc-biko-body {
+  width: 38%;
+}
+.mc-biko-side {
+  width: 44%;
+  padding: 0;
+}
+.mc-biko-side > table {
+  margin: 0;
+  width: 100%;
+}
+.mc-biko-side > table td {
+  border-top: 0;
+  border-bottom: 1px solid #000;
+  border-left: 0;
+  border-right: 1px solid #000;
+}
+.mc-biko-side > table tr:last-child td {
+  border-bottom: 0;
+}
+.mc-biko-side > table td:last-child {
+  border-right: 0;
+}
+.mc-biko-side > table td.mc-lab {
+  width: 48%;
 }
 .mc-c0 {
   width: 14%;
