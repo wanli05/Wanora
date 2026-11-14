@@ -216,7 +216,10 @@
   "Account": {
     "signIn": "登录",
     "signUp": "注册",
-    "signOut": "退出登录"
+    "signOut": "退出登录",
+    "unnamed": "未设置",
+    "photoAlt": "履歴書证明写真",
+    "avatarPlaceholder": "・"
   },
   "Auth": {
     "name": "姓名",

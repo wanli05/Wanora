@@ -216,7 +216,10 @@
   "Account": {
     "signIn": "ログイン",
     "signUp": "新規登録",
-    "signOut": "ログアウト"
+    "signOut": "ログアウト",
+    "unnamed": "未設定",
+    "photoAlt": "履歴書の証明写真",
+    "avatarPlaceholder": "・"
   },
   "Auth": {
     "name": "氏名",

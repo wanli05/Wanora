@@ -216,7 +216,10 @@
   "Account": {
     "signIn": "Sign in",
     "signUp": "Create account",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "unnamed": "Name unset",
+    "photoAlt": "Rirekisho ID photo",
+    "avatarPlaceholder": "・"
   },
   "Auth": {
     "name": "Name",
