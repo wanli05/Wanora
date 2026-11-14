@@ -50,6 +50,34 @@
       "when": 1794500195133,
       "tag": "0006_merge_notes_and_feedback_structure",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794506486044,
+      "tag": "0007_my_career_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794586724137,
+      "tag": "0008_profile_nationality",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794592990764,
+      "tag": "0009_feedback_qa_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794672254036,
+      "tag": "0010_profile_rirekisho_fields",
+      "breakpoints": true
     }
   ]
 }

@@ -18,5 +18,9 @@ async function HomeContent() {
   const user = await getSessionUser(await headers());
   if (!user) return <Landing />;
   const board = await loadBoard(getDb(), user.id);
-  return <ProgressBoard initial={board} />;
+  return (
+    <main className="mx-auto flex w-full flex-1 flex-col px-3 py-4 sm:px-5">
+      <ProgressBoard initial={board} />
+    </main>
+  );
 }

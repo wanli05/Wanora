@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
   type FormEvent,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
@@ -24,6 +25,12 @@ import {
 } from "@/lib/progress/stages";
 import { defaultFreeSlots, type DraftSlot } from "@/lib/progress/slots";
 import {
+  appTaskFlags,
+  countTaskFocus,
+  feedbackPendingAlert,
+  type TaskFocus,
+} from "@/lib/progress/task-focus";
+import {
   endOneHourAfter,
   formatTokyoShort,
   fromTokyoInputValue,
@@ -31,11 +38,13 @@ import {
   tokyoNowParts,
   tokyoTodayKey,
 } from "@/lib/progress/tokyo";
+import type { BoardFeedbackQaItem } from "@/lib/progress/dto";
 import { MonthCalendar } from "./month-calendar";
 import { SlotGrid } from "./slot-grid";
 
 type View = "kanban" | "list";
 type Filter = "in_progress" | "closed" | "all";
+type EditSection = "basic" | "company" | "job" | "history";
 type TBoard = ReturnType<typeof useTranslations<"Board">>;
 type FeedbackTarget = {
   appId: string;
@@ -96,6 +105,11 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const nowParts = tokyoNowParts(new Date(nowMs));
   const [calYear, setCalYear] = useState(nowParts.year);
   const [calMonth, setCalMonth] = useState(nowParts.month);
+  const [menuAppId, setMenuAppId] = useState<string | null>(null);
+  const [passConfirm, setPassConfirm] = useState<BoardApplication | null>(null);
+  const [prepApp, setPrepApp] = useState<BoardApplication | null>(null);
+  const [taskFocus, setTaskFocus] = useState<TaskFocus | null>(null);
+  const [editSection, setEditSection] = useState<EditSection>("basic");
 
   function closePagePanels() {
     setCalendarOpen(false);
@@ -129,10 +143,21 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closePagePanels();
+        setMenuAppId(null);
+        setPassConfirm(null);
+        setPrepApp(null);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    function onDocClick() {
+      setMenuAppId(null);
+    }
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
   }, []);
 
   const platformLabel = (code: string | null, name: string | null) =>
@@ -151,25 +176,14 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     return true;
   });
 
-  const upcoming = useMemo(() => {
-    return apps
-      .filter((app) => app.interview && new Date(app.interview.start).getTime() > nowMs)
-      .sort(
-        (a, b) =>
-          new Date(a.interview!.start).getTime() -
-          new Date(b.interview!.start).getTime(),
-      )[0];
-  }, [apps, nowMs]);
-
-  const nextDeadline = visible
-    .flatMap((app) => app.stages.map((stage) => stage.deadlineAt))
-    .filter((value): value is string => Boolean(value))
-    .sort()[0];
-
-  const pendingSlots = apps.filter(
-    (app) => app.proposal?.status === "sent" && !isClosed(app.outcome, app.offerDecision),
-  ).length;
-  const conflictCount = visible.filter((app) => app.conflict).length;
+  const taskCounts = useMemo(
+    () => countTaskFocus(apps, nowMs),
+    [apps, nowMs],
+  );
+  const alertApp = useMemo(
+    () => feedbackPendingAlert(apps, nowMs),
+    [apps, nowMs],
+  );
   const inProgressExists = apps.some((app) => !isClosed(app.outcome, app.offerDecision));
   const showClosedEmpty =
     visible.length === 0 && filter === "in_progress" && inProgressExists === false && apps.length > 0;
@@ -333,16 +347,18 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     );
   }
 
-  async function onSaveFeedback(event: FormEvent<HTMLFormElement>) {
+  async function onSaveFeedback(
+    event: FormEvent<HTMLFormElement>,
+    qaItems: BoardFeedbackQaItem[],
+  ) {
     event.preventDefault();
     if (!feedbackFor) return;
     const form = new FormData(event.currentTarget);
     const body = String(form.get("body") || "").trim() || null;
-    const question = String(form.get("question") || "").trim() || null;
-    const ownAnswer = String(form.get("ownAnswer") || "").trim() || null;
     const resultText = String(form.get("resultText") || "").trim() || null;
     const reflection = String(form.get("reflection") || "").trim() || null;
-    if (!body && !question && !ownAnswer && !resultText && !reflection) {
+    const hasQa = qaItems.some((item) => item.question || item.answer);
+    if (!body && !resultText && !reflection && !hasQa) {
       setConflictMsg(t("feedbackBodyRequired"));
       return;
     }
@@ -358,8 +374,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
               : {}),
             source: String(form.get("source")),
             body,
-            question,
-            ownAnswer,
+            qaItems,
             resultText,
             reflection,
             recordedOn: String(form.get("recordedOn") || tokyoTodayKey()),
@@ -486,28 +501,33 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="relative z-20 flex flex-wrap items-start justify-between gap-3 bg-[var(--background)]">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="pb-shell flex w-full flex-1 flex-col">
+      <div
+        className="pb-page-toolbar flex w-full flex-nowrap items-center justify-between"
+        data-testid="page-toolbar"
+      >
+        <h1 className="pb-page-title">{t("title")}</h1>
+        <div className="pb-page-actions ml-auto flex shrink-0 items-center gap-2">
           <button
             type="button"
             data-testid="calendar-toggle"
             aria-label={t("calendar")}
+            title={t("calendar")}
             aria-expanded={calendarOpen}
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded border border-zinc-300 dark:border-zinc-700"
+            aria-pressed={calendarOpen}
+            className="pb-icon-cal"
+            data-active={calendarOpen ? "true" : "false"}
             onClick={openCalendar}
           >
-            <CalendarIcon />
+            <CalendarGlyph />
             {monthCount > 0 ? (
-              <span className="absolute -right-1 -top-1 rounded-full bg-zinc-900 px-1 text-[10px] text-white dark:bg-zinc-100 dark:text-zinc-900">
-                {monthCount}
-              </span>
+              <span className="pb-icon-cal-badge">{monthCount}</span>
             ) : null}
           </button>
           <button
             type="button"
-            className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+            className="pb-btn pb-btn-sm"
+            data-testid="add-application"
             onClick={() => setAddingApp(true)}
           >
             {t("addApplication")}
@@ -515,18 +535,67 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         </div>
       </div>
 
+      <div className="pb-main">
+      {calendarOpen ? (
+        <section
+          className="pb-board-slot pb-cal-panel"
+          data-testid="calendar-panel"
+          aria-label={t("calendar")}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2>{t("calendarTitle", { year: calYear, month: calMonth })}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                onClick={() => {
+                  const next = calMonth === 1 ? 12 : calMonth - 1;
+                  setCalMonth(next);
+                  if (calMonth === 1) setCalYear(calYear - 1);
+                }}
+              >
+                {t("calendarPrev")}
+              </button>
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                onClick={() => {
+                  const next = calMonth === 12 ? 1 : calMonth + 1;
+                  setCalMonth(next);
+                  if (calMonth === 12) setCalYear(calYear + 1);
+                }}
+              >
+                {t("calendarNext")}
+              </button>
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                onClick={() => setCalendarOpen(false)}
+              >
+                {t("calendarClose")}
+              </button>
+            </div>
+          </div>
+          <MonthCalendar
+            occupancy={board.occupancy}
+            year={calYear}
+            monthIndex={calMonth - 1}
+          />
+        </section>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <div className="flex rounded border border-zinc-300 dark:border-zinc-700">
+        <div className="flex overflow-hidden rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)]">
           <button
             type="button"
-            className={`px-3 py-1 ${view === "kanban" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`}
+            className={`px-3 py-1 ${view === "kanban" ? "bg-[var(--pb-teal-soft)] font-semibold text-[var(--pb-teal-deep)]" : ""}`}
             onClick={() => setView("kanban")}
           >
             {t("viewKanban")}
           </button>
           <button
             type="button"
-            className={`px-3 py-1 ${view === "list" ? "bg-zinc-200 dark:bg-zinc-800" : ""}`}
+            className={`px-3 py-1 ${view === "list" ? "bg-[var(--pb-teal-soft)] font-semibold text-[var(--pb-teal-deep)]" : ""}`}
             onClick={() => setView("list")}
           >
             {t("viewList")}
@@ -537,10 +606,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             key={key}
             type="button"
             onClick={() => setFilter(key)}
-            className={`rounded px-3 py-1 ${
+            className={`rounded-lg px-3 py-1 ${
               filter === key
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "border border-zinc-300 dark:border-zinc-700"
+                ? "bg-[var(--pb-teal-deep)] text-white"
+                : "border border-[var(--pb-line)] bg-[var(--pb-card)]"
             }`}
           >
             {t(
@@ -553,12 +622,12 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           </button>
         ))}
         <label className="flex items-center gap-1">
-          <span className="text-zinc-500">{t("platform")}</span>
+          <span className="text-[var(--pb-muted)]">{t("platform")}</span>
           <select
             aria-label={t("platform")}
             value={platform}
             onChange={(event) => setPlatform(event.target.value)}
-            className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+            className="rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] px-2 py-1"
           >
             <option value="all">{t("allPlatforms")}</option>
             {board.platforms.map((item) => (
@@ -569,12 +638,12 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           </select>
         </label>
         <label className="flex items-center gap-1">
-          <span className="text-zinc-500">{t("recruiter")}</span>
+          <span className="text-[var(--pb-muted)]">{t("recruiter")}</span>
           <select
             aria-label={t("recruiter")}
             value={recruiter}
             onChange={(event) => setRecruiter(event.target.value)}
-            className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+            className="rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] px-2 py-1"
           >
             <option value="all">{t("allRecruiters")}</option>
             {board.recruiters.map((item) => (
@@ -586,35 +655,62 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         </label>
       </div>
 
-      <div className="grid gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm md:grid-cols-4 dark:border-zinc-800 dark:bg-zinc-900/40">
-        <p>
-          <span className="text-zinc-500">{t("todayNextInterview")}</span>
-          {upcoming ? (
-            <span lang="ja">
-              {` ${upcoming.company} ${formatTokyoShort(upcoming.interview!.start)}`}
-            </span>
-          ) : (
-            <span>{` ${t("none")}`}</span>
-          )}
-        </p>
-        <p>
-          <span className="text-zinc-500">{t("todayPendingSlots")}</span>
-          <span>{` ${pendingSlots ? t("pendingSlotCount", { count: pendingSlots }) : t("none")}`}</span>
-        </p>
-        <p>
-          <span className="text-zinc-500">{t("todayNextDeadline")}</span>
-          <span>
-            {` ${nextDeadline ? formatTokyoShort(nextDeadline) : t("none")}`}
+      <section className="pb-task-bar" aria-label={t("title")} data-testid="task-bar">
+        <div className="pb-task-stats">
+          {(
+            [
+              ["interview", "taskInterview"],
+              ["waiting", "taskWaiting"],
+              ["overdue", "taskOverdue"],
+              ["overlap", "taskOverlap"],
+            ] as const
+          ).map(([key, labelKey]) => (
+            <button
+              key={key}
+              type="button"
+              className="pb-stat"
+              data-testid={`task-stat-${key}`}
+              data-active={taskFocus === key ? "true" : "false"}
+              onClick={() =>
+                setTaskFocus((current) => (current === key ? null : key))
+              }
+            >
+              <div className="pb-label">{t(labelKey)}</div>
+              <div
+                className="pb-num"
+                data-danger={key === "overdue" && taskCounts[key] > 0 ? "true" : "false"}
+              >
+                {taskCounts[key]}
+              </div>
+              <div className="pb-unit">{t("taskUnit")}</div>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="pb-task-alert"
+          data-testid="task-alert"
+          onClick={() => {
+            if (alertApp) {
+              setTaskFocus("interview");
+              setConflictMsg(null);
+              setEditingApp(alertApp);
+              setEditSection("history");
+            } else {
+              setTaskFocus("interview");
+            }
+          }}
+        >
+          <span className="pb-bang" aria-hidden="true">
+            {t("taskAlertBang")}
           </span>
-        </p>
-        {conflictCount > 0 ? (
-          <p className="font-medium text-red-700 dark:text-red-400">
-            {t("todayConflictsCount", { count: conflictCount })}
-          </p>
-        ) : (
-          <p className="text-zinc-500">{t("todayConflictsCount", { count: 0 })}</p>
-        )}
-      </div>
+          <span lang="ja">
+            {alertApp
+              ? t("taskAlertFeedback", { company: alertApp.company })
+              : t("taskAlertNone")}
+          </span>
+        </button>
+      </section>
 
       {conflictMsg && !interviewFor ? (
         <p role="alert" className="text-sm text-red-700">
@@ -630,7 +726,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           onRecruiter={() => setAddingRecruiter(true)}
         />
       ) : view === "kanban" ? (
-        <div className="flex min-h-[28rem] gap-3 overflow-x-auto pb-4">
+        <div data-testid="kanban-row" className="pb-board pb-board-slot w-full">
           {visibleBoardColumns(visible).map((kind) => {
             const cards = visible.filter((app) => app.currentStageKind === kind);
             const vacant = cards.length === 0;
@@ -639,38 +735,69 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                 key={kind}
                 data-testid={`column-${kind}`}
                 data-occupied={vacant ? "false" : "true"}
-                className={`flex shrink-0 flex-col rounded-xl border bg-zinc-50 p-2 dark:bg-zinc-900/30 ${
-                  vacant
-                    ? "w-36 border-zinc-200 opacity-60 dark:border-zinc-800"
-                    : "w-56 border-zinc-200 dark:border-zinc-800"
-                }`}
+                className="pb-col flex min-w-0 flex-1 flex-col"
               >
                 <header className="flex items-baseline justify-between px-1 py-2">
-                  <h2 className="text-sm font-medium">{t(columnKey(kind))}</h2>
-                  <span className="text-xs text-zinc-500">{cards.length}</span>
+                  <h2 className="text-sm font-bold text-[var(--pb-ink-soft)]">
+                    {t(columnKey(kind))}
+                  </h2>
+                  <span className="text-xs text-[var(--pb-muted)]">{cards.length}</span>
                 </header>
                 <div className="flex flex-col gap-2">
-                  {cards.map((app) => (
-                    <ApplicationCard
-                      key={app.id}
-                      app={app}
-                      platformLabel={platformLabel(app.platformCode, app.platformName)}
-                      t={t}
-                      onEdit={() => {
-                        setConflictMsg(null);
-                        setEditingApp(app);
-                      }}
-                      onPass={() => patchApp(app.id, { action: "pass" })}
-                      onReject={() => patchApp(app.id, { action: "reject" })}
-                      onWithdraw={() => patchApp(app.id, { action: "withdraw" })}
-                      onOffer={() => patchApp(app.id, { action: "offer" })}
-                      onAccept={() => patchApp(app.id, { action: "accept_offer" })}
-                      onDecline={() => patchApp(app.id, { action: "decline_offer" })}
-                      onUndo={() => patchApp(app.id, { action: "undo" })}
-                      onProposeSlots={() => openProposeSlots(app.id)}
-                      onConfirmSlot={(slotId) => onConfirmSlot(app.id, slotId)}
-                    />
-                  ))}
+                  {cards.map((app) => {
+                    const flags = appTaskFlags(app, nowMs);
+                    const pulse = Boolean(taskFocus && flags[taskFocus]);
+                    return (
+                      <ApplicationCard
+                        key={app.id}
+                        app={app}
+                        platformLabel={platformLabel(app.platformCode, app.platformName)}
+                        t={t}
+                        pulse={pulse}
+                        menuOpen={menuAppId === app.id}
+                        onToggleMenu={(event) => {
+                          event.stopPropagation();
+                          setMenuAppId((current) =>
+                            current === app.id ? null : app.id,
+                          );
+                        }}
+                        onEdit={() => {
+                          setConflictMsg(null);
+                          setMenuAppId(null);
+                          setEditSection("basic");
+                          setEditingApp(app);
+                        }}
+                        onPrep={() => {
+                          setMenuAppId(null);
+                          setPrepApp(app);
+                        }}
+                        onPass={() => {
+                          setMenuAppId(null);
+                          setPassConfirm(app);
+                        }}
+                        onReject={() => {
+                          setMenuAppId(null);
+                          void patchApp(app.id, { action: "reject" });
+                        }}
+                        onWithdraw={() => {
+                          setMenuAppId(null);
+                          void patchApp(app.id, { action: "withdraw" });
+                        }}
+                        onOffer={() => {
+                          setMenuAppId(null);
+                          void patchApp(app.id, { action: "offer" });
+                        }}
+                        onAccept={() => patchApp(app.id, { action: "accept_offer" })}
+                        onDecline={() => patchApp(app.id, { action: "decline_offer" })}
+                        onUndo={() => {
+                          setMenuAppId(null);
+                          void patchApp(app.id, { action: "undo" });
+                        }}
+                        onProposeSlots={() => openProposeSlots(app.id)}
+                        onConfirmSlot={(slotId) => onConfirmSlot(app.id, slotId)}
+                      />
+                    );
+                  })}
                 </div>
               </section>
             );
@@ -683,9 +810,12 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           platformLabel={(app) => platformLabel(app.platformCode, app.platformName)}
           onEdit={(app) => {
             setConflictMsg(null);
+            setEditSection("basic");
             setEditingApp(app);
           }}
         />
+      )}
+        </>
       )}
 
       {addingApp ? (
@@ -707,7 +837,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           headerAction={{
             label: t("deleteApplication"),
             onClick: onDeleteApplication,
-            className: "text-sm text-red-700 dark:text-red-400",
+            className: "text-sm text-[var(--pb-red)]",
             testId: "delete-application",
           }}
         >
@@ -717,6 +847,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             platformLabel={platformLabel}
             initial={editingApp}
             conflictMsg={conflictMsg}
+            editSection={editSection}
+            onEditSection={setEditSection}
             onSubmit={onEditApplication}
             onOpenFeedback={(interview, editing) =>
               openFeedback({
@@ -729,6 +861,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             onCancel={() => {
               setEditingApp(null);
               setConflictMsg(null);
+              setEditSection("basic");
             }}
           />
         </Modal>
@@ -765,62 +898,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             </div>
           </form>
         </Modal>
-      ) : null}
-
-      {calendarOpen ? (
-        <>
-          <button
-            type="button"
-            data-testid="calendar-backdrop"
-            aria-label={t("calendarClose")}
-            className="fixed inset-0 z-10 bg-black/30"
-            onClick={() => setCalendarOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("calendar")}
-            className="relative z-20 rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">
-                {t("calendarTitle", { year: calYear, month: calMonth })}
-              </h2>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700"
-                  onClick={() => {
-                    const next = calMonth === 1 ? 12 : calMonth - 1;
-                    setCalMonth(next);
-                    if (calMonth === 1) setCalYear(calYear - 1);
-                  }}
-                >
-                  {t("calendarPrev")}
-                </button>
-                <button
-                  type="button"
-                  className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700"
-                  onClick={() => {
-                    const next = calMonth === 12 ? 1 : calMonth + 1;
-                    setCalMonth(next);
-                    if (calMonth === 12) setCalYear(calYear + 1);
-                  }}
-                >
-                  {t("calendarNext")}
-                </button>
-                <button
-                  type="button"
-                  className="text-sm text-zinc-500"
-                  onClick={() => setCalendarOpen(false)}
-                >
-                  {t("calendarClose")}
-                </button>
-              </div>
-            </div>
-            <MonthCalendar occupancy={board.occupancy} year={calYear} monthIndex={calMonth - 1} />
-          </div>
-        </>
       ) : null}
 
       {interviewFor ? (
@@ -935,6 +1012,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             </div>
             <FeedbackForm
               t={t}
+              interview={feedbackFor.interview}
               editing={feedbackFor.editing ?? null}
               conflictMsg={conflictMsg}
               onSubmit={onSaveFeedback}
@@ -943,6 +1021,92 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           </div>
         </>
       ) : null}
+
+      {passConfirm ? (
+        <>
+          <button
+            type="button"
+            className="pb-dialog-backdrop"
+            aria-label={t("cancel")}
+            onClick={() => setPassConfirm(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            data-testid="pass-confirm-dialog"
+            className="pb-dialog"
+          >
+            <h3 className="m-0 text-base font-semibold text-[var(--pb-teal-deep)]">
+              {t("passConfirmTitle")}
+            </h3>
+            <p className="mt-2 text-sm text-[var(--pb-ink-soft)]">
+              {t("passConfirmBody")}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                data-testid="pass-confirm-no"
+                onClick={() => setPassConfirm(null)}
+              >
+                {t("passConfirmNo")}
+              </button>
+              <button
+                type="button"
+                className="pb-btn pb-btn-sm"
+                data-testid="pass-confirm-yes"
+                onClick={() => {
+                  const id = passConfirm.id;
+                  setPassConfirm(null);
+                  void patchApp(id, { action: "pass" });
+                }}
+              >
+                {t("passConfirmYes")}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {prepApp ? (
+        <>
+          <button
+            type="button"
+            className="pb-dialog-backdrop"
+            aria-label={t("cancel")}
+            onClick={() => setPrepApp(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            data-testid="interview-prep-dialog"
+            className="pb-dialog"
+          >
+            <h3 className="m-0 text-base font-semibold text-[var(--pb-teal-deep)]">
+              {t("interviewPrepTitle")}
+            </h3>
+            <p className="mt-2 text-sm text-[var(--pb-ink-soft)]">
+              {t("interviewPrepBody")}
+            </p>
+            <div className="mt-3 rounded-xl bg-gradient-to-br from-[var(--pb-teal)] to-[var(--pb-teal-deep)] p-3 text-sm leading-relaxed text-[#eef7f4]">
+              <div className="mb-1 text-[11px] font-bold opacity-75" lang="ja">
+                {prepApp.company}
+              </div>
+              {t("interviewPrepPreview")}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                className="pb-btn pb-btn-ghost pb-btn-sm"
+                onClick={() => setPrepApp(null)}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+      </div>
     </div>
   );
 }
@@ -953,6 +1117,8 @@ function AddApplicationForm({
   platformLabel,
   initial,
   conflictMsg,
+  editSection = "basic",
+  onEditSection,
   onSubmit,
   onCancel,
   onOpenFeedback,
@@ -962,6 +1128,8 @@ function AddApplicationForm({
   platformLabel: (code: string | null, name: string | null) => string;
   initial?: BoardApplication;
   conflictMsg?: string | null;
+  editSection?: EditSection;
+  onEditSection?: (section: EditSection) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   onOpenFeedback?: (
@@ -980,63 +1148,136 @@ function AddApplicationForm({
         (initial.currentStageKind &&
           INTERVIEW_STAGE_KINDS.has(initial.currentStageKind))),
   );
+  const sections: { id: EditSection; label: string }[] = [
+    { id: "basic", label: t("editSectionBasic") },
+    { id: "company", label: t("editSectionCompany") },
+    { id: "job", label: t("editSectionJob") },
+    { id: "history", label: t("editSectionHistory") },
+  ];
   return (
     <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-      <Field
-        name="company"
-        label={t("company")}
-        required
-        lang="ja"
-        defaultValue={initial?.company ?? ""}
-      />
-      <Field name="role" label={t("role")} lang="ja" defaultValue={initial?.role ?? ""} />
-      <label className="flex flex-col gap-1 text-sm">
-        {t("platform")}
-        <select
-          name="platformId"
-          required
-          value={platformId}
-          onChange={(event) => setPlatformId(event.target.value)}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          {platforms.map((item) => (
-            <option key={item.id} value={item.id} lang="ja">
-              {platformLabel(item.code, item.name)}
-            </option>
+      {initial ? (
+        <div className="pb-tabs" data-testid="edit-section-tabs" role="tablist">
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              role="tab"
+              aria-selected={editSection === section.id}
+              data-on={editSection === section.id ? "true" : "false"}
+              data-testid={`edit-tab-${section.id}`}
+              onClick={() => onEditSection?.(section.id)}
+            >
+              {section.label}
+            </button>
           ))}
-        </select>
-      </label>
-      {showCustomPlatform ? (
-        <label className="flex flex-col gap-1 text-sm">
-          {t("customPlatform")}
-          <input
-            name="customPlatformName"
-            lang="ja"
-            placeholder={t("customPlatformPlaceholder")}
-            defaultValue=""
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-          />
-        </label>
+        </div>
       ) : null}
-      <Field
-        name="recruiterName"
-        label={t("recruiter")}
-        lang="ja"
-        defaultValue={initial?.recruiterName ?? ""}
-      />
-      <Field
-        name="appliedOn"
-        label={t("appliedOn")}
-        type="date"
-        defaultValue={initial?.appliedOn ?? ""}
-      />
+      <section
+        id="edit-sec-basic"
+        role={initial ? "tabpanel" : undefined}
+        hidden={Boolean(initial) && editSection !== "basic"}
+        data-testid={initial ? "basic-section" : undefined}
+        className="space-y-3"
+      >
+        {initial ? (
+          <h3 className="border-b border-[var(--pb-line)] pb-1 text-sm font-bold text-[var(--pb-teal-deep)]">
+            {t("editSectionBasic")}
+          </h3>
+        ) : null}
+        <Field
+          name="company"
+          label={t("company")}
+          required
+          lang="ja"
+          defaultValue={initial?.company ?? ""}
+        />
+        <Field
+          name="role"
+          label={t("role")}
+          lang="ja"
+          defaultValue={initial?.role ?? ""}
+        />
+        <label className="flex flex-col gap-1 text-sm">
+          {t("platform")}
+          <select
+            name="platformId"
+            required
+            value={platformId}
+            onChange={(event) => setPlatformId(event.target.value)}
+            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            {platforms.map((item) => (
+              <option key={item.id} value={item.id} lang="ja">
+                {platformLabel(item.code, item.name)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {showCustomPlatform ? (
+          <label className="flex flex-col gap-1 text-sm">
+            {t("customPlatform")}
+            <input
+              name="customPlatformName"
+              lang="ja"
+              placeholder={t("customPlatformPlaceholder")}
+              defaultValue=""
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+        ) : null}
+        <Field
+          name="recruiterName"
+          label={t("recruiter")}
+          lang="ja"
+          defaultValue={initial?.recruiterName ?? ""}
+        />
+        <Field
+          name="appliedOn"
+          label={t("appliedOn")}
+          type="date"
+          defaultValue={initial?.appliedOn ?? ""}
+        />
+        {initial ? (
+          <label className="flex flex-col gap-1 text-sm">
+            {t("nextPrep")}
+            <textarea
+              name="nextPrepNote"
+              lang="ja"
+              defaultValue={initial.nextPrepNote ?? ""}
+              rows={2}
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+        ) : (
+          <>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="includeInfoSession" />
+              {t("includeInfoSession")}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="includeSecondInterview" />
+              {t("includeSecondInterview")}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="skipAptitude" />
+              {t("skipAptitude")}
+            </label>
+          </>
+        )}
+      </section>
       {initial ? (
         <>
           <section
+            id="edit-sec-company"
+            role="tabpanel"
+            hidden={editSection !== "company"}
             data-testid="company-section"
-            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            className="space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
           >
-            <h3 className="text-sm font-medium">{t("companySection")}</h3>
+            <h3 className="text-sm font-bold text-[var(--pb-teal-deep)]">
+              {t("companySection")}
+            </h3>
             <Field
               name="companyUrl"
               label={t("companyUrl")}
@@ -1055,10 +1296,15 @@ function AddApplicationForm({
             </label>
           </section>
           <section
+            id="edit-sec-job"
+            role="tabpanel"
+            hidden={editSection !== "job"}
             data-testid="job-posting-section"
-            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            className="space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
           >
-            <h3 className="text-sm font-medium">{t("jobPostingSection")}</h3>
+            <h3 className="text-sm font-bold text-[var(--pb-teal-deep)]">
+              {t("jobPostingSection")}
+            </h3>
             <Field
               name="jobUrl"
               label={t("jobUrl")}
@@ -1118,21 +1364,16 @@ function AddApplicationForm({
               />
             </label>
           </section>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("nextPrep")}
-            <textarea
-              name="nextPrepNote"
-              lang="ja"
-              defaultValue={initial.nextPrepNote ?? ""}
-              rows={2}
-              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </label>
           <section
+            id="edit-sec-history"
+            role="tabpanel"
+            hidden={editSection !== "history"}
             data-testid="stage-interviews-section"
-            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            className="space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
           >
-            <h3 className="text-sm font-medium">{t("stageInterviews")}</h3>
+            <h3 className="text-sm font-bold text-[var(--pb-teal-deep)]">
+              {t("editSectionHistory")}
+            </h3>
             {initial.stageInterviews.length === 0 ? (
               <p className="text-sm text-zinc-500">{t("noStageInterviews")}</p>
             ) : (
@@ -1142,56 +1383,41 @@ function AddApplicationForm({
                 onOpenFeedback={onOpenFeedback}
               />
             )}
+            {canEditInterview ? (
+              <div className="space-y-3 border-t border-[var(--pb-line)] pt-3">
+                <label className="flex flex-col gap-1 text-sm">
+                  {t("mode")}
+                  <select
+                    name="mode"
+                    defaultValue={initial.interview?.mode ?? "google_meet"}
+                    className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <option value="google_meet">{t("modeMeet")}</option>
+                    <option value="teams">{t("modeTeams")}</option>
+                    <option value="other_online">{t("modeOther")}</option>
+                    <option value="onsite">{t("modeOnsite")}</option>
+                    <option value="phone">{t("modePhone")}</option>
+                  </select>
+                </label>
+                <Field
+                  name="url"
+                  label={t("meetingUrl")}
+                  type="url"
+                  defaultValue={initial.interview?.meetingUrl ?? ""}
+                />
+                <Field
+                  name="start"
+                  label={t("start")}
+                  type="datetime-local"
+                  defaultValue={
+                    initial.interview
+                      ? toTokyoInputValue(initial.interview.start)
+                      : ""
+                  }
+                />
+              </div>
+            ) : null}
           </section>
-        </>
-      ) : (
-        <>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="includeInfoSession" />
-            {t("includeInfoSession")}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="includeSecondInterview" />
-            {t("includeSecondInterview")}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="skipAptitude" />
-            {t("skipAptitude")}
-          </label>
-        </>
-      )}
-      {canEditInterview ? (
-        <>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("mode")}
-            <select
-              name="mode"
-              defaultValue={initial?.interview?.mode ?? "google_meet"}
-              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              <option value="google_meet">{t("modeMeet")}</option>
-              <option value="teams">{t("modeTeams")}</option>
-              <option value="other_online">{t("modeOther")}</option>
-              <option value="onsite">{t("modeOnsite")}</option>
-              <option value="phone">{t("modePhone")}</option>
-            </select>
-          </label>
-          <Field
-            name="url"
-            label={t("meetingUrl")}
-            type="url"
-            defaultValue={initial?.interview?.meetingUrl ?? ""}
-          />
-          <Field
-            name="start"
-            label={t("start")}
-            type="datetime-local"
-            defaultValue={
-              initial?.interview
-                ? toTokyoInputValue(initial.interview.start)
-                : ""
-            }
-          />
         </>
       ) : null}
       {conflictMsg ? (
@@ -1316,39 +1542,192 @@ function StageInterviewFeedbackGroups({
 
 function FeedbackForm({
   t,
+  interview,
   editing,
   conflictMsg,
   onSubmit,
   onDelete,
 }: {
   t: TBoard;
+  interview: BoardStageInterview;
   editing?: BoardFeedback | null;
   conflictMsg?: string | null;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (
+    event: FormEvent<HTMLFormElement>,
+    qaItems: BoardFeedbackQaItem[],
+  ) => void;
   onDelete?: () => void;
 }) {
+  const [qaItems, setQaItems] = useState<BoardFeedbackQaItem[]>(() => {
+    if (editing?.qaItems?.length) return editing.qaItems;
+    if (editing?.question || editing?.ownAnswer) {
+      return [
+        {
+          question: editing.question,
+          answer: editing.ownAnswer,
+        },
+      ];
+    }
+    return [{ question: "", answer: "", tag: "" }];
+  });
+
   return (
-    <form className="flex flex-col gap-3" onSubmit={onSubmit} key={editing?.id ?? "new"}>
-      <label className="flex flex-col gap-1 text-sm">
-        {t("feedbackSource")}
-        <select
-          name="source"
-          required
-          defaultValue={editing?.source ?? "company"}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          <option value="company">{t("feedbackSourceCompany")}</option>
-          <option value="recruiter">{t("feedbackSourceRecruiter")}</option>
-          <option value="self">{t("feedbackSourceSelf")}</option>
-        </select>
-      </label>
-      <Field
-        name="recordedOn"
-        label={t("feedbackRecordedOn")}
-        type="date"
-        required
-        defaultValue={editing?.recordedOn ?? tokyoTodayKey()}
-      />
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => onSubmit(event, qaItems)}
+      key={editing?.id ?? "new"}
+    >
+      <table className="w-full border-collapse text-sm">
+        <tbody>
+          <tr>
+            <th className="w-[28%] border border-[var(--pb-line)] bg-[var(--pb-teal-soft)] px-2 py-2 text-left font-semibold text-[var(--pb-teal-deep)]">
+              {t("feedbackMetaStage")}
+            </th>
+            <td className="border border-[var(--pb-line)] px-2 py-2" lang="ja">
+              {stageLabel(t, interview.stageKind)}
+            </td>
+          </tr>
+          <tr>
+            <th className="border border-[var(--pb-line)] bg-[var(--pb-teal-soft)] px-2 py-2 text-left font-semibold text-[var(--pb-teal-deep)]">
+              {t("feedbackMetaInterviewers")}
+            </th>
+            <td className="border border-[var(--pb-line)] px-2 py-2" lang="ja">
+              {interview.interviewers?.trim() || t("dash")}
+            </td>
+          </tr>
+          <tr>
+            <th className="border border-[var(--pb-line)] bg-[var(--pb-teal-soft)] px-2 py-2 text-left font-semibold text-[var(--pb-teal-deep)]">
+              {t("feedbackMetaWhen")}
+            </th>
+            <td className="border border-[var(--pb-line)] px-2 py-2">
+              {formatTokyoShort(interview.start)}
+            </td>
+          </tr>
+          <tr>
+            <th className="border border-[var(--pb-line)] bg-[var(--pb-teal-soft)] px-2 py-2 text-left font-semibold text-[var(--pb-teal-deep)]">
+              {t("feedbackMetaMode")}
+            </th>
+            <td className="border border-[var(--pb-line)] px-2 py-2">
+              {interviewModeLabel(interview.mode)}
+            </td>
+          </tr>
+          <tr>
+            <th className="border border-[var(--pb-line)] bg-[var(--pb-teal-soft)] px-2 py-2 text-left font-semibold text-[var(--pb-teal-deep)]">
+              {t("feedbackSource")}
+            </th>
+            <td className="border border-[var(--pb-line)] px-2 py-2">
+              <select
+                name="source"
+                required
+                defaultValue={editing?.source ?? "self"}
+                className="w-full rounded border border-[var(--pb-line)] px-2 py-1.5"
+              >
+                <option value="company">{t("feedbackSourceCompany")}</option>
+                <option value="recruiter">{t("feedbackSourceRecruiter")}</option>
+                <option value="self">{t("feedbackSourceSelf")}</option>
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <th className="border border-[var(--pb-line)] bg-[var(--pb-teal-soft)] px-2 py-2 text-left font-semibold text-[var(--pb-teal-deep)]">
+              {t("feedbackRecordedOn")}
+            </th>
+            <td className="border border-[var(--pb-line)] px-2 py-2">
+              <input
+                name="recordedOn"
+                type="date"
+                required
+                defaultValue={editing?.recordedOn ?? tokyoTodayKey()}
+                className="w-full rounded border border-[var(--pb-line)] px-2 py-1.5"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 className="m-0 text-sm font-bold text-[var(--pb-teal-deep)]">
+        {t("feedbackQaHeading")}
+      </h3>
+      <div data-testid="feedback-qa-list">
+        {qaItems.map((item, index) => (
+          <div key={index} className="pb-qa" data-testid={`feedback-qa-${index}`}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <strong className="text-sm text-[var(--pb-teal-deep)]">
+                {t("feedbackQaQuestionN", { n: String(index + 1).padStart(2, "0") })}
+              </strong>
+              {qaItems.length > 1 ? (
+                <button
+                  type="button"
+                  className="text-xs text-[var(--pb-red)]"
+                  onClick={() =>
+                    setQaItems((rows) => rows.filter((_, i) => i !== index))
+                  }
+                >
+                  {t("feedbackQaRemove")}
+                </button>
+              ) : null}
+            </div>
+            <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
+              {t("feedbackQaTag")}
+              <input
+                lang="ja"
+                value={item.tag ?? ""}
+                onChange={(event) =>
+                  setQaItems((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, tag: event.target.value } : row,
+                    ),
+                  )
+                }
+                className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
+              />
+            </label>
+            <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
+              {t("feedbackQuestion")}
+              <textarea
+                lang="ja"
+                rows={2}
+                value={item.question ?? ""}
+                onChange={(event) =>
+                  setQaItems((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, question: event.target.value } : row,
+                    ),
+                  )
+                }
+                className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
+              {t("feedbackOwnAnswer")}
+              <textarea
+                lang="ja"
+                rows={2}
+                value={item.answer ?? ""}
+                onChange={(event) =>
+                  setQaItems((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, answer: event.target.value } : row,
+                    ),
+                  )
+                }
+                className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        data-testid="feedback-qa-add"
+        className="w-full rounded-full border border-dashed border-[#b9cfc7] bg-[var(--pb-teal-soft)] px-3 py-2 text-sm font-semibold text-[var(--pb-teal-deep)]"
+        onClick={() =>
+          setQaItems((rows) => [...rows, { question: "", answer: "", tag: "" }])
+        }
+      >
+        {t("feedbackQaAdd")}
+      </button>
+
       <label className="flex flex-col gap-1 text-sm">
         {t("feedbackBody")}
         <textarea
@@ -1356,26 +1735,6 @@ function FeedbackForm({
           lang="ja"
           rows={3}
           defaultValue={editing?.body ?? ""}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        {t("feedbackQuestion")}
-        <textarea
-          name="question"
-          lang="ja"
-          rows={2}
-          defaultValue={editing?.question ?? ""}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        {t("feedbackOwnAnswer")}
-        <textarea
-          name="ownAnswer"
-          lang="ja"
-          rows={2}
-          defaultValue={editing?.ownAnswer ?? ""}
           className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
         />
       </label>
@@ -1416,10 +1775,7 @@ function FeedbackForm({
         ) : (
           <span />
         )}
-        <button
-          type="submit"
-          className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
-        >
+        <button type="submit" className="pb-btn pb-btn-sm">
           {editing ? t("feedbackSave") : t("feedbackAppend")}
         </button>
       </div>
@@ -1431,7 +1787,11 @@ function ApplicationCard({
   app,
   platformLabel,
   t,
+  pulse,
+  menuOpen,
+  onToggleMenu,
   onEdit,
+  onPrep,
   onPass,
   onReject,
   onWithdraw,
@@ -1445,7 +1805,11 @@ function ApplicationCard({
   app: BoardApplication;
   platformLabel: string;
   t: TBoard;
+  pulse: boolean;
+  menuOpen: boolean;
+  onToggleMenu: (event: MouseEvent) => void;
   onEdit: () => void;
+  onPrep: () => void;
   onPass: () => void;
   onReject: () => void;
   onWithdraw: () => void;
@@ -1471,104 +1835,171 @@ function ApplicationCard({
     offerDecision: app.offerDecision,
     stages: app.stages,
   });
+  const stageName = app.currentStageKind
+    ? stageLabel(t, app.currentStageKind)
+    : t("dash");
 
   return (
     <article
       data-testid={`card-${app.id}`}
-      className={`rounded-lg border bg-white p-3 shadow-sm dark:bg-zinc-950 ${
-        app.conflict
-          ? "border-l-4 border-l-red-600 border-zinc-200 dark:border-zinc-800"
-          : "border-zinc-200 dark:border-zinc-800"
-      }`}
+      data-pulse={pulse ? "true" : "false"}
+      data-conflict={app.conflict ? "true" : "false"}
+      className="pb-card"
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold leading-snug" lang="ja">
+        <div className="min-w-0">
+          <p className="font-bold leading-snug text-[var(--pb-teal-deep)]" lang="ja">
             {app.company}
           </p>
           {app.role ? (
-            <p className="text-xs text-zinc-500" lang="ja">
+            <p className="mt-0.5 text-[12.5px] text-[var(--pb-ink-soft)]" lang="ja">
               {app.role}
             </p>
           ) : null}
         </div>
-        <button
-          type="button"
-          data-testid={`edit-${app.id}`}
-          className="shrink-0 rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-          onClick={onEdit}
-        >
-          {t("editCard")}
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="rounded-full bg-[#e5f0f8] px-2 py-0.5 text-[11px] font-semibold text-[var(--pb-blue)]">
+            {stageName}
+          </span>
+          <button
+            type="button"
+            data-testid={`card-menu-${app.id}`}
+            aria-label={t("cardMore")}
+            aria-expanded={menuOpen}
+            className="px-1 text-lg leading-none text-[var(--pb-muted)]"
+            onClick={onToggleMenu}
+          >
+            {t("cardMoreGlyph")}
+          </button>
+        </div>
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-        <span
-          className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
-          lang="ja"
+
+      {menuOpen ? (
+        <div
+          className="pb-menu"
+          data-testid={`card-menu-panel-${app.id}`}
+          onClick={(event) => event.stopPropagation()}
         >
-          {platformLabel}
-        </span>
-        <span lang="ja">{app.recruiterName ?? t("noRecruiter")}</span>
-      </p>
-      {app.hasJobPosting || app.hasFeedback ? (
-        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
-          {app.hasJobPosting ? (
-            <span
-              data-testid={`badge-job-${app.id}`}
-              className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
-            >
-              {t("badgeJobPosting")}
-            </span>
+          {inPlay && !offerPending && stageActions.includes("pass") ? (
+            <button type="button" data-testid="action-pass" onClick={onPass}>
+              {app.currentStageKind === "info_session"
+                ? t("advanceNext")
+                : t("menuPass")}
+            </button>
           ) : null}
-          {app.hasFeedback ? (
-            <span
-              data-testid={`badge-feedback-${app.id}`}
-              className="rounded bg-violet-50 px-1.5 py-0.5 text-violet-900 dark:bg-violet-950 dark:text-violet-100"
+          {inPlay && !offerPending && stageActions.includes("reject") ? (
+            <button
+              type="button"
+              data-testid="action-reject"
+              data-danger="true"
+              onClick={onReject}
             >
-              {t("badgeFeedback")}
-            </span>
+              {t("reject")}
+            </button>
+          ) : null}
+          {inPlay && !offerPending && stageActions.includes("withdraw") ? (
+            <button
+              type="button"
+              data-testid="action-withdraw"
+              data-danger="true"
+              onClick={onWithdraw}
+            >
+              {t("withdraw")}
+            </button>
+          ) : null}
+          {inPlay && !offerPending && stageActions.includes("offer") ? (
+            <button type="button" data-testid="action-offer" onClick={onOffer}>
+              {t("markOffer")}
+            </button>
+          ) : null}
+          {offerPending ? (
+            <>
+              <button type="button" onClick={onAccept}>
+                {t("acceptOffer")}
+              </button>
+              <button type="button" data-danger="true" onClick={onDecline}>
+                {t("declineOffer")}
+              </button>
+            </>
+          ) : null}
+          {showUndo ? (
+            <button type="button" data-testid="action-undo" onClick={onUndo}>
+              {t("undoStage")}
+            </button>
+          ) : null}
+          <hr className="my-1 border-0 border-t border-[var(--pb-line)]" />
+          <button
+            type="button"
+            data-testid={`edit-${app.id}`}
+            onClick={onEdit}
+          >
+            {t("menuEdit")}
+          </button>
+          {inPlay && canSchedule && !interview ? (
+            <button type="button" onClick={onProposeSlots}>
+              {t("proposeSlots")}
+            </button>
           ) : null}
         </div>
       ) : null}
-      <p className="mt-2 text-sm" lang="ja">
-        {app.nextPrep}
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+
+      <div className="mt-2.5 flex flex-col gap-1.5 border-t border-dashed border-[var(--pb-line)] pt-2.5 text-[12.5px] text-[var(--pb-ink-soft)]">
         {interview ? (
-          <>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[11px] font-semibold text-[var(--pb-muted)]">
+              {t("cardIconWhen")}
+            </span>
             <span>{formatTokyoShort(interview.start)}</span>
-            {modeLabel ? <span className="text-zinc-500">{modeLabel}</span> : null}
             {interview.meetingUrl ? (
               <a
                 href={interview.meetingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded bg-emerald-700 px-2 py-0.5 font-medium text-white"
+                className="rounded bg-[var(--pb-teal)] px-2 py-0.5 text-[11px] font-medium text-white"
               >
                 {t("join")}
               </a>
             ) : null}
-          </>
-        ) : app.proposal?.status === "sent" ? (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-950">
+          </div>
+        ) : !app.proposal ? (
+          <div className="flex items-center gap-2 text-[var(--pb-muted)]">
+            <span className="shrink-0 text-[11px] font-semibold">
+              {t("cardIconWhen")}
+            </span>
+            <span>{t("unscheduled")}</span>
+          </div>
+        ) : null}
+        {modeLabel ? (
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[11px] font-semibold text-[var(--pb-muted)]">
+              {t("cardIconMode")}
+            </span>
+            <span>{modeLabel}</span>
+          </div>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-[11px] font-semibold text-[var(--pb-muted)]">
+            {t("cardIconChannel")}
+          </span>
+          <span lang="ja">
+            {app.recruiterName
+              ? t("cardChannelWithRecruiter", {
+                  platform: platformLabel,
+                  recruiter: app.recruiterName,
+                })
+              : platformLabel}
+          </span>
+        </div>
+        {app.proposal?.status === "sent" && !interview ? (
+          <span className="rounded bg-[var(--pb-amber-bg)] px-1.5 py-0.5 text-[11px] text-[var(--pb-amber)]">
             {t("slotCount", { count: app.proposal.slots.length })}
           </span>
-        ) : app.proposal?.status === "draft" ? (
-          <span className="rounded bg-zinc-100 px-1.5 py-0.5">
-            {t("slotDraftCount", { count: app.proposal.slots.length })}
-          </span>
-        ) : (
-          <span className="text-zinc-500">{t("unscheduled")}</span>
-        )}
-        {app.conflict ? (
-          <span className="font-medium text-red-700">{t("conflict")}</span>
         ) : null}
-        {offerPending ? (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">
-            {t("offerPending")}
-          </span>
+        {app.conflict ? (
+          <span className="font-medium text-[var(--pb-red)]">{t("conflict")}</span>
         ) : null}
       </div>
+
       {app.proposal && app.proposal.slots.length > 0 && !interview ? (
         <ul className="mt-2 space-y-1 text-xs" lang="ja">
           {app.proposal.slots.map((slot) => (
@@ -1587,89 +2018,48 @@ function ApplicationCard({
           ))}
         </ul>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-1">
-        {inPlay ? (
-          offerPending ? (
-            <>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onAccept}
-              >
-                {t("acceptOffer")}
-              </button>
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                onClick={onDecline}
-              >
-                {t("declineOffer")}
-              </button>
-            </>
-          ) : (
-            <>
-              {stageActions.includes("pass") ? (
-                <button
-                  type="button"
-                  data-testid="action-pass"
-                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                  onClick={onPass}
-                >
-                  {app.currentStageKind === "info_session" ? t("advanceNext") : t("pass")}
-                </button>
-              ) : null}
-              {stageActions.includes("reject") ? (
-                <button
-                  type="button"
-                  data-testid="action-reject"
-                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                  onClick={onReject}
-                >
-                  {t("reject")}
-                </button>
-              ) : null}
-              {stageActions.includes("withdraw") ? (
-                <button
-                  type="button"
-                  data-testid="action-withdraw"
-                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                  onClick={onWithdraw}
-                >
-                  {t("withdraw")}
-                </button>
-              ) : null}
-              {stageActions.includes("offer") ? (
-                <button
-                  type="button"
-                  data-testid="action-offer"
-                  className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-                  onClick={onOffer}
-                >
-                  {t("markOffer")}
-                </button>
-              ) : null}
-            </>
-          )
-        ) : null}
-        {inPlay && canSchedule && !interview ? (
-          <button
-            type="button"
-            className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-            onClick={onProposeSlots}
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        {app.hasJobPosting ? (
+          <span
+            data-testid={`badge-job-${app.id}`}
+            className="rounded-full bg-[var(--pb-teal-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pb-green)]"
           >
-            {t("proposeSlots")}
-          </button>
-        ) : null}
-        {showUndo ? (
-          <button
-            type="button"
-            data-testid="action-undo"
-            className="rounded border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700"
-            onClick={onUndo}
+            {t("badgeJobPosting")}
+          </span>
+        ) : (
+          <span />
+        )}
+        {app.hasFeedback ? (
+          <span
+            data-testid={`badge-feedback-${app.id}`}
+            className="rounded-full bg-[#e5f0f8] px-2 py-0.5 text-[11px] font-semibold text-[var(--pb-blue)]"
           >
-            {t("undoStage")}
-          </button>
+            {t("badgeFeedback")}
+          </span>
         ) : null}
+        <span className="ml-auto text-[11.5px] text-[var(--pb-muted)]">
+          {`${t("appliedOn")} ${app.appliedOn}`}
+        </span>
+      </div>
+
+      <div className="mt-2 flex w-full gap-1.5">
+        <button
+          type="button"
+          data-testid={`edit-${app.id}-detail`}
+          className="pb-btn pb-btn-ghost pb-btn-sm flex-1"
+          onClick={onEdit}
+        >
+          {t("cardDetail")}
+        </button>
+        <button
+          type="button"
+          data-testid={`prep-${app.id}`}
+          className="pb-btn pb-btn-ink pb-btn-sm flex-[1.15]"
+          onClick={onPrep}
+        >
+          {t("interviewPrep")}
+        </button>
       </div>
     </article>
   );
@@ -1763,6 +2153,39 @@ function ApplicationTable({
   );
 }
 
+/** White square + blue-top calendar — Demo / fig8 / fig9 glyph. */
+function CalendarGlyph() {
+  return (
+    <svg
+      className="pb-icon-cal-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="17"
+        rx="3"
+        fill="#eef0f8"
+        stroke="#c5c9d6"
+        strokeWidth="1"
+      />
+      <rect x="3" y="4" width="18" height="5" rx="2.5" fill="#3b82f6" />
+      <rect x="3" y="7.5" width="18" height="2" fill="#3b82f6" />
+      <circle cx="8" cy="6.2" r="0.9" fill="#fff" />
+      <circle cx="16" cy="6.2" r="0.9" fill="#fff" />
+      <rect x="6" y="11" width="3.2" height="3.2" rx="0.6" fill="#c4b5fd" />
+      <rect x="10.4" y="11" width="3.2" height="3.2" rx="0.6" fill="#ddd6fe" />
+      <rect x="14.8" y="11" width="3.2" height="3.2" rx="0.6" fill="#c4b5fd" />
+      <rect x="6" y="15.2" width="3.2" height="3.2" rx="0.6" fill="#ddd6fe" />
+      <rect x="10.4" y="15.2" width="3.2" height="3.2" rx="0.6" fill="#c4b5fd" />
+      <rect x="14.8" y="15.2" width="3.2" height="3.2" rx="0.6" fill="#2563eb" />
+    </svg>
+  );
+}
+
 function EmptyState({
   t,
   closedFilter,
@@ -1797,24 +2220,6 @@ function EmptyState({
       </button>
       <p className="text-xs text-zinc-500">{t("addRecruiterHint")}</p>
     </div>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <rect
-        x="3"
-        y="5"
-        width="18"
-        height="16"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path d="M3 9h18M8 3v4M16 3v4" fill="none" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
   );
 }
 

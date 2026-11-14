@@ -82,9 +82,10 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
     expect(screen.getByRole("button", { name: "进入下一阶段" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "跳过" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "通过" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "选考通过" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "落选" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "内定" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "辞退" })).not.toBeInTheDocument();
@@ -120,6 +121,33 @@ describe("ProgressBoard", () => {
     );
   });
 
+  it("spreads 書類選考→内定 columns equally across the board width", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    const row = screen.getByTestId("kanban-row");
+    expect(row.className).toMatch(/\bw-full\b/);
+    expect(row.className).not.toMatch(/overflow-x-auto/);
+
+    const columns = [
+      "document_screening",
+      "aptitude_test",
+      "interview_1",
+      "interview_2",
+      "interview_final",
+      "offer",
+    ].map((kind) => screen.getByTestId(`column-${kind}`));
+    expect(columns).toHaveLength(6);
+    for (const col of columns) {
+      expect(col.className).toMatch(/\bflex-1\b/);
+      expect(col.className).toMatch(/\bmin-w-0\b/);
+      expect(col.className).not.toMatch(/\bw-36\b|\bw-56\b|\bshrink-0\b/);
+    }
+  });
+
   it("hides offer on document screening but keeps pass and reject", () => {
     renderWithIntl(
       <ProgressBoard
@@ -127,7 +155,8 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    expect(screen.getByRole("button", { name: "通过" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
+    expect(screen.getByRole("button", { name: "选考通过" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "落选" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "内定" })).not.toBeInTheDocument();
   });
@@ -139,10 +168,76 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    expect(screen.getByRole("button", { name: "通过" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
+    expect(screen.getByRole("button", { name: "选考通过" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "落选" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "内定" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "跳过" })).not.toBeInTheDocument();
+  });
+
+  it("asks before advancing when pass is chosen from the menu", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
+    fireEvent.click(screen.getByTestId("action-pass"));
+    expect(screen.getByTestId("pass-confirm-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("pass-confirm-yes")).toHaveTextContent("进入下一阶段");
+  });
+
+  it("exposes clickable task reminders on the board", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    expect(screen.getByTestId("task-bar")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("task-stat-waiting"));
+    expect(screen.getByTestId("task-stat-waiting")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+  });
+
+  it("opens the calendar as an in-shell panel aligned with the board slot", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    const toggle = screen.getByTestId("calendar-toggle");
+    expect(toggle).toHaveClass("pb-icon-cal");
+    expect(toggle.querySelector(".pb-icon-cal-glyph")).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("calendar-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("month-calendar")).toBeInTheDocument();
+    expect(screen.queryByTestId("task-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("calendar-backdrop")).not.toBeInTheDocument();
+    expect(toggle).toHaveAttribute("data-active", "true");
+  });
+
+  it("places the calendar icon button left of add on the page toolbar", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "zh-CN",
+    );
+    const toolbar = screen.getByTestId("page-toolbar");
+    expect(toolbar.className).toMatch(/justify-between/);
+    const actions = toolbar.querySelector(".pb-page-actions");
+    expect(actions).not.toBeNull();
+    expect(actions!.className).toMatch(/ml-auto/);
+    const kids = Array.from(actions!.children);
+    expect(kids[0]).toHaveAttribute("data-testid", "calendar-toggle");
+    expect(kids[0]).toBeVisible();
+    expect(kids[0]!.querySelector("svg")).not.toBeNull();
+    expect(kids[1]).toHaveAttribute("data-testid", "add-application");
   });
 
   it("shows undo on rejected cards and after a pass", async () => {
@@ -167,7 +262,8 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    fireEvent.click(screen.getByRole("button", { name: "全部" }));
+      fireEvent.click(screen.getByRole("button", { name: "全部" }));
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
     await waitFor(() => {
       expect(screen.getByTestId("action-undo")).toHaveTextContent("撤销");
     });
@@ -201,6 +297,7 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
     expect(screen.getByTestId("action-undo")).toBeInTheDocument();
   });
 
@@ -221,6 +318,7 @@ describe("ProgressBoard", () => {
                 mode: "google_meet",
                 meetingUrl: null,
                 locationText: null,
+                interviewers: "技術部門責任者",
                 status: "scheduled",
                 canWriteFeedback: true,
                 feedbacks: [
@@ -231,6 +329,7 @@ describe("ProgressBoard", () => {
                     body: "志望動機が弱い",
                     question: null,
                     ownAnswer: null,
+                    qaItems: [],
                     resultText: null,
                     reflection: null,
                     recordedOn: "2026-11-01",
@@ -243,6 +342,7 @@ describe("ProgressBoard", () => {
                     body: "次回は具体例を",
                     question: null,
                     ownAnswer: null,
+                    qaItems: [],
                     resultText: null,
                     reflection: null,
                     recordedOn: "2026-11-02",
@@ -259,6 +359,7 @@ describe("ProgressBoard", () => {
                 mode: "teams",
                 meetingUrl: null,
                 locationText: null,
+                interviewers: null,
                 status: "scheduled",
                 canWriteFeedback: true,
                 feedbacks: [],
@@ -269,7 +370,7 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    screen.getByRole("button", { name: "编辑" }).click();
+    fireEvent.click(screen.getByTestId("edit-app-1-detail"));
     await waitFor(() => {
       expect(screen.getByTestId("feedback-group-interview_1")).toBeInTheDocument();
     });
@@ -288,6 +389,7 @@ describe("ProgressBoard", () => {
       />,
       "ja",
     );
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
     expect(screen.getByRole("button", { name: "辞退" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "応募辞退" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "スキップ" })).not.toBeInTheDocument();
@@ -301,16 +403,35 @@ describe("ProgressBoard", () => {
       "zh-CN",
     );
     expect(screen.getByTestId("card-app-1")).toHaveTextContent("Doda");
-    screen.getByRole("button", { name: "编辑" }).click();
+    fireEvent.click(screen.getByTestId("edit-app-1-detail"));
     await waitFor(() => {
       expect(screen.getByRole("dialog", { name: "编辑投递" })).toBeInTheDocument();
     });
+    expect(screen.getByTestId("edit-section-tabs")).toBeInTheDocument();
+    expect(screen.getByTestId("edit-tab-basic")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("basic-section")).not.toHaveAttribute("hidden");
     expect(screen.getByDisplayValue("テスト株式会社")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "エージェント担当者" })).toBeInTheDocument();
-    expect(screen.getByTestId("job-posting-section")).toBeInTheDocument();
-    expect(screen.getByTestId("company-section")).toBeInTheDocument();
-    expect(screen.getByLabelText("求人其他")).toBeInTheDocument();
     expect(screen.getByLabelText("下一步行动")).toBeInTheDocument();
+    // Mutual exclusive tabs: only 基本情報 visible on open.
+    expect(screen.getByTestId("company-section")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("job-posting-section")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("stage-interviews-section")).toHaveAttribute(
+      "hidden",
+    );
+    fireEvent.click(screen.getByTestId("edit-tab-job"));
+    expect(screen.getByTestId("edit-tab-job")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("basic-section")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("job-posting-section")).not.toHaveAttribute(
+      "hidden",
+    );
+    expect(screen.getByLabelText("求人其他")).toBeInTheDocument();
     expect(screen.queryByLabelText("备注")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存修改" })).toBeInTheDocument();
     expect(screen.getByTestId("delete-application")).toHaveTextContent("删除");
@@ -328,7 +449,7 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    screen.getByRole("button", { name: "编辑" }).click();
+    fireEvent.click(screen.getByTestId("edit-app-1-detail"));
     await waitFor(() => {
       expect(screen.getByTestId("delete-application")).toBeInTheDocument();
     });
@@ -390,12 +511,12 @@ describe("ProgressBoard", () => {
       />,
       "zh-CN",
     );
-    expect(screen.getByTestId("card-app-1")).toHaveTextContent("一次面接");
+    expect(screen.getByTestId("card-app-1")).toHaveTextContent("一次面试");
     expect(screen.getByTestId("card-app-1")).toHaveTextContent("Google Meet");
     expect(screen.getByTestId("card-app-1")).toHaveTextContent("参加");
     expect(screen.queryByTestId("action-interview")).not.toBeInTheDocument();
 
-    screen.getByRole("button", { name: "编辑" }).click();
+    fireEvent.click(screen.getByTestId("edit-app-1-detail"));
     await waitFor(() => {
       expect(screen.getByRole("dialog", { name: "编辑投递" })).toBeInTheDocument();
     });
@@ -428,6 +549,7 @@ describe("ProgressBoard", () => {
     expect(card).not.toHaveTextContent("の準備");
     expect(screen.queryByRole("button", { name: "確定した面接" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("action-interview")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
     expect(screen.getByRole("button", { name: "候補日程を提出" })).toBeInTheDocument();
   });
 });

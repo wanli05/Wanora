@@ -21,7 +21,6 @@ import { getProfileByUserId, upsertProfile } from "@/lib/data/profiles";
 import {
   createWorkHistoryEntry,
   deleteWorkHistoryEntry,
-  listWorkHistoryEntries,
   updateWorkHistoryEntry,
 } from "@/lib/data/work-history-entries";
 import { parseDateInput, yearMonthFromInputValue, compareYearMonthDates } from "@/lib/domain/dates";
@@ -39,6 +38,22 @@ import { getSessionUser } from "@/lib/session";
 
 const dateFormatSchema = z.enum(["wareki", "seireki"]);
 const optionalEmailSchema = z.union([z.literal(""), z.string().email()]);
+
+function optionalNonNegInt(raw: FormDataEntryValue | null): number | null {
+  const text = raw?.toString().trim() ?? "";
+  if (!text) return null;
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < 0) return null;
+  return n;
+}
+
+/** Radio 有／無 → boolean；未选 → null */
+function optionalYesNo(raw: FormDataEntryValue | null): boolean | null {
+  const v = raw?.toString();
+  if (v === "yes") return true;
+  if (v === "no") return false;
+  return null;
+}
 
 export type ProfileSaveError =
   | "unauthenticated"
@@ -108,6 +123,13 @@ export async function saveProfileAction(
       email: emailParsed.data || null,
       altContact: optionalJapaneseFromForm(formData, "altContact"),
       dateFormat,
+      nearestStation:
+        formData.get("nearestStation")?.toString().trim() || null,
+      commuteHours: optionalNonNegInt(formData.get("commuteHours")),
+      commuteMinutes: optionalNonNegInt(formData.get("commuteMinutes")),
+      dependentsCount: optionalNonNegInt(formData.get("dependentsCount")),
+      hasSpouse: optionalYesNo(formData.get("hasSpouse")),
+      spouseDependent: optionalYesNo(formData.get("spouseDependent")),
     });
     revalidatePath("/profile", "layout");
     revalidatePath("/profile");
@@ -211,56 +233,6 @@ async function syncEducationFromForm(
   }
 }
 
-async function syncWorkHistoryFromForm(
-  db: ReturnType<typeof getDb>,
-  userId: string,
-  formData: FormData,
-): Promise<void> {
-  const existing = await listWorkHistoryEntries(db, userId);
-  const existingIds = new Set(existing.map((e) => e.id));
-  const keptIds = new Set<string>();
-
-  const parsed = [];
-  for (const i of indexedFormKeys(formData, "workHistory")) {
-    const id = formData.get(`workHistory.${i}.id`)?.toString() || undefined;
-    const companyJa = jaFromIndexedField(formData, "workHistory", i, "company");
-    if (!companyJa) continue;
-    const eventCode = z.enum(WORK_HISTORY_EVENT_CODES).parse(
-      formData.get(`workHistory.${i}.eventCode`)?.toString(),
-    );
-    parsed.push({
-      formIndex: i,
-      id,
-      yearMonth: yearMonthFromIndexedForm(formData, "workHistory", i),
-      companyJa,
-      eventCode,
-    });
-  }
-
-  for (const [sortOrder, row] of sortIndexedRowsByYearMonth(parsed).entries()) {
-    const input = {
-      yearMonth: row.yearMonth,
-      company: { ja: row.companyJa },
-      eventCode: row.eventCode,
-      note: null,
-      sortOrder,
-    };
-    if (row.id && existingIds.has(row.id)) {
-      await updateWorkHistoryEntry(db, userId, row.id, input);
-      keptIds.add(row.id);
-    } else {
-      const created = await createWorkHistoryEntry(db, userId, input);
-      keptIds.add(created.id);
-    }
-  }
-
-  for (const row of existing) {
-    if (!keptIds.has(row.id)) {
-      await deleteWorkHistoryEntry(db, userId, row.id);
-    }
-  }
-}
-
 async function syncLicensesFromForm(
   db: ReturnType<typeof getDb>,
   userId: string,
@@ -319,8 +291,11 @@ export async function saveFullProfileAction(
   try {
     const db = getDb();
     await syncEducationFromForm(db, userId, formData);
-    await syncWorkHistoryFromForm(db, userId, formData);
-    await syncLicensesFromForm(db, userId, formData);
+    // 職歴は Work History（career_employers）が唯一編集源。履歴書フォームでは同期しない。
+    // 免許・資格の編集源はスキルモジュール；履歴書フォームは omitLicenses でスキップ。
+    if (formData.get("omitLicenses") !== "1") {
+      await syncLicensesFromForm(db, userId, formData);
+    }
     revalidatePath("/profile", "layout");
     revalidatePath("/profile");
     revalidatePath("/profile/education");
@@ -441,6 +416,8 @@ export async function saveLicenseAction(formData: FormData): Promise<void> {
     } else {
       await createLicense(db, userId, input);
     }
+    revalidatePath("/profile", "layout");
+    revalidatePath("/profile");
     revalidatePath("/profile/licenses");
   } catch {
     /* invalid form */
@@ -451,6 +428,8 @@ export async function deleteLicenseAction(id: string): Promise<void> {
   const userId = await requireUserId();
   if (!userId) return;
   await deleteLicense(getDb(), userId, id);
+  revalidatePath("/profile", "layout");
+  revalidatePath("/profile");
   revalidatePath("/profile/licenses");
 }
 

@@ -4,17 +4,11 @@ import { useRouter } from "next/navigation";
 import { useActionState, useCallback, useState, type ReactNode } from "react";
 import { JapaneseTextField } from "@/components/japanese-text-field";
 import { PhotoUpload } from "@/components/photo-upload";
+import { PostalAddressFields } from "@/components/postal-address-fields";
 import { YearMonthField } from "@/app/[locale]/profile/form-fields";
 import type { EducationEventCode } from "@/lib/domain/resume-events";
-import type { WorkHistoryEventCode } from "@/lib/domain/resume-events";
-import {
-  EDUCATION_EVENT_CODES,
-  WORK_HISTORY_EVENT_CODES,
-} from "@/lib/domain/resume-events";
-import {
-  formatWorkHistoryYearMonthEvent,
-  formatYearMonthJa,
-} from "@/lib/domain/profile-display";
+import { EDUCATION_EVENT_CODES } from "@/lib/domain/resume-events";
+import { formatYearMonthJa } from "@/lib/domain/profile-display";
 import {
   formatYearMonthInputValue,
   parseYearMonthInputValue,
@@ -34,14 +28,6 @@ type EducationRow = {
   eventCode: EducationEventCode;
 };
 
-type WorkHistoryRow = {
-  clientKey: string;
-  id?: string;
-  yearMonth: string;
-  workContentJa: string;
-  eventCode: WorkHistoryEventCode;
-};
-
 type LicenseRow = {
   clientKey: string;
   id?: string;
@@ -59,7 +45,6 @@ export type ProfilePageFormLabels = {
   sections: {
     basic: string;
     education: string;
-    workHistory: string;
     licenses: string;
   };
   basic: {
@@ -77,17 +62,29 @@ export type ProfilePageFormLabels = {
     phone: string;
     email: string;
     altContact: string;
+    nearestStation: string;
+    commuteTime: string;
+    commuteHours: string;
+    commuteMinutes: string;
+    commuteApprox: string;
+    dependentsCount: string;
+    dependentsUnit: string;
+    hasSpouse: string;
+    spouseDependent: string;
+    yesNoYes: string;
+    yesNoNo: string;
+    photo: string;
+    photoAlt: string;
+    postalLookupHint: string;
+    postalLookingUp: string;
+    postalNotFound: string;
+    postalLookupFailed: string;
+    postalLineRemainderHint: string;
   };
   japaneseHint: string;
   education: {
     empty: string;
     school: string;
-    event: string;
-    yearMonth: string;
-  };
-  workHistory: {
-    empty: string;
-    workContent: string;
     event: string;
     yearMonth: string;
   };
@@ -98,7 +95,6 @@ export type ProfilePageFormLabels = {
   };
   events: {
     education: Record<EducationEventCode, string>;
-    workHistory: Record<WorkHistoryEventCode, string>;
   };
 };
 
@@ -115,10 +111,18 @@ export type ProfilePageInitial = {
   phone: string;
   email: string;
   altContact: LocalizedText;
+  nearestStation: string;
+  commuteHours: string;
+  commuteMinutes: string;
+  dependentsCount: string;
+  hasSpouse: "" | "yes" | "no";
+  spouseDependent: "" | "yes" | "no";
   education: Omit<EducationRow, "clientKey">[];
-  workHistory: Omit<WorkHistoryRow, "clientKey">[];
   licenses: Omit<LicenseRow, "clientKey">[];
   storageReady: boolean;
+  hasPhoto: boolean;
+  /** Dev fallback when S3_* is unset. */
+  photoLocalBackend?: boolean;
 };
 
 function withClientKeys<T extends { id?: string; yearMonth: string }>(
@@ -203,17 +207,17 @@ function consumeProfileSavedFlash(): boolean {
 export function ProfilePageForm({
   initial,
   labels,
+  includeLicenses = true,
 }: {
   initial: ProfilePageInitial;
   labels: ProfilePageFormLabels;
+  /** When false (My Career), licenses are edited in Skills; form skips sync. */
+  includeLicenses?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [justSaved, setJustSaved] = useState(() => consumeProfileSavedFlash());
   const [educationRows, setEducationRows] = useState(() =>
     withClientKeys(initial.education),
-  );
-  const [workRows, setWorkRows] = useState(() =>
-    withClientKeys(initial.workHistory),
   );
   const [licenseRows, setLicenseRows] = useState(() =>
     withClientKeys(initial.licenses),
@@ -296,43 +300,36 @@ export function ProfilePageForm({
               value={initial.gender}
               hint={labels.japaneseHint}
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium">{labels.basic.postalCode}</span>
-                <input
-                  name="postalCode"
-                  defaultValue={initial.postalCode}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium">{labels.basic.dateFormat}</span>
-                <select
-                  name="dateFormat"
-                  defaultValue={initial.dateFormat}
-                  className={inputClass}
-                >
-                  <option value="wareki">{labels.basic.dateFormatWareki}</option>
-                  <option value="seireki">
-                    {labels.basic.dateFormatSeireki}
-                  </option>
-                </select>
-              </label>
-            </div>
-            <JapaneseTextField
-              fieldPrefix="address"
-              label={labels.basic.address}
-              value={initial.address}
-              hint={labels.japaneseHint}
-            />
             <label className="block space-y-1 text-sm">
-              <span className="font-medium">{labels.basic.addressKana}</span>
-              <input
-                name="addressKana"
-                defaultValue={initial.addressKana}
+              <span className="font-medium">{labels.basic.dateFormat}</span>
+              <select
+                name="dateFormat"
+                defaultValue={initial.dateFormat}
                 className={inputClass}
-              />
+              >
+                <option value="wareki">{labels.basic.dateFormatWareki}</option>
+                <option value="seireki">
+                  {labels.basic.dateFormatSeireki}
+                </option>
+              </select>
             </label>
+            <PostalAddressFields
+              labels={{
+                postalCode: labels.basic.postalCode,
+                address: labels.basic.address,
+                addressKana: labels.basic.addressKana,
+                japaneseHint: labels.japaneseHint,
+                lookupHint: labels.basic.postalLookupHint,
+                lookingUp: labels.basic.postalLookingUp,
+                notFound: labels.basic.postalNotFound,
+                lookupFailed: labels.basic.postalLookupFailed,
+                lineRemainderHint: labels.basic.postalLineRemainderHint,
+              }}
+              initialPostalCode={initial.postalCode}
+              initialAddressJa={initial.address.ja ?? ""}
+              initialAddressKana={initial.addressKana}
+              inputClass={inputClass}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-1 text-sm">
                 <span className="font-medium">{labels.basic.phone}</span>
@@ -361,10 +358,143 @@ export function ProfilePageForm({
               multiline
               hint={labels.japaneseHint}
             />
-            <PhotoUpload disabled={!initial.storageReady} />
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">{labels.basic.nearestStation}</span>
+              <input
+                name="nearestStation"
+                lang="ja"
+                defaultValue={initial.nearestStation}
+                className={inputClass}
+              />
+            </label>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {labels.basic.commuteTime}
+              </legend>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span>{labels.basic.commuteApprox}</span>
+                <input
+                  name="commuteHours"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  defaultValue={initial.commuteHours}
+                  className={`${inputClass} w-20`}
+                  aria-label={labels.basic.commuteHours}
+                />
+                <span>{labels.basic.commuteHours}</span>
+                <input
+                  name="commuteMinutes"
+                  type="number"
+                  min={0}
+                  max={59}
+                  inputMode="numeric"
+                  defaultValue={initial.commuteMinutes}
+                  className={`${inputClass} w-20`}
+                  aria-label={labels.basic.commuteMinutes}
+                />
+                <span>{labels.basic.commuteMinutes}</span>
+              </div>
+            </fieldset>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">
+                {labels.basic.dependentsCount}
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  name="dependentsCount"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  defaultValue={initial.dependentsCount}
+                  className={`${inputClass} w-24`}
+                />
+                <span>{labels.basic.dependentsUnit}</span>
+              </div>
+            </label>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {labels.basic.hasSpouse}
+              </legend>
+              <div className="flex gap-4 text-sm">
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="hasSpouse"
+                    value="yes"
+                    defaultChecked={initial.hasSpouse === "yes"}
+                  />
+                  {labels.basic.yesNoYes}
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="hasSpouse"
+                    value="no"
+                    defaultChecked={initial.hasSpouse === "no"}
+                  />
+                  {labels.basic.yesNoNo}
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {labels.basic.spouseDependent}
+              </legend>
+              <div className="flex gap-4 text-sm">
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="spouseDependent"
+                    value="yes"
+                    defaultChecked={initial.spouseDependent === "yes"}
+                  />
+                  {labels.basic.yesNoYes}
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="spouseDependent"
+                    value="no"
+                    defaultChecked={initial.spouseDependent === "no"}
+                  />
+                  {labels.basic.yesNoNo}
+                </label>
+              </div>
+            </fieldset>
+            <PhotoUpload
+              disabled={!initial.storageReady}
+              hasPhoto={initial.hasPhoto}
+              localBackend={Boolean(initial.photoLocalBackend)}
+              initialUrl={
+                initial.hasPhoto ? "/api/profile/photo" : null
+              }
+            />
           </div>
         ) : (
           <RirekishoTable>
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <th className="w-36 py-2.5 pr-4 text-left align-top text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {labels.basic.photo}
+              </th>
+              <td className="py-2.5 text-sm text-zinc-900 dark:text-zinc-100">
+                {initial.hasPhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- authenticated photo API
+                  <img
+                    src="/api/profile/photo"
+                    alt={labels.basic.photoAlt}
+                    className="h-[113px] w-[85px] rounded border border-zinc-200 object-cover dark:border-zinc-700"
+                  />
+                ) : (
+                  <div
+                    className="flex h-[113px] w-[85px] items-center justify-center rounded border border-dashed border-zinc-300 text-xs text-zinc-400 dark:border-zinc-600"
+                    aria-label={labels.basic.photo}
+                  >
+                    {labels.basic.photo}
+                  </div>
+                )}
+              </td>
+            </tr>
             <ViewRow
               label={labels.basic.fullName}
               value={initial.fullName.ja}
@@ -404,6 +534,46 @@ export function ProfilePageForm({
             <ViewRow
               label={labels.basic.altContact}
               value={initial.altContact.ja}
+            />
+            <ViewRow
+              label={labels.basic.nearestStation}
+              value={initial.nearestStation}
+            />
+            <ViewRow
+              label={labels.basic.commuteTime}
+              value={
+                initial.commuteHours || initial.commuteMinutes
+                  ? `${labels.basic.commuteApprox} ${initial.commuteHours || "0"} ${labels.basic.commuteHours} ${initial.commuteMinutes || "0"} ${labels.basic.commuteMinutes}`
+                  : null
+              }
+            />
+            <ViewRow
+              label={labels.basic.dependentsCount}
+              value={
+                initial.dependentsCount
+                  ? `${initial.dependentsCount}${labels.basic.dependentsUnit ? ` ${labels.basic.dependentsUnit}` : ""}`
+                  : null
+              }
+            />
+            <ViewRow
+              label={labels.basic.hasSpouse}
+              value={
+                initial.hasSpouse === "yes"
+                  ? labels.basic.yesNoYes
+                  : initial.hasSpouse === "no"
+                    ? labels.basic.yesNoNo
+                    : null
+              }
+            />
+            <ViewRow
+              label={labels.basic.spouseDependent}
+              value={
+                initial.spouseDependent === "yes"
+                  ? labels.basic.yesNoYes
+                  : initial.spouseDependent === "no"
+                    ? labels.basic.yesNoNo
+                    : null
+              }
             />
           </RirekishoTable>
         )}
@@ -557,27 +727,27 @@ export function ProfilePageForm({
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{labels.sections.workHistory}</h2>
-        {editing ? (
-          <div className="space-y-4">
-            {workRows.map((row, index) => (
-              <div
-                key={row.clientKey}
-                className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
-              >
-                <input
-                  type="hidden"
-                  name={`workHistory.${index}.id`}
-                  value={row.id ?? ""}
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
+      {includeLicenses ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">{labels.sections.licenses}</h2>
+          {editing ? (
+            <div className="space-y-4">
+              {licenseRows.map((row, index) => (
+                <div
+                  key={row.clientKey}
+                  className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
+                >
+                  <input
+                    type="hidden"
+                    name={`licenses.${index}.id`}
+                    value={row.id ?? ""}
+                  />
                   <YearMonthField
-                    name={`workHistory.${index}.yearMonth`}
-                    label={labels.workHistory.yearMonth}
+                    name={`licenses.${index}.yearMonth`}
+                    label={labels.licenses.yearMonth}
                     value={row.yearMonth}
                     onChange={(yearMonth) =>
-                      setWorkRows((rows) =>
+                      setLicenseRows((rows) =>
                         sortByYearMonthInput(
                           rows.map((r) =>
                             r.clientKey === row.clientKey
@@ -589,229 +759,85 @@ export function ProfilePageForm({
                     }
                   />
                   <label className="block space-y-1 text-sm">
-                    <span className="font-medium">
-                      {labels.workHistory.event}
-                    </span>
-                    <select
-                      name={`workHistory.${index}.eventCode`}
-                      value={row.eventCode}
+                    <span className="font-medium">{labels.licenses.name}</span>
+                    <input
+                      name={`licenses.${index}.name_ja`}
+                      required
+                      value={row.nameJa}
                       onChange={(e) =>
-                        setWorkRows((rows) =>
+                        setLicenseRows((rows) =>
                           rows.map((r) =>
                             r.clientKey === row.clientKey
-                              ? {
-                                  ...r,
-                                  eventCode: e.target
-                                    .value as WorkHistoryEventCode,
-                                }
+                              ? { ...r, nameJa: e.target.value }
                               : r,
                           ),
                         )
                       }
                       className={inputClass}
-                    >
-                      {WORK_HISTORY_EVENT_CODES.map((code) => (
-                        <option key={code} value={code}>
-                          {labels.events.workHistory[code]}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </label>
-                </div>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium">
-                    {labels.workHistory.workContent}
-                  </span>
-                  <input
-                    name={`workHistory.${index}.company_ja`}
-                    required
-                    value={row.workContentJa}
-                    onChange={(e) =>
-                      setWorkRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey
-                            ? { ...r, workContentJa: e.target.value }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={inputClass}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() =>
-                    setWorkRows((rows) =>
-                      rows.filter((r) => r.clientKey !== row.clientKey),
-                    )
-                  }
-                >
-                  {labels.removeRow}
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
-              onClick={() =>
-                setWorkRows((rows) =>
-                  sortByYearMonthInput([
-                    ...rows,
-                    {
-                      clientKey: `new-${crypto.randomUUID()}`,
-                      yearMonth: defaultYearMonth(),
-                      workContentJa: "",
-                      eventCode: "joined",
-                    },
-                  ]),
-                )
-              }
-            >
-              {labels.addRow}
-            </button>
-          </div>
-        ) : workRows.length === 0 ? (
-          <p className="text-sm text-zinc-500">{labels.workHistory.empty}</p>
-        ) : (
-          <TimelineTableWithHead
-            head={
-              <>
-                <th className="py-2 pr-4 font-medium normal-case">
-                  {labels.workHistory.yearMonth}
-                </th>
-                <th className="py-2 font-medium normal-case">
-                  {labels.workHistory.workContent}
-                </th>
-              </>
-            }
-          >
-            {workRows.map((row) => {
-              const { year, month } = yearMonthParts(row.yearMonth);
-              return (
-                <tr key={row.clientKey}>
-                  <td className="whitespace-nowrap py-2.5 pr-4 align-top">
-                    {formatWorkHistoryYearMonthEvent(
-                      year,
-                      month,
-                      labels.events.workHistory[row.eventCode],
-                    )}
-                  </td>
-                  <td className="py-2.5">{row.workContentJa || "—"}</td>
-                </tr>
-              );
-            })}
-          </TimelineTableWithHead>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{labels.sections.licenses}</h2>
-        {editing ? (
-          <div className="space-y-4">
-            {licenseRows.map((row, index) => (
-              <div
-                key={row.clientKey}
-                className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
-              >
-                <input
-                  type="hidden"
-                  name={`licenses.${index}.id`}
-                  value={row.id ?? ""}
-                />
-                <YearMonthField
-                  name={`licenses.${index}.yearMonth`}
-                  label={labels.licenses.yearMonth}
-                  value={row.yearMonth}
-                  onChange={(yearMonth) =>
-                    setLicenseRows((rows) =>
-                      sortByYearMonthInput(
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey ? { ...r, yearMonth } : r,
-                        ),
-                      ),
-                    )
-                  }
-                />
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium">{labels.licenses.name}</span>
-                  <input
-                    name={`licenses.${index}.name_ja`}
-                    required
-                    value={row.nameJa}
-                    onChange={(e) =>
+                  <button
+                    type="button"
+                    className="text-sm text-red-600 hover:underline"
+                    onClick={() =>
                       setLicenseRows((rows) =>
-                        rows.map((r) =>
-                          r.clientKey === row.clientKey
-                            ? { ...r, nameJa: e.target.value }
-                            : r,
-                        ),
+                        rows.filter((r) => r.clientKey !== row.clientKey),
                       )
                     }
-                    className={inputClass}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() =>
-                    setLicenseRows((rows) =>
-                      rows.filter((r) => r.clientKey !== row.clientKey),
-                    )
-                  }
-                >
-                  {labels.removeRow}
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
-              onClick={() =>
-                setLicenseRows((rows) =>
-                  sortByYearMonthInput([
-                    ...rows,
-                    {
-                      clientKey: `new-${crypto.randomUUID()}`,
-                      yearMonth: defaultYearMonth(12),
-                      nameJa: "",
-                    },
-                  ]),
-                )
+                  >
+                    {labels.removeRow}
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="text-sm font-medium text-zinc-700 underline dark:text-zinc-300"
+                onClick={() =>
+                  setLicenseRows((rows) =>
+                    sortByYearMonthInput([
+                      ...rows,
+                      {
+                        clientKey: `new-${crypto.randomUUID()}`,
+                        yearMonth: defaultYearMonth(12),
+                        nameJa: "",
+                      },
+                    ]),
+                  )
+                }
+              >
+                {labels.addRow}
+              </button>
+            </div>
+          ) : licenseRows.length === 0 ? (
+            <p className="text-sm text-zinc-500">{labels.licenses.empty}</p>
+          ) : (
+            <TimelineTableWithHead
+              head={
+                <>
+                  <th className="py-2 pr-4 font-medium normal-case">
+                    {labels.licenses.name}
+                  </th>
+                  <th className="py-2 font-medium normal-case">
+                    {labels.licenses.yearMonth}
+                  </th>
+                </>
               }
             >
-              {labels.addRow}
-            </button>
-          </div>
-        ) : licenseRows.length === 0 ? (
-          <p className="text-sm text-zinc-500">{labels.licenses.empty}</p>
-        ) : (
-          <TimelineTableWithHead
-            head={
-              <>
-                <th className="py-2 pr-4 font-medium normal-case">
-                  {labels.licenses.name}
-                </th>
-                <th className="py-2 font-medium normal-case">
-                  {labels.licenses.yearMonth}
-                </th>
-              </>
-            }
-          >
-            {licenseRows.map((row) => {
-              const { year, month } = yearMonthParts(row.yearMonth);
-              return (
-                <tr key={row.clientKey}>
-                  <td className="py-2.5 pr-4">{row.nameJa || "—"}</td>
-                  <td className="py-2.5 whitespace-nowrap">
-                    {formatYearMonthJa(year, month)}
-                  </td>
-                </tr>
-              );
-            })}
-          </TimelineTableWithHead>
-        )}
-      </section>
+              {licenseRows.map((row) => {
+                const { year, month } = yearMonthParts(row.yearMonth);
+                return (
+                  <tr key={row.clientKey}>
+                    <td className="py-2.5 pr-4">{row.nameJa || "—"}</td>
+                    <td className="py-2.5 whitespace-nowrap">
+                      {formatYearMonthJa(year, month)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </TimelineTableWithHead>
+          )}
+        </section>
+      ) : null}
     </>
   );
 
@@ -824,7 +850,6 @@ export function ProfilePageForm({
             onClick={() => {
               setJustSaved(false);
               setEducationRows(withClientKeys(initial.education));
-              setWorkRows(withClientKeys(initial.workHistory));
               setLicenseRows(withClientKeys(initial.licenses));
               setEditing(true);
             }}
@@ -854,6 +879,9 @@ export function ProfilePageForm({
 
       {editing ? (
         <form action={formAction} className="space-y-8">
+          {!includeLicenses ? (
+            <input type="hidden" name="omitLicenses" value="1" />
+          ) : null}
           {sections}
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
             {saveButton}

@@ -9,7 +9,7 @@ export function SignOutButton() {
   return (
     <button
       type="button"
-      className="underline"
+      className="site-logout"
       onClick={async () => {
         await authClient.signOut();
         // Full reload drops all client state of the previous user, including

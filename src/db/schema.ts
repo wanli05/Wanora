@@ -152,6 +152,38 @@ export const profiles = pgTable(
     altContact: jsonb("alt_contact"),
     photoKey: text("photo_key"),
     dateFormat: text("date_format").notNull().default("wareki"),
+    /** Career Profile extras (My Career). */
+    headline: text("headline"),
+    directionTags: jsonb("direction_tags").$type<string[]>().notNull().default([]),
+    selfPr: jsonb("self_pr"),
+    jobSummary: jsonb("job_summary"),
+    strengths: jsonb("strengths").$type<string[]>().notNull().default([]),
+    languages: jsonb("languages")
+      .$type<{ language: string; level: string }[]>()
+      .notNull()
+      .default([]),
+    nationality: text("nationality"),
+    residenceStatus: text("residence_status"),
+    residencePeriod: text("residence_period"),
+    residenceUntil: date("residence_until", { mode: "date" }),
+    salaryAnnualMan: integer("salary_annual_man"),
+    salaryBonusMan: integer("salary_bonus_man"),
+    salaryMonthlyMan: integer("salary_monthly_man"),
+    salaryOvertimeMan: integer("salary_overtime_man"),
+    salaryHope: text("salary_hope"),
+    personalHope: jsonb("personal_hope"),
+    /** 履歴書フィールド：最寄り駅など */
+    nearestStation: text("nearest_station"),
+    /** 通勤時間（ドアからドアまで）・時間 */
+    commuteHours: integer("commute_hours"),
+    /** 通勤時間・分 */
+    commuteMinutes: integer("commute_minutes"),
+    /** 扶養家族数（配偶者を除く） */
+    dependentsCount: integer("dependents_count"),
+    /** 配偶者：true=有 / false=無 / null=未設定 */
+    hasSpouse: boolean("has_spouse"),
+    /** 配偶者の扶養義務：true=有 / false=無 / null=未設定 */
+    spouseDependent: boolean("spouse_dependent"),
     ...timestamps,
   },
   (t) => [
@@ -169,6 +201,30 @@ export const profiles = pgTable(
     check(
       "profiles_alt_contact_json_check",
       sql`${t.altContact} is null or ${jsonObjectCheck(t.altContact)}`,
+    ),
+    check(
+      "profiles_self_pr_json_check",
+      sql`${t.selfPr} is null or ${jsonObjectCheck(t.selfPr)}`,
+    ),
+    check(
+      "profiles_job_summary_json_check",
+      sql`${t.jobSummary} is null or ${jsonObjectCheck(t.jobSummary)}`,
+    ),
+    check(
+      "profiles_personal_hope_json_check",
+      sql`${t.personalHope} is null or ${jsonObjectCheck(t.personalHope)}`,
+    ),
+    check(
+      "profiles_direction_tags_array_check",
+      sql`jsonb_typeof(${t.directionTags}) = 'array'`,
+    ),
+    check(
+      "profiles_strengths_array_check",
+      sql`jsonb_typeof(${t.strengths}) = 'array'`,
+    ),
+    check(
+      "profiles_languages_array_check",
+      sql`jsonb_typeof(${t.languages}) = 'array'`,
     ),
   ],
 );
@@ -258,6 +314,137 @@ export const licenses = pgTable(
     check("licenses_name_json_check", jsonObjectCheck(t.name)),
     check("licenses_acquired_ym_day_check", yearMonthDayOneCheck(t.acquiredYm)),
     index("licenses_user_acquired_idx").on(t.userId, t.acquiredYm),
+  ],
+);
+
+export const CAREER_PROJECT_STATUSES = ["confirmed", "pending_confirm"] as const;
+export type CareerProjectStatus = (typeof CAREER_PROJECT_STATUSES)[number];
+
+export const CAREER_GOAL_KINDS = ["short", "long"] as const;
+export type CareerGoalKind = (typeof CAREER_GOAL_KINDS)[number];
+
+/** Employer narrative cards for Work History / 職務経歴書職務詳細. */
+export const careerEmployers = pgTable(
+  "career_employers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyName: jsonb("company_name").notNull(),
+    title: text("title"),
+    startYm: date("start_ym", { mode: "date" }).notNull(),
+    endYm: date("end_ym", { mode: "date" }),
+    capitalText: text("capital_text"),
+    revenueText: text("revenue_text"),
+    employeesText: text("employees_text"),
+    narrative: jsonb("narrative"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    check("career_employers_company_name_json_check", jsonObjectCheck(t.companyName)),
+    check(
+      "career_employers_narrative_json_check",
+      sql`${t.narrative} is null or ${jsonObjectCheck(t.narrative)}`,
+    ),
+    check("career_employers_start_ym_day_check", yearMonthDayOneCheck(t.startYm)),
+    check(
+      "career_employers_end_ym_day_check",
+      sql`${t.endYm} is null or ${yearMonthDayOneCheck(t.endYm)}`,
+    ),
+    index("career_employers_user_idx").on(t.userId, t.sortOrder),
+  ],
+);
+
+/** Project portfolio cards (four-column export projection). */
+export const careerProjects = pgTable(
+  "career_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: jsonb("title").notNull(),
+    titleUrl: text("title_url"),
+    startYm: date("start_ym", { mode: "date" }).notNull(),
+    endYm: date("end_ym", { mode: "date" }),
+    overview: jsonb("overview"),
+    phases: jsonb("phases"),
+    responsibilities: jsonb("responsibilities"),
+    results: jsonb("results"),
+    environment: text("environment"),
+    roleText: text("role_text"),
+    scaleText: text("scale_text"),
+    teamSizeText: text("team_size_text"),
+    status: text("status").notNull().default("confirmed"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "career_projects_status_check",
+      inListCheck(t.status.name, CAREER_PROJECT_STATUSES),
+    ),
+    check("career_projects_title_json_check", jsonObjectCheck(t.title)),
+    check(
+      "career_projects_overview_json_check",
+      sql`${t.overview} is null or ${jsonObjectCheck(t.overview)}`,
+    ),
+    check(
+      "career_projects_phases_json_check",
+      sql`${t.phases} is null or ${jsonObjectCheck(t.phases)}`,
+    ),
+    check(
+      "career_projects_responsibilities_json_check",
+      sql`${t.responsibilities} is null or ${jsonObjectCheck(t.responsibilities)}`,
+    ),
+    check(
+      "career_projects_results_json_check",
+      sql`${t.results} is null or ${jsonObjectCheck(t.results)}`,
+    ),
+    check("career_projects_start_ym_day_check", yearMonthDayOneCheck(t.startYm)),
+    check(
+      "career_projects_end_ym_day_check",
+      sql`${t.endYm} is null or ${yearMonthDayOneCheck(t.endYm)}`,
+    ),
+    index("career_projects_user_idx").on(t.userId, t.status, t.sortOrder),
+  ],
+);
+
+export const careerSkills = pgTable(
+  "career_skills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    name: text("name").notNull(),
+    yearsText: text("years_text").notNull(),
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [index("career_skills_user_idx").on(t.userId, t.sortOrder)],
+);
+
+export const careerGoals = pgTable(
+  "career_goals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    content: jsonb("content").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    check("career_goals_kind_check", inListCheck(t.kind.name, CAREER_GOAL_KINDS)),
+    check("career_goals_content_json_check", jsonObjectCheck(t.content)),
+    index("career_goals_user_idx").on(t.userId, t.kind, t.sortOrder),
   ],
 );
 
@@ -536,6 +723,13 @@ export const busyBlocks = pgTable(
 const feedbackTextNonEmpty = (column: AnyPgColumn) =>
   sql`${column} is not null and length(btrim(${column})) > 0`;
 
+/** One Q&A block inside interview feedback (demo: addable rows). */
+export type FeedbackQaItem = {
+  question: string | null;
+  answer: string | null;
+  tag?: string | null;
+};
+
 export const interviewFeedbacks = pgTable(
   "interview_feedbacks",
   {
@@ -545,8 +739,14 @@ export const interviewFeedbacks = pgTable(
     source: text("source").notNull(),
     /** Overview / company quote; optional when structured fields are set. */
     body: text("body"),
+    /**
+     * Legacy single Q&A pair — kept for reversible mapping.
+     * Prefer `qaItems`; writers mirror the first block here.
+     */
     question: text("question"),
     ownAnswer: text("own_answer"),
+    /** Structured Q&A blocks; never drop legacy columns when reading/writing. */
+    qaItems: jsonb("qa_items").$type<FeedbackQaItem[]>().notNull().default([]),
     /** Free short text (通過/見送り/保留 etc.); not applications.outcome. */
     resultText: text("result_text"),
     reflection: text("reflection"),
@@ -561,7 +761,15 @@ export const interviewFeedbacks = pgTable(
         or ${feedbackTextNonEmpty(t.question)}
         or ${feedbackTextNonEmpty(t.ownAnswer)}
         or ${feedbackTextNonEmpty(t.resultText)}
-        or ${feedbackTextNonEmpty(t.reflection)}`,
+        or ${feedbackTextNonEmpty(t.reflection)}
+        or (
+          jsonb_typeof(${t.qaItems}) = 'array'
+          and jsonb_array_length(${t.qaItems}) > 0
+        )`,
+    ),
+    check(
+      "interview_feedbacks_qa_items_array_check",
+      sql`jsonb_typeof(${t.qaItems}) = 'array'`,
     ),
     unique("interview_feedbacks_id_user_uidx").on(t.id, t.userId),
     index("interview_feedbacks_user_idx").on(t.userId),

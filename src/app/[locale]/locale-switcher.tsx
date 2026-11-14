@@ -13,13 +13,13 @@ export function LocaleSwitcher() {
   const [pending, startTransition] = useTransition();
 
   return (
-    <label className="flex items-center gap-2">
+    <label className="site-locale">
       <span className="sr-only">{t("language")}</span>
       <select
         aria-label={t("language")}
         value={locale}
         disabled={pending}
-        className="rounded border border-zinc-300 bg-transparent px-2 py-1 dark:border-zinc-700"
+        className="site-locale-select"
         onChange={(event) => {
           const next = event.target.value as Locale;
           if (next === locale) return;

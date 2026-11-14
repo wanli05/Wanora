@@ -22,6 +22,7 @@ import type {
 } from "@/lib/progress/enums";
 import { ProgressError } from "@/lib/progress/errors";
 import { canCreateFeedback, feedbackSummary } from "@/lib/progress/feedback";
+import { resolveQaItems } from "@/lib/progress/qa-items";
 import {
   hasJobPostingContent,
   normalizeOptionalText,
@@ -283,25 +284,34 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
           const mappedFeedbacks = feedbackList
             .slice()
             .sort((a, b) => a.recordedOn.localeCompare(b.recordedOn) || a.createdAt.getTime() - b.createdAt.getTime())
-            .map((feedback) => ({
-              id: feedback.id,
-              interviewId: feedback.interviewId,
-              source: feedback.source as FeedbackSource,
-              body: feedback.body,
-              question: feedback.question,
-              ownAnswer: feedback.ownAnswer,
-              resultText: feedback.resultText,
-              reflection: feedback.reflection,
-              recordedOn: feedback.recordedOn,
-              summary: feedbackSummary({
+            .map((feedback) => {
+              const qaItems = resolveQaItems({
+                qaItems: feedback.qaItems,
+                question: feedback.question,
+                ownAnswer: feedback.ownAnswer,
+              });
+              return {
+                id: feedback.id,
+                interviewId: feedback.interviewId,
                 source: feedback.source as FeedbackSource,
                 body: feedback.body,
                 question: feedback.question,
                 ownAnswer: feedback.ownAnswer,
+                qaItems,
                 resultText: feedback.resultText,
                 reflection: feedback.reflection,
-              }),
-            }));
+                recordedOn: feedback.recordedOn,
+                summary: feedbackSummary({
+                  source: feedback.source as FeedbackSource,
+                  body: feedback.body,
+                  question: feedback.question,
+                  ownAnswer: feedback.ownAnswer,
+                  qaItems,
+                  resultText: feedback.resultText,
+                  reflection: feedback.reflection,
+                }),
+              };
+            });
           return {
             id: item.id,
             stageId: stage.id,
@@ -311,6 +321,7 @@ export async function loadBoard(db: Db, userId: string): Promise<BoardPayload> {
             mode: item.mode as InterviewMode,
             meetingUrl: item.meetingUrl,
             locationText: item.locationText,
+            interviewers: item.interviewers,
             status: item.status as InterviewStatus,
             canWriteFeedback: canCreateFeedback({
               interviewStatus: item.status,

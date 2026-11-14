@@ -44,13 +44,22 @@ export type BoardInterview = {
   status: InterviewStatus;
 };
 
+export type BoardFeedbackQaItem = {
+  question: string | null;
+  answer: string | null;
+  tag?: string | null;
+};
+
 export type BoardFeedback = {
   id: string;
   interviewId: string;
   source: FeedbackSource;
   body: string | null;
+  /** Legacy single pair — mirrored from first qaItems block. */
   question: string | null;
   ownAnswer: string | null;
+  /** Prefer these blocks in the UI (legacy falls back when empty). */
+  qaItems: BoardFeedbackQaItem[];
   resultText: string | null;
   reflection: string | null;
   recordedOn: string;
@@ -60,6 +69,7 @@ export type BoardFeedback = {
 export type BoardStageInterview = BoardInterview & {
   stageId: string;
   stageKind: StageKind;
+  interviewers: string | null;
   canWriteFeedback: boolean;
   feedbacks: BoardFeedback[];
 };

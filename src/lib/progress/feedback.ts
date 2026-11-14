@@ -1,11 +1,19 @@
+import type { FeedbackQaItem } from "@/db/schema";
 import type { FeedbackSource } from "./enums";
 import { ProgressError } from "./errors";
 import { normalizeOptionalText } from "./job-posting";
+import {
+  mirrorQaToLegacy,
+  normalizeQaItems,
+  qaItemsHaveContent,
+  resolveQaItems,
+} from "./qa-items";
 
 export type FeedbackStructuredFields = {
   body: string | null;
   question: string | null;
   ownAnswer: string | null;
+  qaItems: FeedbackQaItem[];
   resultText: string | null;
   reflection: string | null;
 };
@@ -16,6 +24,7 @@ export type FeedbackInput = {
   body?: string | null;
   question?: string | null;
   ownAnswer?: string | null;
+  qaItems?: FeedbackQaItem[] | null;
   resultText?: string | null;
   reflection?: string | null;
 };
@@ -44,13 +53,24 @@ export function validateFeedbackContent(input: {
   body?: string | null;
   question?: string | null;
   ownAnswer?: string | null;
+  qaItems?: FeedbackQaItem[] | null;
   resultText?: string | null;
   reflection?: string | null;
 }): FeedbackStructuredFields {
+  const mirrored = mirrorQaToLegacy(
+    input.qaItems != null && input.qaItems.length > 0
+      ? normalizeQaItems(input.qaItems)
+      : resolveQaItems({
+          qaItems: input.qaItems,
+          question: input.question,
+          ownAnswer: input.ownAnswer,
+        }),
+  );
   const fields: FeedbackStructuredFields = {
     body: normalizeFeedbackField(input.body),
-    question: normalizeFeedbackField(input.question),
-    ownAnswer: normalizeFeedbackField(input.ownAnswer),
+    question: mirrored.question,
+    ownAnswer: mirrored.ownAnswer,
+    qaItems: mirrored.qaItems,
     resultText: normalizeFeedbackField(input.resultText),
     reflection: normalizeFeedbackField(input.reflection),
   };
@@ -59,7 +79,8 @@ export function validateFeedbackContent(input: {
     !fields.question &&
     !fields.ownAnswer &&
     !fields.resultText &&
-    !fields.reflection
+    !fields.reflection &&
+    !qaItemsHaveContent(fields.qaItems)
   ) {
     throw new ProgressError("invalid", "feedback content required");
   }
@@ -67,8 +88,11 @@ export function validateFeedbackContent(input: {
 }
 
 function firstSnippet(fields: FeedbackStructuredFields): string {
+  const firstQa = fields.qaItems[0];
   return (
     fields.body ??
+    firstQa?.question ??
+    firstQa?.answer ??
     fields.question ??
     fields.ownAnswer ??
     fields.resultText ??
@@ -82,6 +106,7 @@ export function feedbackSummary(input: {
   body?: string | null;
   question?: string | null;
   ownAnswer?: string | null;
+  qaItems?: FeedbackQaItem[] | null;
   resultText?: string | null;
   reflection?: string | null;
 }): string {
@@ -91,10 +116,16 @@ export function feedbackSummary(input: {
       : input.source === "recruiter"
         ? "エージェント"
         : "自分";
+  const resolved = resolveQaItems({
+    qaItems: input.qaItems,
+    question: input.question,
+    ownAnswer: input.ownAnswer,
+  });
   const snippet = firstSnippet({
     body: normalizeFeedbackField(input.body),
     question: normalizeFeedbackField(input.question),
     ownAnswer: normalizeFeedbackField(input.ownAnswer),
+    qaItems: resolved,
     resultText: normalizeFeedbackField(input.resultText),
     reflection: normalizeFeedbackField(input.reflection),
   });
