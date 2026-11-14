@@ -4,6 +4,7 @@
   },
   "Nav": {
     "language": "界面语言",
+    "primary": "主导航",
     "progress": "进度板",
     "recruiters": "猎头",
     "profile": "个人资料",

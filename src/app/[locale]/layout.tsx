@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
-import { Noto_Sans_JP, Noto_Sans_SC } from "next/font/google";
+import { Newsreader, Noto_Sans_JP, Noto_Sans_SC } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { APP_NAME } from "@/lib/app";
 import { LOCALES } from "@/lib/locale";
 import { SiteHeader } from "./site-header";
 import "./globals.css";
+
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  display: "swap",
+});
 
 // CJK fonts are large; they load on demand instead of being preloaded.
 const notoSansJp = Noto_Sans_JP({
@@ -39,7 +46,7 @@ export default async function LocaleLayout({
   return (
     <html
       lang={locale}
-      className={`${notoSansJp.variable} ${notoSansSc.variable} h-full antialiased`}
+      className={`${newsreader.variable} ${notoSansJp.variable} ${notoSansSc.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider locale={locale} messages={messages}>

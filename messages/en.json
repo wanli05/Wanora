@@ -4,6 +4,7 @@
   },
   "Nav": {
     "language": "Language",
+    "primary": "Primary navigation",
     "progress": "Progress board",
     "recruiters": "Recruiters",
     "profile": "Profile",

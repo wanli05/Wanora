@@ -32,6 +32,126 @@ body {
   font-family: var(--font-noto-sans-jp), sans-serif;
 }
 
+/* Global App Header — WN-54; aligned to Demo .app-chrome row */
+.site-header {
+  --sh-teal: #0d6b63;
+  --sh-teal-deep: #084f49;
+  --sh-ink-soft: #3d4f4c;
+  --sh-muted: #6a7a76;
+  --sh-line: #d5ddd8;
+  --sh-card: #fffdf8;
+  position: relative;
+  z-index: 30;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(13, 107, 99, 0.14);
+  background: rgba(255, 253, 248, 0.92);
+  color: var(--sh-ink-soft);
+  backdrop-filter: blur(6px);
+}
+.site-header-row {
+  display: flex;
+  align-items: center;
+  gap: 14px 18px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.site-brand {
+  font-family: var(--font-newsreader), Newsreader, Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--sh-teal-deep);
+  line-height: 1;
+  text-decoration: none;
+  margin-right: 4px;
+}
+.site-brand:hover,
+.site-brand:focus-visible {
+  color: var(--sh-teal);
+  text-decoration: none;
+}
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--sh-muted);
+}
+.site-nav-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+}
+.site-nav-link:hover {
+  color: var(--sh-teal-deep);
+  text-decoration: none;
+}
+.site-nav-link:focus-visible {
+  outline: 2px solid var(--sh-teal);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.site-nav-link[data-active="true"],
+.site-nav-link[aria-current="page"] {
+  color: var(--sh-teal-deep);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--sh-teal);
+  padding-bottom: 2px;
+}
+.site-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--sh-ink-soft);
+}
+.site-locale-select {
+  border: 1px solid var(--sh-line);
+  background: var(--sh-card);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--sh-ink-soft);
+}
+.site-locale-select:disabled {
+  opacity: 0.6;
+}
+.site-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.site-user {
+  margin: 0;
+  color: var(--sh-muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-logout {
+  border: 0;
+  background: transparent;
+  color: var(--sh-teal-deep);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+}
+.site-logout:hover {
+  color: var(--sh-teal);
+  text-decoration: none;
+}
+
 /* My Career shell + export sheets (aligned to locked export-final demo) */
 .mc-shell {
   --mc-teal: #0d6b63;

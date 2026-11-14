@@ -6,23 +6,24 @@ import { APP_NAME } from "@/lib/app";
 import { getSessionUser } from "@/lib/session";
 import { AccountStatus } from "./account-status";
 import { LocaleSwitcher } from "./locale-switcher";
+import { SiteNavLinks } from "./site-nav-links";
 
 export function SiteHeader() {
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-      <div className="flex items-center gap-4">
-        <Link href="/" className="text-lg font-semibold">
+    <header className="site-header" data-testid="site-header">
+      <div className="site-header-row">
+        <Link href="/" className="site-brand">
           {APP_NAME}
         </Link>
         <Suspense fallback={null}>
           <SignedInNav />
         </Suspense>
-      </div>
-      <div className="flex items-center gap-4 text-sm">
-        <LocaleSwitcher />
-        <Suspense fallback={null}>
-          <AccountStatus />
-        </Suspense>
+        <div className="site-header-right">
+          <LocaleSwitcher />
+          <Suspense fallback={null}>
+            <AccountStatus />
+          </Suspense>
+        </div>
       </div>
     </header>
   );
@@ -33,13 +34,10 @@ async function SignedInNav() {
   if (!user) return null;
   const t = await getTranslations("Nav");
   return (
-    <nav className="flex items-center gap-3 text-sm">
-      <Link href="/" className="underline">
-        {t("progress")}
-      </Link>
-      <Link href="/profile" className="underline">
-        {t("myCareer")}
-      </Link>
-    </nav>
+    <SiteNavLinks
+      progressLabel={t("progress")}
+      myCareerLabel={t("myCareer")}
+      ariaLabel={t("primary")}
+    />
   );
 }

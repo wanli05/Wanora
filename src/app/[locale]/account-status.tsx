@@ -12,11 +12,11 @@ export async function AccountStatus() {
 
   if (!user) {
     return (
-      <nav className="flex gap-4">
-        <Link href="/sign-in" className="underline">
+      <nav className="site-account">
+        <Link href="/sign-in" className="site-nav-link">
           {tAccount("signIn")}
         </Link>
-        <Link href="/sign-up" className="underline">
+        <Link href="/sign-up" className="site-nav-link">
           {tAccount("signUp")}
         </Link>
       </nav>
@@ -24,8 +24,10 @@ export async function AccountStatus() {
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <p data-testid="signed-in-as">{user.email}</p>
+    <div className="site-account">
+      <p className="site-user" data-testid="signed-in-as" title={user.email}>
+        {user.email}
+      </p>
       <SignOutButton />
     </div>
   );

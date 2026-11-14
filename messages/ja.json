@@ -4,6 +4,7 @@
   },
   "Nav": {
     "language": "表示言語",
+    "primary": "メインナビゲーション",
     "progress": "進捗ボード",
     "recruiters": "エージェント",
     "profile": "個人資料",
