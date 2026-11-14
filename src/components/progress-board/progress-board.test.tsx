@@ -408,12 +408,30 @@ describe("ProgressBoard", () => {
       expect(screen.getByRole("dialog", { name: "编辑投递" })).toBeInTheDocument();
     });
     expect(screen.getByTestId("edit-section-tabs")).toBeInTheDocument();
+    expect(screen.getByTestId("edit-tab-basic")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("basic-section")).not.toHaveAttribute("hidden");
     expect(screen.getByDisplayValue("テスト株式会社")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "エージェント担当者" })).toBeInTheDocument();
-    expect(screen.getByTestId("job-posting-section")).toBeInTheDocument();
-    expect(screen.getByTestId("company-section")).toBeInTheDocument();
-    expect(screen.getByLabelText("求人其他")).toBeInTheDocument();
     expect(screen.getByLabelText("下一步行动")).toBeInTheDocument();
+    // Mutual exclusive tabs: only 基本情報 visible on open.
+    expect(screen.getByTestId("company-section")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("job-posting-section")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("stage-interviews-section")).toHaveAttribute(
+      "hidden",
+    );
+    fireEvent.click(screen.getByTestId("edit-tab-job"));
+    expect(screen.getByTestId("edit-tab-job")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("basic-section")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("job-posting-section")).not.toHaveAttribute(
+      "hidden",
+    );
+    expect(screen.getByLabelText("求人其他")).toBeInTheDocument();
     expect(screen.queryByLabelText("备注")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存修改" })).toBeInTheDocument();
     expect(screen.getByTestId("delete-application")).toHaveTextContent("删除");

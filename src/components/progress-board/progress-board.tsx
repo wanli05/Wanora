@@ -810,6 +810,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           platformLabel={(app) => platformLabel(app.platformCode, app.platformName)}
           onEdit={(app) => {
             setConflictMsg(null);
+            setEditSection("basic");
             setEditingApp(app);
           }}
         />
@@ -1156,86 +1157,123 @@ function AddApplicationForm({
   return (
     <form className="flex flex-col gap-3" onSubmit={onSubmit}>
       {initial ? (
-        <div className="pb-tabs" data-testid="edit-section-tabs">
+        <div className="pb-tabs" data-testid="edit-section-tabs" role="tablist">
           {sections.map((section) => (
             <button
               key={section.id}
               type="button"
+              role="tab"
+              aria-selected={editSection === section.id}
               data-on={editSection === section.id ? "true" : "false"}
               data-testid={`edit-tab-${section.id}`}
-              onClick={() => {
-                onEditSection?.(section.id);
-                document
-                  .getElementById(`edit-sec-${section.id}`)
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
+              onClick={() => onEditSection?.(section.id)}
             >
               {section.label}
             </button>
           ))}
         </div>
       ) : null}
-      <section id="edit-sec-basic" className="scroll-mt-2 space-y-3">
+      <section
+        id="edit-sec-basic"
+        role={initial ? "tabpanel" : undefined}
+        hidden={Boolean(initial) && editSection !== "basic"}
+        data-testid={initial ? "basic-section" : undefined}
+        className="space-y-3"
+      >
         {initial ? (
           <h3 className="border-b border-[var(--pb-line)] pb-1 text-sm font-bold text-[var(--pb-teal-deep)]">
             {t("editSectionBasic")}
           </h3>
         ) : null}
-      <Field
-        name="company"
-        label={t("company")}
-        required
-        lang="ja"
-        defaultValue={initial?.company ?? ""}
-      />
-      <Field name="role" label={t("role")} lang="ja" defaultValue={initial?.role ?? ""} />
-      <label className="flex flex-col gap-1 text-sm">
-        {t("platform")}
-        <select
-          name="platformId"
+        <Field
+          name="company"
+          label={t("company")}
           required
-          value={platformId}
-          onChange={(event) => setPlatformId(event.target.value)}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          {platforms.map((item) => (
-            <option key={item.id} value={item.id} lang="ja">
-              {platformLabel(item.code, item.name)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {showCustomPlatform ? (
+          lang="ja"
+          defaultValue={initial?.company ?? ""}
+        />
+        <Field
+          name="role"
+          label={t("role")}
+          lang="ja"
+          defaultValue={initial?.role ?? ""}
+        />
         <label className="flex flex-col gap-1 text-sm">
-          {t("customPlatform")}
-          <input
-            name="customPlatformName"
-            lang="ja"
-            placeholder={t("customPlatformPlaceholder")}
-            defaultValue=""
+          {t("platform")}
+          <select
+            name="platformId"
+            required
+            value={platformId}
+            onChange={(event) => setPlatformId(event.target.value)}
             className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-          />
+          >
+            {platforms.map((item) => (
+              <option key={item.id} value={item.id} lang="ja">
+                {platformLabel(item.code, item.name)}
+              </option>
+            ))}
+          </select>
         </label>
-      ) : null}
-      <Field
-        name="recruiterName"
-        label={t("recruiter")}
-        lang="ja"
-        defaultValue={initial?.recruiterName ?? ""}
-      />
-      <Field
-        name="appliedOn"
-        label={t("appliedOn")}
-        type="date"
-        defaultValue={initial?.appliedOn ?? ""}
-      />
+        {showCustomPlatform ? (
+          <label className="flex flex-col gap-1 text-sm">
+            {t("customPlatform")}
+            <input
+              name="customPlatformName"
+              lang="ja"
+              placeholder={t("customPlatformPlaceholder")}
+              defaultValue=""
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+        ) : null}
+        <Field
+          name="recruiterName"
+          label={t("recruiter")}
+          lang="ja"
+          defaultValue={initial?.recruiterName ?? ""}
+        />
+        <Field
+          name="appliedOn"
+          label={t("appliedOn")}
+          type="date"
+          defaultValue={initial?.appliedOn ?? ""}
+        />
+        {initial ? (
+          <label className="flex flex-col gap-1 text-sm">
+            {t("nextPrep")}
+            <textarea
+              name="nextPrepNote"
+              lang="ja"
+              defaultValue={initial.nextPrepNote ?? ""}
+              rows={2}
+              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+        ) : (
+          <>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="includeInfoSession" />
+              {t("includeInfoSession")}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="includeSecondInterview" />
+              {t("includeSecondInterview")}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="skipAptitude" />
+              {t("skipAptitude")}
+            </label>
+          </>
+        )}
       </section>
       {initial ? (
         <>
           <section
             id="edit-sec-company"
+            role="tabpanel"
+            hidden={editSection !== "company"}
             data-testid="company-section"
-            className="scroll-mt-2 space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
+            className="space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
           >
             <h3 className="text-sm font-bold text-[var(--pb-teal-deep)]">
               {t("companySection")}
@@ -1259,8 +1297,10 @@ function AddApplicationForm({
           </section>
           <section
             id="edit-sec-job"
+            role="tabpanel"
+            hidden={editSection !== "job"}
             data-testid="job-posting-section"
-            className="scroll-mt-2 space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
+            className="space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
           >
             <h3 className="text-sm font-bold text-[var(--pb-teal-deep)]">
               {t("jobPostingSection")}
@@ -1324,20 +1364,12 @@ function AddApplicationForm({
               />
             </label>
           </section>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("nextPrep")}
-            <textarea
-              name="nextPrepNote"
-              lang="ja"
-              defaultValue={initial.nextPrepNote ?? ""}
-              rows={2}
-              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </label>
           <section
             id="edit-sec-history"
+            role="tabpanel"
+            hidden={editSection !== "history"}
             data-testid="stage-interviews-section"
-            className="scroll-mt-2 space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
+            className="space-y-3 rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] p-3"
           >
             <h3 className="text-sm font-bold text-[var(--pb-teal-deep)]">
               {t("editSectionHistory")}
@@ -1351,56 +1383,41 @@ function AddApplicationForm({
                 onOpenFeedback={onOpenFeedback}
               />
             )}
+            {canEditInterview ? (
+              <div className="space-y-3 border-t border-[var(--pb-line)] pt-3">
+                <label className="flex flex-col gap-1 text-sm">
+                  {t("mode")}
+                  <select
+                    name="mode"
+                    defaultValue={initial.interview?.mode ?? "google_meet"}
+                    className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <option value="google_meet">{t("modeMeet")}</option>
+                    <option value="teams">{t("modeTeams")}</option>
+                    <option value="other_online">{t("modeOther")}</option>
+                    <option value="onsite">{t("modeOnsite")}</option>
+                    <option value="phone">{t("modePhone")}</option>
+                  </select>
+                </label>
+                <Field
+                  name="url"
+                  label={t("meetingUrl")}
+                  type="url"
+                  defaultValue={initial.interview?.meetingUrl ?? ""}
+                />
+                <Field
+                  name="start"
+                  label={t("start")}
+                  type="datetime-local"
+                  defaultValue={
+                    initial.interview
+                      ? toTokyoInputValue(initial.interview.start)
+                      : ""
+                  }
+                />
+              </div>
+            ) : null}
           </section>
-        </>
-      ) : (
-        <>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="includeInfoSession" />
-            {t("includeInfoSession")}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="includeSecondInterview" />
-            {t("includeSecondInterview")}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="skipAptitude" />
-            {t("skipAptitude")}
-          </label>
-        </>
-      )}
-      {canEditInterview ? (
-        <>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("mode")}
-            <select
-              name="mode"
-              defaultValue={initial?.interview?.mode ?? "google_meet"}
-              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              <option value="google_meet">{t("modeMeet")}</option>
-              <option value="teams">{t("modeTeams")}</option>
-              <option value="other_online">{t("modeOther")}</option>
-              <option value="onsite">{t("modeOnsite")}</option>
-              <option value="phone">{t("modePhone")}</option>
-            </select>
-          </label>
-          <Field
-            name="url"
-            label={t("meetingUrl")}
-            type="url"
-            defaultValue={initial?.interview?.meetingUrl ?? ""}
-          />
-          <Field
-            name="start"
-            label={t("start")}
-            type="datetime-local"
-            defaultValue={
-              initial?.interview
-                ? toTokyoInputValue(initial.interview.start)
-                : ""
-            }
-          />
         </>
       ) : null}
       {conflictMsg ? (
