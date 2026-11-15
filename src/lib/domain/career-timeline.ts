@@ -13,6 +13,36 @@ function entryMs(createdAt?: Date | null): number {
   return createdAt?.getTime() ?? 0;
 }
 
+/** Parse display labels like `2025年9月` into numeric year/month. */
+function parseAtYearMonth(at: string): { year: number; month: number } | null {
+  const match = /^(\d{4})年(\d{1,2})月$/.exec(at.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    return null;
+  }
+  return { year, month };
+}
+
+/** Newest year/month first; unparseable labels sort after parseable ones. */
+function compareAtDescending(a: string, b: string): number {
+  const pa = parseAtYearMonth(a);
+  const pb = parseAtYearMonth(b);
+  if (pa && pb) {
+    if (pa.year !== pb.year) return pb.year - pa.year;
+    return pb.month - pa.month;
+  }
+  if (pa) return -1;
+  if (pb) return 1;
+  return b.localeCompare(a, "ja");
+}
+
 export function buildCareerTimeline(input: {
   education: {
     id: string;
@@ -130,7 +160,7 @@ export function buildCareerTimeline(input: {
   }
 
   return items.sort((a, b) => {
-    const byAt = b.at.localeCompare(a.at, "ja");
+    const byAt = compareAtDescending(a.at, b.at);
     if (byAt !== 0) return byAt;
     if (a.entryOrder !== b.entryOrder) return a.entryOrder - b.entryOrder;
     return a.id.localeCompare(b.id);
