@@ -79,6 +79,11 @@ export function getServerEnv(): ServerEnv {
   return cached;
 }
 
+/** Clear cached env (tests that mutate process.env). */
+export function resetServerEnvCache() {
+  cached = undefined;
+}
+
 export function isObjectStorageConfigured(
   env: ServerEnv = getServerEnv(),
 ): boolean {

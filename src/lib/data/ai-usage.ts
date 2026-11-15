@@ -56,6 +56,7 @@ export async function updateAiUsageEventStatus(
     estimatedCostUsd?: string;
     latencyMs?: number | null;
     errorCode?: string | null;
+    model?: string | null;
   },
 ) {
   const [row] = await db
@@ -73,6 +74,7 @@ export async function updateAiUsageEventStatus(
         : {}),
       ...(patch.latencyMs !== undefined ? { latencyMs: patch.latencyMs } : {}),
       ...(patch.errorCode !== undefined ? { errorCode: patch.errorCode } : {}),
+      ...(patch.model !== undefined ? { model: patch.model } : {}),
     })
     .where(and(eq(aiUsageEvents.id, id), eq(aiUsageEvents.userId, userId)))
     .returning();
