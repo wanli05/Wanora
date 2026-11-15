@@ -143,6 +143,29 @@ describe("ai_jobs claim + fencing", () => {
     expect(bad.ok).toBe(false);
   });
 
+  it("does not reclaim jobs stuck in calling_provider (uncertain billing)", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const { conv, msg } = await seedConversation(user.id);
+    const stuck = await insertAiJob(db, user.id, {
+      conversationId: conv.id,
+      userMessageId: msg.id,
+      clientRequestId: randomUUID(),
+      feature: "chat",
+      status: "running",
+      providerOutcome: "not_started",
+      executionPhase: "calling_provider",
+      attempt: 1,
+      fencingToken: 1,
+      lockedBy: "dead",
+      leaseExpiresAt: new Date(Date.now() - 5_000),
+    });
+
+    const claimed = await claimAiJobs(db, { workerId: "w-x", limit: 10 });
+    expect(claimed.find((j) => j.id === stuck.id)).toBeUndefined();
+  });
+
   it("does not reclaim succeeded, canceled, or uncertain jobs", async () => {
     const db = getDb();
     const user = newUser();

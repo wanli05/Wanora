@@ -7,6 +7,8 @@ export default defineConfig({
     include: ["src/**/*.int.test.ts"],
     globalSetup: ["./test/integration/global-setup.ts"],
     setupFiles: ["./test/integration/setup.ts"],
+    // Shared Testcontainers Postgres: AI job claim/SKIP LOCKED races across files.
+    fileParallelism: false,
     testTimeout: 30_000,
     hookTimeout: 120_000,
   },

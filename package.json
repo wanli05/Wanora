@@ -15,7 +15,8 @@
     "prepare": "husky",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.mts"
+    "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.mts",
+    "ai:worker": "tsx --env-file-if-exists=.env.local scripts/ai-worker.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",

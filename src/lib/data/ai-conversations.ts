@@ -93,6 +93,17 @@ export async function getUsableAiConversation(
   return row;
 }
 
+/** Own conversation that can accept new AI jobs (active only). */
+export async function getActiveAiConversation(
+  db: Db,
+  userId: string,
+  id: string,
+) {
+  const row = await getAiConversation(db, userId, id);
+  if (!row || row.status !== "active") return null;
+  return row;
+}
+
 export async function createAiConversation(
   db: Db,
   userId: string,

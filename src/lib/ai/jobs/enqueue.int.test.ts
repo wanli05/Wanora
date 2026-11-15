@@ -1,0 +1,204 @@
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getDb } from "@/db";
+import { aiJobs, aiMessages, aiUsageEvents, users } from "@/db/schema";
+import { enqueueAiJob } from "@/lib/ai/jobs/enqueue";
+import { createAiConversation } from "@/lib/data/ai-conversations";
+import { getAiDailyBudgetCounter } from "@/lib/data/ai-budget";
+import { resetServerEnvCache } from "@/lib/env";
+
+function newUser(name = "Enqueue Test") {
+  return {
+    id: randomUUID(),
+    name,
+    email: `${randomUUID()}@example.test`,
+  };
+}
+
+function setAiEnv(overrides: Record<string, string> = {}) {
+  process.env.AI_ENABLED = "true";
+  process.env.AI_PROVIDER = "mock";
+  process.env.AI_RATE_LIMIT_PER_MINUTE = "50";
+  process.env.AI_DAILY_TOKEN_BUDGET = "100000";
+  process.env.AI_DAILY_COST_BUDGET_USD = "1";
+  process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
+  Object.assign(process.env, overrides);
+  resetServerEnvCache();
+}
+
+beforeEach(() => {
+  setAiEnv();
+});
+
+afterEach(() => {
+  delete process.env.AI_ENABLED;
+  delete process.env.AI_RATE_LIMIT_PER_MINUTE;
+  delete process.env.AI_DAILY_TOKEN_BUDGET;
+  delete process.env.AI_DAILY_COST_BUDGET_USD;
+  delete process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD;
+  resetServerEnvCache();
+});
+
+describe("enqueueAiJob", () => {
+  it("atomically creates usage(reserved) + user message + queued job", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "q" });
+    const clientRequestId = randomUUID();
+
+    const result = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId,
+      content: "職務要約を直してください",
+      pageContext: { path: "/ja/my-career", area: "my_career" },
+      targetContext: { type: "profile", section: "job_summary" },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.replayed).toBe(false);
+    expect(result.job.status).toBe("queued");
+    expect(result.job.userMessageId).toBe(result.userMessage.id);
+    expect(result.job.usageEventId).toBeTruthy();
+    expect(result.job.pageContext).toMatchObject({
+      path: "/ja/my-career",
+      area: "my_career",
+    });
+    expect(result.job.targetContext).toMatchObject({
+      type: "profile",
+      section: "job_summary",
+    });
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, result.job.usageEventId!));
+    expect(usage.status).toBe("reserved");
+    expect(usage.requestId).toBe(clientRequestId);
+
+    const [msg] = await db
+      .select()
+      .from(aiMessages)
+      .where(eq(aiMessages.id, result.userMessage.id));
+    expect(msg.role).toBe("user");
+    expect(msg.content).toContain("職務要約");
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBeGreaterThan(0);
+  });
+
+  it("is concurrent-safe idempotent for the same clientRequestId", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "idem" });
+    const clientRequestId = randomUUID();
+    const input = {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId,
+      content: "同じリクエスト",
+    };
+
+    const [a, b] = await Promise.all([
+      enqueueAiJob(db, input),
+      enqueueAiJob(db, input),
+    ]);
+
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(a.job.id).toBe(b.job.id);
+    expect(a.userMessage.id).toBe(b.userMessage.id);
+    expect([a.replayed, b.replayed].filter(Boolean).length).toBeGreaterThanOrEqual(
+      1,
+    );
+
+    const jobs = await db
+      .select()
+      .from(aiJobs)
+      .where(eq(aiJobs.userId, user.id));
+    expect(jobs).toHaveLength(1);
+
+    const usages = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.userId, user.id));
+    expect(usages.filter((u) => u.requestId === clientRequestId)).toHaveLength(
+      1,
+    );
+
+    const msgs = await db
+      .select()
+      .from(aiMessages)
+      .where(eq(aiMessages.userId, user.id));
+    expect(msgs).toHaveLength(1);
+  });
+
+  it("rejects when daily cost budget is exceeded", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "budget" });
+    setAiEnv({ AI_DAILY_COST_BUDGET_USD: "0" });
+
+    const result = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId: randomUUID(),
+      content: "予算オーバー",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("budget_exceeded");
+
+    const jobs = await db
+      .select()
+      .from(aiJobs)
+      .where(eq(aiJobs.userId, user.id));
+    expect(jobs).toHaveLength(0);
+    const msgs = await db
+      .select()
+      .from(aiMessages)
+      .where(eq(aiMessages.userId, user.id));
+    expect(msgs).toHaveLength(0);
+  });
+
+  it("rejects archived or foreign conversations", async () => {
+    const db = getDb();
+    const owner = newUser("Owner");
+    const other = newUser("Other");
+    await db.insert(users).values([owner, other]);
+    const conv = await createAiConversation(db, owner.id, { title: "mine" });
+    const archived = await createAiConversation(db, owner.id, {
+      title: "old",
+    });
+    const { updateAiConversation } = await import(
+      "@/lib/data/ai-conversations"
+    );
+    await updateAiConversation(db, owner.id, archived.id, {
+      status: "archived",
+    });
+
+    const archivedResult = await enqueueAiJob(db, {
+      userId: owner.id,
+      conversationId: archived.id,
+      clientRequestId: randomUUID(),
+      content: "archived",
+    });
+    expect(archivedResult.ok).toBe(false);
+    if (!archivedResult.ok) expect(archivedResult.code).toBe("not_found");
+
+    const cross = await enqueueAiJob(db, {
+      userId: other.id,
+      conversationId: conv.id,
+      clientRequestId: randomUUID(),
+      content: "cross",
+    });
+    expect(cross.ok).toBe(false);
+    if (!cross.ok) expect(cross.code).toBe("not_found");
+  });
+});

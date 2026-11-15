@@ -101,6 +101,24 @@ export async function getAiJobById(db: Db, id: string) {
   return row ?? null;
 }
 
+export async function findAiJobByClientRequestId(
+  db: Db,
+  userId: string,
+  clientRequestId: string,
+) {
+  const [row] = await db
+    .select()
+    .from(aiJobs)
+    .where(
+      and(
+        eq(aiJobs.userId, userId),
+        eq(aiJobs.clientRequestId, clientRequestId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 /**
  * Atomically claim up to `limit` runnable jobs via FOR UPDATE SKIP LOCKED.
  * Increments fencing_token and attempt on each claim.
@@ -128,6 +146,8 @@ export async function claimAiJobs(
   const leaseExpires = new Date(now.getTime() + leaseMs);
 
   return db.transaction(async (tx) => {
+    // Reclaim only before_provider crashes — never auto-retry calling_provider /
+    // after_provider (billing may already be uncertain).
     const candidates = await tx
       .select({ id: aiJobs.id })
       .from(aiJobs)
@@ -138,6 +158,7 @@ export async function claimAiJobs(
             eq(aiJobs.status, "running"),
             lt(aiJobs.leaseExpiresAt, now),
             eq(aiJobs.providerOutcome, "not_started"),
+            eq(aiJobs.executionPhase, "before_provider"),
             sql`${aiJobs.attempt} < ${aiJobs.maxAttempts}`,
           ),
         ),

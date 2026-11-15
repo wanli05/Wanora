@@ -1,0 +1,264 @@
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getDb } from "@/db";
+import { aiMessages, aiUsageEvents, users } from "@/db/schema";
+import { enqueueAiJob } from "@/lib/ai/jobs/enqueue";
+import {
+  executeAiJob,
+  ProviderCleanFailure,
+  ProviderUncertainFailure,
+} from "@/lib/ai/jobs/execute";
+import { runAiWorkerOnce } from "@/lib/ai/jobs/worker";
+import { createAiConversation } from "@/lib/data/ai-conversations";
+import {
+  claimAiJobs,
+  forceAiJobLeaseExpiry,
+  getAiJobById,
+  updateAiJobWithFence,
+} from "@/lib/data/ai-jobs";
+import { getAiDailyBudgetCounter } from "@/lib/data/ai-budget";
+import { resetServerEnvCache } from "@/lib/env";
+import type { AiProvider } from "@/lib/ai/types";
+
+function newUser(name = "Execute Test") {
+  return {
+    id: randomUUID(),
+    name,
+    email: `${randomUUID()}@example.test`,
+  };
+}
+
+function setAiEnv(overrides: Record<string, string> = {}) {
+  process.env.AI_ENABLED = "true";
+  process.env.AI_PROVIDER = "mock";
+  process.env.AI_RATE_LIMIT_PER_MINUTE = "50";
+  process.env.AI_DAILY_TOKEN_BUDGET = "100000";
+  process.env.AI_DAILY_COST_BUDGET_USD = "1";
+  process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
+  Object.assign(process.env, overrides);
+  resetServerEnvCache();
+}
+
+beforeEach(() => {
+  setAiEnv();
+});
+
+afterEach(() => {
+  delete process.env.AI_ENABLED;
+  delete process.env.AI_RATE_LIMIT_PER_MINUTE;
+  delete process.env.AI_DAILY_TOKEN_BUDGET;
+  delete process.env.AI_DAILY_COST_BUDGET_USD;
+  delete process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD;
+  resetServerEnvCache();
+});
+
+async function enqueueOne(userId: string, content = "こんにちは") {
+  const db = getDb();
+  const conv = await createAiConversation(db, userId, { title: "exec" });
+  const result = await enqueueAiJob(db, {
+    userId,
+    conversationId: conv.id,
+    clientRequestId: randomUUID(),
+    content,
+    pageContext: { path: "/ja/my-career", area: "my_career" },
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error("enqueue failed");
+  return result;
+}
+
+describe("executeAiJob / worker", () => {
+  it("persists assistant message and settles usage on success", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id, "職務経歴を要約");
+
+    const { results } = await runAiWorkerOnce(db, { workerId: "w-ok" });
+    expect(results).toHaveLength(1);
+    expect(results[0].ok).toBe(true);
+    if (!results[0].ok) return;
+
+    const job = await getAiJobById(db, enq.job.id);
+    expect(job?.status).toBe("succeeded");
+    expect(job?.resultMessageId).toBe(results[0].resultMessageId);
+    expect(job?.providerOutcome).toBe("succeeded");
+    expect(job?.lockedBy).toBeNull();
+
+    const [assistant] = await db
+      .select()
+      .from(aiMessages)
+      .where(eq(aiMessages.id, job!.resultMessageId!));
+    expect(assistant.role).toBe("assistant");
+    expect(assistant.content).toContain("【モック応答】");
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, job!.usageEventId!));
+    expect(usage.status).toBe("ok");
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBe(0);
+    expect(Number(budget!.spentUsd)).toBeGreaterThan(0);
+  });
+
+  it("stale fencing token cannot settle after reclaim", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id);
+
+    const [old] = await claimAiJobs(db, {
+      workerId: "w-old",
+      leaseMs: 60_000,
+    });
+    expect(old.id).toBe(enq.job.id);
+
+    await forceAiJobLeaseExpiry(db, old.id, new Date(Date.now() - 1_000));
+    const [neu] = await claimAiJobs(db, { workerId: "w-new" });
+    expect(neu.fencingToken).toBeGreaterThan(old.fencingToken);
+
+    const stale = await executeAiJob(db, {
+      job: old,
+      workerId: "w-old",
+    });
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) expect(stale.reason).toBe("stale_fence");
+
+    const fresh = await executeAiJob(db, {
+      job: neu,
+      workerId: "w-new",
+    });
+    expect(fresh.ok).toBe(true);
+
+    const job = await getAiJobById(db, enq.job.id);
+    expect(job?.status).toBe("succeeded");
+    expect(job?.lockedBy).toBeNull();
+  });
+
+  it("rejects duplicate settle after success (fenced)", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id);
+    const [claimed] = await claimAiJobs(db, { workerId: "w1" });
+
+    const first = await executeAiJob(db, {
+      job: claimed,
+      workerId: "w1",
+    });
+    expect(first.ok).toBe(true);
+
+    const second = await updateAiJobWithFence(
+      db,
+      {
+        jobId: claimed.id,
+        workerId: "w1",
+        fencingToken: claimed.fencingToken,
+      },
+      { status: "succeeded", clearLock: true },
+    );
+    expect(second).toEqual({ ok: false, reason: "stale_fence" });
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, enq.job.usageEventId!));
+    expect(usage.status).toBe("ok");
+  });
+
+  it("marks clean provider failure as failed and releases reserve", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id);
+    const [claimed] = await claimAiJobs(db, { workerId: "w-fail" });
+
+    const failing: AiProvider = {
+      id: "mock",
+      async complete() {
+        throw new ProviderCleanFailure("mock boom", "mock_error");
+      },
+    };
+
+    const result = await executeAiJob(db, {
+      job: claimed,
+      workerId: "w-fail",
+      provider: failing,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("provider_failed");
+
+    const job = await getAiJobById(db, enq.job.id);
+    expect(job?.status).toBe("failed");
+    expect(job?.providerOutcome).toBe("failed");
+    expect(job?.errorCode).toBe("mock_error");
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, enq.job.usageEventId!));
+    expect(usage.status).toBe("error");
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBe(0);
+  });
+
+  it("marks uncertain provider outcome without auto-retry reclaim", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id);
+    const [claimed] = await claimAiJobs(db, { workerId: "w-unc" });
+
+    const uncertain: AiProvider = {
+      id: "mock",
+      async complete() {
+        throw new ProviderUncertainFailure("timeout");
+      },
+    };
+
+    const result = await executeAiJob(db, {
+      job: claimed,
+      workerId: "w-unc",
+      provider: uncertain,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("provider_uncertain");
+
+    const job = await getAiJobById(db, enq.job.id);
+    expect(job?.status).toBe("failed");
+    expect(job?.providerOutcome).toBe("uncertain");
+
+    await forceAiJobLeaseExpiry(
+      db,
+      enq.job.id,
+      new Date(Date.now() - 1_000),
+    );
+    const reclaimed = await claimAiJobs(db, { workerId: "w-retry", limit: 5 });
+    expect(reclaimed.find((j) => j.id === enq.job.id)).toBeUndefined();
+  });
+
+  it("concurrent workers claim distinct jobs via SKIP LOCKED", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    await enqueueOne(user.id, "job-a");
+    await enqueueOne(user.id, "job-b");
+
+    const [c1, c2] = await Promise.all([
+      claimAiJobs(db, { workerId: "wa", limit: 1 }),
+      claimAiJobs(db, { workerId: "wb", limit: 1 }),
+    ]);
+    const ids = new Set([...c1, ...c2].map((j) => j.id));
+    expect(ids.size).toBe(2);
+
+    const results = await Promise.all([
+      ...c1.map((job) => executeAiJob(db, { job, workerId: "wa" })),
+      ...c2.map((job) => executeAiJob(db, { job, workerId: "wb" })),
+    ]);
+    expect(results.every((r) => r.ok)).toBe(true);
+  });
+});
