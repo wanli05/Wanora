@@ -1,4 +1,4 @@
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { aiMessages, type AiMessageRole } from "@/db/schema";
 
@@ -40,6 +40,27 @@ export async function listAiMessages(
     return query.limit(limit).offset(offset);
   }
   return query;
+}
+
+/** Most recent messages in chronological order (oldest → newest). */
+export async function listRecentAiMessages(
+  db: Db,
+  userId: string,
+  conversationId: string,
+  limit: number,
+) {
+  const rows = await db
+    .select()
+    .from(aiMessages)
+    .where(
+      and(
+        eq(aiMessages.userId, userId),
+        eq(aiMessages.conversationId, conversationId),
+      ),
+    )
+    .orderBy(desc(aiMessages.createdAt))
+    .limit(limit);
+  return rows.reverse();
 }
 
 export async function countAiMessages(

@@ -43,3 +43,9 @@ export {
   type AiConversationDto,
   type AiMessageDto,
 } from "@/lib/ai/conversation";
+export {
+  chatBodySchema,
+  runMockChat,
+  type ChatBody,
+  type ChatServiceResult,
+} from "@/lib/ai/chat";

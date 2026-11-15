@@ -5,7 +5,13 @@ export type AiApiErrorCode =
   | "not_found"
   | "invalid_body"
   | "invalid_query"
-  | "invalid_params";
+  | "invalid_params"
+  | "conversation_archived"
+  | "ai_unavailable"
+  | "rate_limited"
+  | "budget_exceeded"
+  | "provider_error"
+  | "duplicate_request";
 
 export function aiError(
   code: AiApiErrorCode,
