@@ -86,6 +86,59 @@ describe("buildCareerTimeline", () => {
     expect(items.some((i) => i.title === "旧会社")).toBe(false);
   });
 
+  it("orders months by numeric year/month descending (9 before 10/12 as strings would be wrong)", () => {
+    const items = buildCareerTimeline({
+      education: [],
+      workHistory: [],
+      employers: [],
+      licenses: [
+        {
+          id: "sep",
+          acquiredYm: yearMonthFromInput(2025, 9),
+          name: { ja: "九月" },
+          createdAt: new Date("2025-01-01T00:00:00Z"),
+        },
+        {
+          id: "dec",
+          acquiredYm: yearMonthFromInput(2025, 12),
+          name: { ja: "十二月" },
+          createdAt: new Date("2025-01-02T00:00:00Z"),
+        },
+        {
+          id: "oct",
+          acquiredYm: yearMonthFromInput(2025, 10),
+          name: { ja: "十月" },
+          createdAt: new Date("2025-01-03T00:00:00Z"),
+        },
+      ],
+      projects: [
+        {
+          id: "p-aug",
+          startYm: yearMonthFromInput(2024, 8),
+          title: { ja: "去年八月" },
+          status: "confirmed",
+          createdAt: new Date("2025-01-04T00:00:00Z"),
+        },
+      ],
+      skills: [],
+    });
+
+    expect(items.map((i) => i.at)).toEqual([
+      "2025年12月",
+      "2025年10月",
+      "2025年9月",
+      "2024年8月",
+    ]);
+
+    const groups = groupCareerTimelineByAt(items);
+    expect(groups.map((g) => g.at)).toEqual([
+      "2025年12月",
+      "2025年10月",
+      "2025年9月",
+      "2024年8月",
+    ]);
+  });
+
   it("orders same-month events left-to-right by entry time", () => {
     const items = buildCareerTimeline({
       education: [
