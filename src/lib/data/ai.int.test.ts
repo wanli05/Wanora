@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { users } from "@/db/schema";
+import { aiUsageEvents, users } from "@/db/schema";
 import {
   createAiConversation,
   getAiConversation,
@@ -57,6 +58,23 @@ describe("ai data access", () => {
     ).rejects.toThrow();
   });
 
+  it("rejects usage rows that point at another user's conversation", async () => {
+    const db = getDb();
+    const a = newUser("A");
+    const b = newUser("B");
+    await db.insert(users).values([a, b]);
+    const convA = await createAiConversation(db, a.id);
+
+    await expect(
+      insertAiUsageEvent(db, b.id, {
+        feature: "chat",
+        provider: "mock",
+        status: "ok",
+        conversationId: convA.id,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("soft-deletes conversations and hard-deletes after cutoff", async () => {
     const db = getDb();
     const user = newUser();
@@ -86,9 +104,7 @@ describe("ai data access", () => {
     expect(removed).toBeGreaterThanOrEqual(1);
     expect(await getAiConversation(db, user.id, conv.id)).toBeNull();
 
-    // Usage row remains; conversation_id nulled by FK ON DELETE SET NULL.
-    const { aiUsageEvents } = await import("@/db/schema");
-    const { eq } = await import("drizzle-orm");
+    // Usage retained; composite FK SET NULL (conversation_id) only.
     const [usageRow] = await db
       .select()
       .from(aiUsageEvents)
@@ -96,6 +112,28 @@ describe("ai data access", () => {
     expect(usageRow.userId).toBe(user.id);
     expect(usageRow.conversationId).toBeNull();
     expect(usageRow.estimatedCostUsd).toBe("0.010000");
+  });
+
+  it("cascades usage when the owning user account is deleted", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id);
+    const usage = await insertAiUsageEvent(db, user.id, {
+      feature: "chat",
+      provider: "mock",
+      status: "ok",
+      conversationId: conv.id,
+      estimatedCostUsd: "0.02",
+    });
+
+    await db.delete(users).where(eq(users.id, user.id));
+
+    const leftover = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, usage.id));
+    expect(leftover).toHaveLength(0);
   });
 
   it("enforces client_message_id uniqueness per user", async () => {

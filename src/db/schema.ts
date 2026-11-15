@@ -925,12 +925,21 @@ export const aiUsageEvents = pgTable(
     index("ai_usage_events_user_created_idx").on(t.userId, t.createdAt),
     index("ai_usage_events_created_idx").on(t.createdAt),
     index("ai_usage_events_status_created_idx").on(t.status, t.createdAt),
-    // Single-column FK so ON DELETE SET NULL only clears conversation_id
-    // (composite FK + SET NULL would also null user_id and violate NOT NULL).
+    /**
+     * Composite ownership FK. Live DB uses PostgreSQL 15+ column-list action:
+     *   ON DELETE SET NULL (conversation_id)
+     * so hard-deleting a conversation clears only conversation_id and keeps
+     * user_id (usage audit retained).
+     *
+     * Drizzle's onDelete('set null') cannot express the column list; migration
+     * `0012_ai_usage_conversation_user_fk.sql` is hand-authored. Do NOT re-run
+     * db:generate in a way that replaces that clause with bare SET NULL (which
+     * would null user_id and break NOT NULL / cascade semantics).
+     */
     foreignKey({
-      columns: [t.conversationId],
-      foreignColumns: [aiConversations.id],
-      name: "ai_usage_events_conversation_id_fk",
+      columns: [t.conversationId, t.userId],
+      foreignColumns: [aiConversations.id, aiConversations.userId],
+      name: "ai_usage_events_conversation_user_fk",
     }).onDelete("set null"),
   ],
 );

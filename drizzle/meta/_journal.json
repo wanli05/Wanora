@@ -85,6 +85,13 @@
       "when": 1794737585728,
       "tag": "0011_ai_assistant_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794738664915,
+      "tag": "0012_ai_usage_conversation_user_fk",
+      "breakpoints": true
     }
   ]
 }
