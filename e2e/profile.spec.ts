@@ -1,28 +1,14 @@
-import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-
-const localeCookie = {
-  name: "NEXT_LOCALE",
-  value: "ja",
-  domain: "localhost",
-  path: "/",
-  sameSite: "Lax" as const,
-};
+import { apiSignUp, newSignedInPage } from "./ai-helpers";
 
 test("signed-in user can edit profile and add education on one page", async ({
-  page,
-  context,
+  browser,
+  request,
 }) => {
-  await context.addCookies([localeCookie]);
-  const email = `e2e-profile-${randomUUID()}@example.test`;
-  const password = "correct-horse-battery";
-
-  await page.goto("/sign-up");
-  await page.getByLabel("氏名").fill("山田 太郎");
-  await page.getByLabel("メールアドレス").fill(email);
-  await page.getByLabel("パスワード").fill(password);
-  await page.getByRole("button", { name: "登録する" }).click();
-  await expect(page).toHaveURL("/", { timeout: 15_000 });
+  // API signup avoids UI race / Better Auth 429 under parallel workers
+  // (previous flaky: stayed on /sign-up after click).
+  const creds = await apiSignUp(request, { name: "山田 太郎" });
+  const { page, context } = await newSignedInPage(browser, creds);
 
   await page.getByRole("link", { name: "My Career" }).click();
   await expect(page).toHaveURL("/profile");
@@ -52,4 +38,6 @@ test("signed-in user can edit profile and add education on one page", async ({
   await expect(page.getByRole("cell", { name: "2020年4月" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "入学" })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("個人資料を保存しました。");
+
+  await context.close();
 });

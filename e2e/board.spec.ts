@@ -1,23 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { apiSignUp, newSignedInPage } from "./ai-helpers";
 
-test("signed-in home is the progress board", async ({ page, context }) => {
-  await context.addCookies([
-    {
-      name: "NEXT_LOCALE",
-      value: "ja",
-      domain: "localhost",
-      path: "/",
-      sameSite: "Lax",
-    },
-  ]);
-  const email = `e2e-board-${randomUUID()}@example.test`;
-  await page.goto("/sign-up");
-  await page.getByLabel("氏名").fill("山田 太郎");
-  await page.getByLabel("メールアドレス").fill(email);
-  await page.getByLabel("パスワード").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "登録する" }).click();
-  await expect(page).toHaveURL("/");
+test("signed-in home is the progress board", async ({ browser, request }) => {
+  const creds = await apiSignUp(request, { name: "山田 太郎" });
+  const { page, context } = await newSignedInPage(browser, creds);
+
   await expect(page.getByRole("heading", { name: "応募進捗" })).toBeVisible();
   await expect(page.getByTestId("board-empty")).toBeVisible();
 
@@ -34,4 +21,6 @@ test("signed-in home is the progress board", async ({ page, context }) => {
   await expect(card.getByRole("button", { name: "詳細を見る" })).toBeVisible();
   await expect(card.getByRole("button", { name: "面接準備" })).toBeVisible();
   await expect(page.getByTestId("task-bar")).toBeVisible();
+
+  await context.close();
 });
