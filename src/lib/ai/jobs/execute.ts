@@ -9,12 +9,15 @@ import { mockEstimatedCostUsd } from "@/lib/ai/providers/mock";
 import { withUserAiLock } from "@/lib/ai/rate-limit";
 import type { AiChatMessage, AiProvider } from "@/lib/ai/types";
 import { updateAiUsageEventStatus } from "@/lib/ai/usage";
+import { getAiConversation } from "@/lib/data/ai-conversations";
 import {
+  getAiJobById,
   type AiJobFence,
   type AiJobRow,
   updateAiJobWithFence,
 } from "@/lib/data/ai-jobs";
 import { createAiMessage, listAiMessages } from "@/lib/data/ai-messages";
+import { releaseReservedUsageIfNeeded } from "@/lib/ai/jobs/release-budget";
 
 /** Provider threw a confirmed non-billing failure (safe to settle release). */
 export class ProviderCleanFailure extends Error {
@@ -53,7 +56,8 @@ export type ExecuteAiJobResult =
         | "provider_failed"
         | "provider_uncertain"
         | "missing_usage"
-        | "aborted";
+        | "aborted"
+        | "canceled";
       job?: AiJobRow;
     };
 
@@ -131,6 +135,12 @@ export async function executeAiJob(
     };
   }
 
+  // Phase B: cancel / soft-delete before provider — safe to release reserved.
+  const preflight = await shouldStopBeforeProvider(db, job);
+  if (preflight.stop) {
+    return finalizeCanceled(db, fence, job, now, preflight.code);
+  }
+
   const phase = await updateAiJobWithFence(db, fence, {
     executionPhase: "calling_provider",
   });
@@ -139,7 +149,8 @@ export async function executeAiJob(
   }
 
   if (input.signal?.aborted) {
-    return finalizeUncertain(db, fence, job, now, "aborted_before_provider");
+    // Abort after entering calling_provider → billing unknown.
+    return finalizeUncertain(db, fence, job, now, "aborted_calling_provider");
   }
 
   const pageContext = asPageContext(job.pageContext);
@@ -193,7 +204,11 @@ export async function executeAiJob(
     return finalizeCleanFailure(db, fence, job, now, clean);
   }
 
-  // Persist success: assistant + settle + usage + job terminal — one TX, fenced.
+  // Phase D: provider returned — billing assumed for mock; never treat as free cancel.
+  // Soft-deleted conversation: settle usage but do not write a new assistant message.
+  const conv = await getAiConversation(db, job.userId, job.conversationId);
+  const discardAssistant = !conv || conv.status === "deleted";
+
   try {
     const settled = await db.transaction(async (tx) => {
       return withUserAiLock(tx, job.userId, async () => {
@@ -202,17 +217,21 @@ export async function executeAiJob(
           return { kind: "missing_usage" as const };
         }
 
-        const assistant = await createAiMessage(
-          tx,
-          job.userId,
-          job.conversationId,
-          {
-            role: "assistant",
-            content: completion.text,
-            pageContext,
-            targetContext,
-          },
-        );
+        let resultMessageId: string | null = null;
+        if (!discardAssistant) {
+          const assistant = await createAiMessage(
+            tx,
+            job.userId,
+            job.conversationId,
+            {
+              role: "assistant",
+              content: completion.text,
+              pageContext,
+              targetContext,
+            },
+          );
+          resultMessageId = assistant.id;
+        }
 
         const actualTokens =
           completion.usage.inputTokens + completion.usage.outputTokens;
@@ -232,41 +251,49 @@ export async function executeAiJob(
           outputTokens: completion.usage.outputTokens,
           estimatedCostUsd: actualCostUsd,
           latencyMs: completion.latencyMs,
-          errorCode: null,
+          errorCode: discardAssistant ? "discarded_conversation_deleted" : null,
           model: completion.model,
         });
 
         const fin = await updateAiJobWithFence(tx, fence, {
-          status: "succeeded",
+          status: discardAssistant ? "canceled" : "succeeded",
           executionPhase: "after_provider",
           providerOutcome: "succeeded",
-          resultMessageId: assistant.id,
+          resultMessageId,
           resultPayload: {
             text: completion.text,
             model: completion.model,
             provider: completion.provider,
+            discarded: discardAssistant,
           },
           provider: completion.provider,
           model: completion.model,
+          errorCode: discardAssistant ? "conversation_deleted" : null,
+          errorMessage: discardAssistant
+            ? "provider result discarded; conversation deleted"
+            : null,
           finishedAt: now,
           clearLock: true,
         });
 
         if (!fin.ok) {
-          // Roll back message + settle — stale worker must not double-charge.
           throw new StaleFenceAbort();
         }
 
         return {
           kind: "ok" as const,
           job: fin.job,
-          resultMessageId: assistant.id,
+          resultMessageId: resultMessageId ?? "",
+          discarded: discardAssistant,
         };
       });
     });
 
     if (settled.kind === "missing_usage") {
       return { ok: false, reason: "missing_usage" };
+    }
+    if (settled.discarded) {
+      return { ok: false, reason: "canceled", job: settled.job };
     }
     return {
       ok: true,
@@ -278,6 +305,59 @@ export async function executeAiJob(
       return { ok: false, reason: "stale_fence" };
     }
     throw err;
+  }
+}
+
+async function shouldStopBeforeProvider(
+  db: Db,
+  job: AiJobRow,
+): Promise<{ stop: boolean; code: string }> {
+  const fresh = await getAiJobById(db, job.id);
+  if (fresh?.cancelRequestedAt) {
+    return { stop: true, code: "canceled" };
+  }
+  const conv = await getAiConversation(db, job.userId, job.conversationId);
+  if (!conv || conv.status === "deleted") {
+    return { stop: true, code: "conversation_deleted" };
+  }
+  return { stop: false, code: "" };
+}
+
+async function finalizeCanceled(
+  db: Db,
+  fence: AiJobFence,
+  job: AiJobRow,
+  now: Date,
+  code: string,
+): Promise<ExecuteAiJobResult> {
+  try {
+    const fin = await db.transaction(async (tx) => {
+      return withUserAiLock(tx, job.userId, async () => {
+        await releaseReservedUsageIfNeeded(tx, {
+          userId: job.userId,
+          usageEventId: job.usageEventId,
+          errorCode: code,
+          now,
+        });
+        const updated = await updateAiJobWithFence(tx, fence, {
+          status: "canceled",
+          executionPhase: "before_provider",
+          providerOutcome: "not_started",
+          errorCode: code,
+          errorMessage: code,
+          finishedAt: now,
+          clearLock: true,
+        });
+        if (!updated.ok) throw new StaleFenceAbort();
+        return updated.job;
+      });
+    });
+    return { ok: false, reason: "canceled", job: fin };
+  } catch (e) {
+    if (e instanceof StaleFenceAbort) {
+      return { ok: false, reason: "stale_fence" };
+    }
+    throw e;
   }
 }
 

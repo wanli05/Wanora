@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { claimAiJobs } from "@/lib/data/ai-jobs";
 import { executeAiJob } from "@/lib/ai/jobs/execute";
+import { runAiJobMaintenance } from "@/lib/ai/jobs/recover";
 import type { AiProvider } from "@/lib/ai/types";
 
 export type AiWorkerOptions = {
@@ -120,6 +121,9 @@ export function startAiWorker(options: AiWorkerOptions): AiWorkerHandle {
       abort = new AbortController();
       let claimed = 0;
       try {
+        // Lease recovery / uncertain reconcile before claiming work.
+        await runAiJobMaintenance(options.db);
+
         const jobs = await claimAiJobs(options.db, {
           workerId,
           limit: batchSize,

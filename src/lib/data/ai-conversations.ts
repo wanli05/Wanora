@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import {
   aiConversations,
+  aiJobs,
   type AiConversationStatus,
 } from "@/db/schema";
 
@@ -173,20 +174,31 @@ export async function softDeleteAiConversation(
   return row ?? null;
 }
 
-/** Hard-delete soft-deleted rows older than cutoff (for external scheduler). */
+/**
+ * Hard-delete soft-deleted rows older than cutoff.
+ * Prefer `purgeDeletedAiConversations` (jobs RESTRICT-safe). This helper
+ * deletes jobs first so Message RESTRICT FKs cannot block conversation delete.
+ */
 export async function hardDeleteExpiredAiConversations(
   db: Db,
   cutoff: Date,
 ) {
-  const deleted = await db
-    .delete(aiConversations)
+  const expired = await db
+    .select({ id: aiConversations.id })
+    .from(aiConversations)
     .where(
       and(
         eq(aiConversations.status, "deleted"),
         isNotNull(aiConversations.deletedAt),
         lt(aiConversations.deletedAt, cutoff),
       ),
-    )
+    );
+  if (expired.length === 0) return 0;
+  const ids = expired.map((r) => r.id);
+  await db.delete(aiJobs).where(inArray(aiJobs.conversationId, ids));
+  const deleted = await db
+    .delete(aiConversations)
+    .where(inArray(aiConversations.id, ids))
     .returning({ id: aiConversations.id });
   return deleted.length;
 }

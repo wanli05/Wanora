@@ -8,9 +8,9 @@ import {
   serializeConversation,
   unauthorized,
 } from "@/lib/ai/conversation";
+import { softDeleteConversationAndCancelJobs } from "@/lib/ai/jobs/cancel";
 import {
   getUsableAiConversation,
-  softDeleteAiConversation,
   updateAiConversation,
 } from "@/lib/data/ai-conversations";
 
@@ -78,7 +78,7 @@ export async function DELETE(
     return aiError("invalid_params", 400, "invalid conversation id");
   }
 
-  const row = await softDeleteAiConversation(
+  const row = await softDeleteConversationAndCancelJobs(
     getDb(),
     user.id,
     idParsed.data,

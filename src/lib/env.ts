@@ -33,7 +33,16 @@ const serverEnvSchema = z
     AI_GLOBAL_DAILY_COST_BUDGET_USD: z.coerce.number().nonnegative().default(20),
     AI_MAX_CONTEXT_CHARS: z.coerce.number().int().positive().default(12_000),
     AI_CHAT_HARD_DELETE_AFTER_DAYS: z.coerce.number().int().positive().default(30),
-    /** Shared secret for externally scheduled chat hard-delete. */
+    /**
+     * After a job is marked provider_uncertain, keep reserved budget this many
+     * hours for audit, then release via reconcile (default 24h).
+     */
+    AI_UNCERTAIN_RECONCILE_AFTER_HOURS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(24),
+    /** Shared secret for externally scheduled chat hard-delete / reconcile. */
     AI_PURGE_SECRET: z.string().min(1).optional(),
   })
   .refine(
