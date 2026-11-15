@@ -7,7 +7,9 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -781,3 +783,196 @@ export const interviewFeedbacks = pgTable(
     }).onDelete("cascade"),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// AI Assistant (Phase 1A) — conversations, messages, usage, budget counters
+// ---------------------------------------------------------------------------
+
+export const AI_CONVERSATION_STATUSES = [
+  "active",
+  "archived",
+  "deleted",
+] as const;
+export type AiConversationStatus = (typeof AI_CONVERSATION_STATUSES)[number];
+
+export const AI_MESSAGE_ROLES = [
+  "user",
+  "assistant",
+  "system",
+  "tool",
+] as const;
+export type AiMessageRole = (typeof AI_MESSAGE_ROLES)[number];
+
+export const AI_USAGE_STATUSES = [
+  "reserved",
+  "ok",
+  "error",
+  "rejected_budget",
+  "rejected_rate",
+  "invalid_output",
+  "ai_unavailable",
+] as const;
+export type AiUsageStatus = (typeof AI_USAGE_STATUSES)[number];
+
+export const AI_BUDGET_SCOPE_TYPES = ["user", "global"] as const;
+export type AiBudgetScopeType = (typeof AI_BUDGET_SCOPE_TYPES)[number];
+
+/** Chat thread owned by a single user. Soft-delete via status + deleted_at. */
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: userId(),
+    title: text("title"),
+    status: text("status").notNull().default("active"),
+    /** Set when status becomes deleted; used by external hard-delete scheduler. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /** Optional locked TargetContext snapshot: { type, id, ... }. */
+    pinnedTarget: jsonb("pinned_target"),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "ai_conversations_status_check",
+      inListCheck(t.status.name, AI_CONVERSATION_STATUSES),
+    ),
+    check(
+      "ai_conversations_deleted_at_check",
+      sql`(${t.status} = 'deleted' and ${t.deletedAt} is not null)
+        or (${t.status} <> 'deleted' and ${t.deletedAt} is null)`,
+    ),
+    unique("ai_conversations_id_user_uidx").on(t.id, t.userId),
+    index("ai_conversations_user_updated_idx").on(t.userId, t.updatedAt),
+    index("ai_conversations_user_status_idx").on(t.userId, t.status),
+    index("ai_conversations_purge_idx").on(t.status, t.deletedAt),
+  ],
+);
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: userId(),
+    conversationId: uuid("conversation_id").notNull(),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    pageContext: jsonb("page_context"),
+    targetContext: jsonb("target_context"),
+    /** Client-generated id for idempotent retries; unique per user when set. */
+    clientMessageId: text("client_message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "ai_messages_role_check",
+      inListCheck(t.role.name, AI_MESSAGE_ROLES),
+    ),
+    unique("ai_messages_id_user_uidx").on(t.id, t.userId),
+    uniqueIndex("ai_messages_user_client_message_uidx")
+      .on(t.userId, t.clientMessageId)
+      .where(sql`${t.clientMessageId} is not null`),
+    index("ai_messages_conversation_created_idx").on(
+      t.conversationId,
+      t.createdAt,
+    ),
+    index("ai_messages_user_idx").on(t.userId),
+    foreignKey({
+      columns: [t.conversationId, t.userId],
+      foreignColumns: [aiConversations.id, aiConversations.userId],
+      name: "ai_messages_conversation_user_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Per-call metering / audit. Kept after chat hard-delete for cost history. */
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: userId(),
+    feature: text("feature").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    estimatedCostUsd: numeric("estimated_cost_usd", {
+      precision: 12,
+      scale: 6,
+    })
+      .notNull()
+      .default("0"),
+    latencyMs: integer("latency_ms"),
+    status: text("status").notNull(),
+    errorCode: text("error_code"),
+    requestId: text("request_id"),
+    conversationId: uuid("conversation_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "ai_usage_events_status_check",
+      inListCheck(t.status.name, AI_USAGE_STATUSES),
+    ),
+    check(
+      "ai_usage_events_tokens_nonneg_check",
+      sql`${t.inputTokens} >= 0 and ${t.outputTokens} >= 0`,
+    ),
+    index("ai_usage_events_user_created_idx").on(t.userId, t.createdAt),
+    index("ai_usage_events_created_idx").on(t.createdAt),
+    index("ai_usage_events_status_created_idx").on(t.status, t.createdAt),
+    // Single-column FK so ON DELETE SET NULL only clears conversation_id
+    // (composite FK + SET NULL would also null user_id and violate NOT NULL).
+    foreignKey({
+      columns: [t.conversationId],
+      foreignColumns: [aiConversations.id],
+      name: "ai_usage_events_conversation_id_fk",
+    }).onDelete("set null"),
+  ],
+);
+
+/**
+ * Daily spend / reserve counters for atomic budget checks (SELECT FOR UPDATE).
+ * scope_type=user → scope_id=userId; scope_type=global → scope_id='global'.
+ */
+export const aiDailyBudgetCounters = pgTable(
+  "ai_daily_budget_counters",
+  {
+    scopeType: text("scope_type").notNull(),
+    scopeId: text("scope_id").notNull(),
+    budgetDate: date("budget_date").notNull(),
+    spentUsd: numeric("spent_usd", { precision: 12, scale: 6 })
+      .notNull()
+      .default("0"),
+    reservedUsd: numeric("reserved_usd", { precision: 12, scale: 6 })
+      .notNull()
+      .default("0"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.scopeType, t.scopeId, t.budgetDate],
+      name: "ai_daily_budget_counters_pk",
+    }),
+    check(
+      "ai_daily_budget_counters_scope_type_check",
+      inListCheck(t.scopeType.name, AI_BUDGET_SCOPE_TYPES),
+    ),
+    check(
+      "ai_daily_budget_counters_amounts_nonneg_check",
+      sql`${t.spentUsd} >= 0 and ${t.reservedUsd} >= 0`,
+    ),
+    check(
+      "ai_daily_budget_counters_global_scope_id_check",
+      sql`(${t.scopeType} <> 'global') or (${t.scopeId} = 'global')`,
+    ),
+  ],
+);
+

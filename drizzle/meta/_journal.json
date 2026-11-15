@@ -78,6 +78,13 @@
       "when": 1794672254036,
       "tag": "0010_profile_rirekisho_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794737585728,
+      "tag": "0011_ai_assistant_tables",
+      "breakpoints": true
     }
   ]
 }
