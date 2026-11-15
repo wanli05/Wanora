@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { aiJobs, aiMessages, aiUsageEvents, users } from "@/db/schema";
 import { enqueueAiJob } from "@/lib/ai/jobs/enqueue";
+import { drainAiWorker } from "@/lib/ai/jobs/worker";
 import { createAiConversation } from "@/lib/data/ai-conversations";
 import { getAiDailyBudgetCounter } from "@/lib/data/ai-budget";
 import { resetServerEnvCache } from "@/lib/env";
@@ -31,7 +32,9 @@ beforeEach(() => {
   setAiEnv();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Do not leave queued jobs for later suites that share the Testcontainers DB.
+  await drainAiWorker(getDb(), { workerIdPrefix: "enqueue-cleanup" });
   delete process.env.AI_ENABLED;
   delete process.env.AI_RATE_LIMIT_PER_MINUTE;
   delete process.env.AI_DAILY_TOKEN_BUDGET;

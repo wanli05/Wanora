@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as getMe } from "@/app/api/me/route";
-import { runAiWorkerOnce } from "@/lib/ai/jobs/worker";
+import { drainAiWorker } from "@/lib/ai/jobs/worker";
 import { getDb } from "@/db";
+import { getAiJobById } from "@/lib/data/ai-jobs";
 import { resetServerEnvCache } from "@/lib/env";
 import {
   BASE_URL,
@@ -51,8 +52,9 @@ function setAiEnv() {
   resetServerEnvCache();
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   setAiEnv();
+  await drainAiWorker(getDb(), { workerIdPrefix: "jobs-api-cleanup" });
 });
 
 afterEach(() => {
@@ -142,7 +144,10 @@ describe("/api/ai/jobs", () => {
     expect(gotBody.job.id).toBe(jobId);
     expect(gotBody.job.status).toBe("queued");
 
-    await runAiWorkerOnce(getDb(), { workerId: "api-test-worker" });
+    // Drain shared-DB leftovers from earlier suites, then assert our job.
+    await drainAiWorker(getDb(), { workerIdPrefix: "api-test-worker" });
+    const drained = await getAiJobById(getDb(), jobId);
+    expect(drained?.status).toBe("succeeded");
 
     const after = await jobItem.GET(req(`/api/ai/jobs/${jobId}`, { cookie }), {
       params: params(jobId),

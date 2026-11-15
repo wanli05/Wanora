@@ -194,3 +194,32 @@ export async function runAiWorkerOnce(
   }
   return { workerId, results };
 }
+
+/**
+ * Keep claiming until the queue is empty or `maxCycles` is hit.
+ * Needed in shared-DB integration suites where earlier tests leave queued rows.
+ */
+export async function drainAiWorker(
+  db: Db,
+  options?: {
+    workerIdPrefix?: string;
+    limit?: number;
+    leaseMs?: number;
+    provider?: AiProvider;
+    maxCycles?: number;
+  },
+) {
+  const maxCycles = options?.maxCycles ?? 50;
+  const all = [];
+  for (let i = 0; i < maxCycles; i++) {
+    const batch = await runAiWorkerOnce(db, {
+      workerId: `${options?.workerIdPrefix ?? "drain"}-${i}`,
+      limit: options?.limit ?? 5,
+      leaseMs: options?.leaseMs,
+      provider: options?.provider,
+    });
+    if (batch.results.length === 0) break;
+    all.push(...batch.results);
+  }
+  return all;
+}

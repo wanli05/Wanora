@@ -13,6 +13,7 @@ export {
 export {
   startAiWorker,
   runAiWorkerOnce,
+  drainAiWorker,
   type AiWorkerOptions,
   type AiWorkerHandle,
 } from "@/lib/ai/jobs/worker";

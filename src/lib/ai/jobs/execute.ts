@@ -115,7 +115,20 @@ export async function executeAiJob(
   const provider = input.provider ?? getAiProvider();
 
   if (!job.usageEventId) {
-    return { ok: false, reason: "missing_usage" };
+    const fin = await updateAiJobWithFence(db, fence, {
+      status: "failed",
+      executionPhase: "after_provider",
+      providerOutcome: "failed",
+      errorCode: "missing_usage",
+      errorMessage: "job missing usage_event_id",
+      finishedAt: now,
+      clearLock: true,
+    });
+    return {
+      ok: false,
+      reason: "missing_usage",
+      job: fin.ok ? fin.job : undefined,
+    };
   }
 
   const phase = await updateAiJobWithFence(db, fence, {

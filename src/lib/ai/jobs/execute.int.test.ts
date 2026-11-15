@@ -9,7 +9,7 @@ import {
   ProviderCleanFailure,
   ProviderUncertainFailure,
 } from "@/lib/ai/jobs/execute";
-import { runAiWorkerOnce } from "@/lib/ai/jobs/worker";
+import { drainAiWorker } from "@/lib/ai/jobs/worker";
 import { createAiConversation } from "@/lib/data/ai-conversations";
 import {
   claimAiJobs,
@@ -40,8 +40,10 @@ function setAiEnv(overrides: Record<string, string> = {}) {
   resetServerEnvCache();
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   setAiEnv();
+  // Clear queued leftovers from earlier shared-DB suites (e.g. enqueue.int).
+  await drainAiWorker(getDb(), { workerIdPrefix: "exec-cleanup" });
 });
 
 afterEach(() => {
@@ -75,14 +77,10 @@ describe("executeAiJob / worker", () => {
     await db.insert(users).values(user);
     const enq = await enqueueOne(user.id, "職務経歴を要約");
 
-    const { results } = await runAiWorkerOnce(db, { workerId: "w-ok" });
-    expect(results).toHaveLength(1);
-    expect(results[0].ok).toBe(true);
-    if (!results[0].ok) return;
-
+    await drainAiWorker(db, { workerIdPrefix: "w-ok" });
     const job = await getAiJobById(db, enq.job.id);
     expect(job?.status).toBe("succeeded");
-    expect(job?.resultMessageId).toBe(results[0].resultMessageId);
+    expect(job?.resultMessageId).toBeTruthy();
     expect(job?.providerOutcome).toBe("succeeded");
     expect(job?.lockedBy).toBeNull();
 
@@ -118,6 +116,7 @@ describe("executeAiJob / worker", () => {
 
     await forceAiJobLeaseExpiry(db, old.id, new Date(Date.now() - 1_000));
     const [neu] = await claimAiJobs(db, { workerId: "w-new" });
+    expect(neu.id).toBe(enq.job.id);
     expect(neu.fencingToken).toBeGreaterThan(old.fencingToken);
 
     const stale = await executeAiJob(db, {
@@ -144,6 +143,7 @@ describe("executeAiJob / worker", () => {
     await db.insert(users).values(user);
     const enq = await enqueueOne(user.id);
     const [claimed] = await claimAiJobs(db, { workerId: "w1" });
+    expect(claimed.id).toBe(enq.job.id);
 
     const first = await executeAiJob(db, {
       job: claimed,
@@ -175,6 +175,7 @@ describe("executeAiJob / worker", () => {
     await db.insert(users).values(user);
     const enq = await enqueueOne(user.id);
     const [claimed] = await claimAiJobs(db, { workerId: "w-fail" });
+    expect(claimed.id).toBe(enq.job.id);
 
     const failing: AiProvider = {
       id: "mock",
@@ -212,6 +213,7 @@ describe("executeAiJob / worker", () => {
     await db.insert(users).values(user);
     const enq = await enqueueOne(user.id);
     const [claimed] = await claimAiJobs(db, { workerId: "w-unc" });
+    expect(claimed.id).toBe(enq.job.id);
 
     const uncertain: AiProvider = {
       id: "mock",
@@ -245,8 +247,8 @@ describe("executeAiJob / worker", () => {
     const db = getDb();
     const user = newUser();
     await db.insert(users).values(user);
-    await enqueueOne(user.id, "job-a");
-    await enqueueOne(user.id, "job-b");
+    const a = await enqueueOne(user.id, "job-a");
+    const b = await enqueueOne(user.id, "job-b");
 
     const [c1, c2] = await Promise.all([
       claimAiJobs(db, { workerId: "wa", limit: 1 }),
@@ -254,6 +256,8 @@ describe("executeAiJob / worker", () => {
     ]);
     const ids = new Set([...c1, ...c2].map((j) => j.id));
     expect(ids.size).toBe(2);
+    expect(ids.has(a.job.id)).toBe(true);
+    expect(ids.has(b.job.id)).toBe(true);
 
     const results = await Promise.all([
       ...c1.map((job) => executeAiJob(db, { job, workerId: "wa" })),
