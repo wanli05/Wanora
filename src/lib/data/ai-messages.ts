@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { aiMessages, type AiMessageRole } from "@/db/schema";
 
@@ -12,12 +12,20 @@ export type AiMessageInput = {
   clientMessageId?: string | null;
 };
 
+export type ListAiMessagesOptions = {
+  limit?: number;
+  offset?: number;
+};
+
 export async function listAiMessages(
   db: Db,
   userId: string,
   conversationId: string,
+  options?: ListAiMessagesOptions,
 ) {
-  return db
+  const limit = options?.limit;
+  const offset = options?.offset ?? 0;
+  const query = db
     .select()
     .from(aiMessages)
     .where(
@@ -27,6 +35,28 @@ export async function listAiMessages(
       ),
     )
     .orderBy(asc(aiMessages.createdAt));
+
+  if (limit !== undefined) {
+    return query.limit(limit).offset(offset);
+  }
+  return query;
+}
+
+export async function countAiMessages(
+  db: Db,
+  userId: string,
+  conversationId: string,
+) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(aiMessages)
+    .where(
+      and(
+        eq(aiMessages.userId, userId),
+        eq(aiMessages.conversationId, conversationId),
+      ),
+    );
+  return Number(row?.n ?? 0);
 }
 
 export async function createAiMessage(

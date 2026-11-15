@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import {
   aiConversations,
@@ -7,15 +7,32 @@ import {
 
 export type AiConversationRow = typeof aiConversations.$inferSelect;
 
+export type ListAiConversationsOptions = {
+  /** Include archived rows. Deleted are never listed. */
+  includeArchived?: boolean;
+  /** Explicit status filter (non-deleted only). Overrides includeArchived when set. */
+  status?: "active" | "archived";
+  limit?: number;
+  offset?: number;
+};
+
+function visibleStatuses(
+  options?: ListAiConversationsOptions,
+): AiConversationStatus[] {
+  if (options?.status) return [options.status];
+  return options?.includeArchived ? ["active", "archived"] : ["active"];
+}
+
 export async function listAiConversations(
   db: Db,
   userId: string,
-  options?: { includeArchived?: boolean },
+  options?: ListAiConversationsOptions,
 ) {
-  const statuses: AiConversationStatus[] = options?.includeArchived
-    ? ["active", "archived"]
-    : ["active"];
-  return db
+  const statuses = visibleStatuses(options);
+  const limit = options?.limit;
+  const offset = options?.offset ?? 0;
+
+  const query = db
     .select()
     .from(aiConversations)
     .where(
@@ -25,6 +42,29 @@ export async function listAiConversations(
       ),
     )
     .orderBy(desc(aiConversations.updatedAt));
+
+  if (limit !== undefined) {
+    return query.limit(limit).offset(offset);
+  }
+  return query;
+}
+
+export async function countAiConversations(
+  db: Db,
+  userId: string,
+  options?: Omit<ListAiConversationsOptions, "limit" | "offset">,
+) {
+  const statuses = visibleStatuses(options);
+  const [row] = await db
+    .select({ n: count() })
+    .from(aiConversations)
+    .where(
+      and(
+        eq(aiConversations.userId, userId),
+        inArray(aiConversations.status, statuses),
+      ),
+    );
+  return Number(row?.n ?? 0);
 }
 
 export async function getAiConversation(
@@ -40,6 +80,17 @@ export async function getAiConversation(
     )
     .limit(1);
   return row ?? null;
+}
+
+/** Own conversation that is not soft-deleted (active or archived). */
+export async function getUsableAiConversation(
+  db: Db,
+  userId: string,
+  id: string,
+) {
+  const row = await getAiConversation(db, userId, id);
+  if (!row || row.status === "deleted") return null;
+  return row;
 }
 
 export async function createAiConversation(

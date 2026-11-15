@@ -35,3 +35,11 @@ export {
   type AiTargetContext,
   type ResolvedAiContext,
 } from "@/lib/ai/context";
+export {
+  createConversationBodySchema,
+  patchConversationBodySchema,
+  serializeConversation,
+  serializeMessage,
+  type AiConversationDto,
+  type AiMessageDto,
+} from "@/lib/ai/conversation";
