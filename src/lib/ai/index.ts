@@ -23,3 +23,15 @@ export {
   sumAiTokensForUserSince,
   updateAiUsageEventStatus,
 } from "@/lib/ai/usage";
+export {
+  applyPageNavigation,
+  createMyCareerContextSource,
+  MY_CAREER_DENIED_PROFILE_FIELDS,
+  MY_CAREER_PROFILE_WHITELIST,
+  MY_CAREER_SOURCE_ID,
+  resolveAiContext,
+  targetsEqual,
+  type AiPageContext,
+  type AiTargetContext,
+  type ResolvedAiContext,
+} from "@/lib/ai/context";
