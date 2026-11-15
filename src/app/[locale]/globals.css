@@ -3,6 +3,13 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Match @fontsource-variable/* family names (self-hosted; no Google fetch). */
+  --font-newsreader: "Newsreader Variable", Newsreader, Georgia, "Times New Roman",
+    serif;
+  --font-noto-sans-jp: "Noto Sans JP Variable", "Noto Sans JP", "Hiragino Sans",
+    "Yu Gothic", "Segoe UI", sans-serif;
+  --font-noto-sans-sc: "Noto Sans SC Variable", "Noto Sans SC", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
 }
 
 @theme inline {

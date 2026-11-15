@@ -1,32 +1,17 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Newsreader, Noto_Sans_JP, Noto_Sans_SC } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { APP_NAME } from "@/lib/app";
 import { LOCALES } from "@/lib/locale";
 import { AiSidebarHost } from "@/components/ai-sidebar/ai-sidebar-host";
 import { SiteHeader } from "./site-header";
+// Self-hosted via npm — avoids next/font/google + Turbopack fetch failures
+// when fonts.googleapis.com is slow/unreachable (broken virtual font modules).
+import "@fontsource-variable/newsreader";
+import "@fontsource-variable/noto-sans-jp";
+import "@fontsource-variable/noto-sans-sc";
 import "./globals.css";
-
-const newsreader = Newsreader({
-  variable: "--font-newsreader",
-  subsets: ["latin"],
-  weight: ["500", "600"],
-  display: "swap",
-});
-
-// CJK fonts are large; they load on demand instead of being preloaded.
-const notoSansJp = Noto_Sans_JP({
-  variable: "--font-noto-sans-jp",
-  display: "swap",
-  preload: false,
-});
-const notoSansSc = Noto_Sans_SC({
-  variable: "--font-noto-sans-sc",
-  display: "swap",
-  preload: false,
-});
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -46,10 +31,7 @@ export default async function LocaleLayout({
   const locale = await getLocale();
   const messages = await getMessages();
   return (
-    <html
-      lang={locale}
-      className={`${newsreader.variable} ${notoSansJp.variable} ${notoSansSc.variable} h-full antialiased`}
-    >
+    <html lang={locale} className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <SiteHeader />
