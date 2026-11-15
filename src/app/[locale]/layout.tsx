@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Newsreader, Noto_Sans_JP, Noto_Sans_SC } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
@@ -53,7 +54,9 @@ export default async function LocaleLayout({
         <NextIntlClientProvider locale={locale} messages={messages}>
           <SiteHeader />
           {children}
-          <AiSidebarHost />
+          <Suspense fallback={null}>
+            <AiSidebarHost />
+          </Suspense>
         </NextIntlClientProvider>
       </body>
     </html>
