@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+function boolFromEnv(defaultValue: boolean) {
+  return z.preprocess((value) => {
+    if (value === undefined || value === "") return defaultValue;
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    return value;
+  }, z.boolean());
+}
+
 const serverEnvSchema = z
   .object({
     DATABASE_URL: z.url(),
@@ -12,6 +21,20 @@ const serverEnvSchema = z
     S3_SECRET_KEY: z.string().min(1).optional(),
     S3_BUCKET: z.string().min(1).optional(),
     S3_REGION: z.string().min(1).optional(),
+    /** Master switch for AI features. Default off. */
+    AI_ENABLED: boolFromEnv(false),
+    /** Phase 1A only ships mock; real ids are added when a provider is implemented. */
+    AI_PROVIDER: z.enum(["mock"]).default("mock"),
+    AI_DEFAULT_MODEL: z.string().min(1).optional(),
+    AI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
+    AI_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(100_000),
+    AI_DAILY_COST_BUDGET_USD: z.coerce.number().nonnegative().default(1),
+    /** Site-wide daily estimated cost cap (all users). */
+    AI_GLOBAL_DAILY_COST_BUDGET_USD: z.coerce.number().nonnegative().default(20),
+    AI_MAX_CONTEXT_CHARS: z.coerce.number().int().positive().default(12_000),
+    AI_CHAT_HARD_DELETE_AFTER_DAYS: z.coerce.number().int().positive().default(30),
+    /** Shared secret for externally scheduled chat hard-delete. */
+    AI_PURGE_SECRET: z.string().min(1).optional(),
   })
   .refine(
     (env) => !!env.AUTH_GOOGLE_CLIENT_ID === !!env.AUTH_GOOGLE_CLIENT_SECRET,
@@ -31,7 +54,10 @@ const serverEnvSchema = z
       const set = keys.filter(Boolean).length;
       return set === 0 || set === 4;
     },
-    { message: "S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, and S3_BUCKET must be set together" },
+    {
+      message:
+        "S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, and S3_BUCKET must be set together",
+    },
   );
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -62,4 +88,8 @@ export function isObjectStorageConfigured(
       env.S3_SECRET_KEY &&
       env.S3_BUCKET,
   );
+}
+
+export function isAiEnabled(env: ServerEnv = getServerEnv()): boolean {
+  return env.AI_ENABLED;
 }
