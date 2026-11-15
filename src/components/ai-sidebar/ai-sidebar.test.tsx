@@ -126,21 +126,22 @@ describe("AiSidebar", () => {
       userMessageId: "m1",
       replayed: false,
     });
+    // Keep non-terminal so in-progress status UI stays visible (CI race-safe).
     api.getJob.mockResolvedValue({
       job: {
         id: "job-1",
         conversationId: "conv-1",
         clientRequestId: "req-1",
         feature: "chat",
-        status: "succeeded",
+        status: "running",
         attempt: 1,
         maxAttempts: 3,
-        executionPhase: "after_provider",
-        providerOutcome: "succeeded",
+        executionPhase: "calling_provider",
+        providerOutcome: "not_started",
         errorCode: null,
         errorMessage: null,
         userMessageId: "m1",
-        resultMessageId: "m2",
+        resultMessageId: null,
         usageEventId: "u1",
         provider: "mock",
         model: "mock-v1",
@@ -148,7 +149,7 @@ describe("AiSidebar", () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
+        finishedAt: null,
         cancelRequestedAt: null,
       },
     });
