@@ -93,6 +93,36 @@ export async function getUsableAiConversation(
   return row;
 }
 
+/** Own conversation that can accept new chat turns (status=active). */
+export async function getActiveAiConversation(
+  db: Db,
+  userId: string,
+  id: string,
+) {
+  const row = await getAiConversation(db, userId, id);
+  if (!row || row.status !== "active") return null;
+  return row;
+}
+
+export async function touchAiConversation(
+  db: Db,
+  userId: string,
+  id: string,
+) {
+  const [row] = await db
+    .update(aiConversations)
+    .set({ updatedAt: new Date() })
+    .where(
+      and(
+        eq(aiConversations.id, id),
+        eq(aiConversations.userId, userId),
+        ne(aiConversations.status, "deleted"),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
 export async function createAiConversation(
   db: Db,
   userId: string,
