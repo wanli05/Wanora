@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -870,6 +871,12 @@ export const aiMessages = pgTable(
       inListCheck(t.role.name, AI_MESSAGE_ROLES),
     ),
     unique("ai_messages_id_user_uidx").on(t.id, t.userId),
+    /** Enables ai_jobs composite FK tying message + conversation + user. */
+    unique("ai_messages_id_conversation_user_uidx").on(
+      t.id,
+      t.conversationId,
+      t.userId,
+    ),
     uniqueIndex("ai_messages_user_client_message_uidx")
       .on(t.userId, t.clientMessageId)
       .where(sql`${t.clientMessageId} is not null`),
@@ -922,6 +929,7 @@ export const aiUsageEvents = pgTable(
       "ai_usage_events_tokens_nonneg_check",
       sql`${t.inputTokens} >= 0 and ${t.outputTokens} >= 0`,
     ),
+    unique("ai_usage_events_id_user_uidx").on(t.id, t.userId),
     index("ai_usage_events_user_created_idx").on(t.userId, t.createdAt),
     index("ai_usage_events_created_idx").on(t.createdAt),
     index("ai_usage_events_status_created_idx").on(t.status, t.createdAt),
@@ -982,6 +990,125 @@ export const aiDailyBudgetCounters = pgTable(
       "ai_daily_budget_counters_global_scope_id_check",
       sql`(${t.scopeType} <> 'global') or (${t.scopeId} = 'global')`,
     ),
+  ],
+);
+
+export const AI_JOB_STATUSES = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "canceled",
+] as const;
+export type AiJobStatus = (typeof AI_JOB_STATUSES)[number];
+
+export const AI_JOB_EXECUTION_PHASES = [
+  "queued",
+  "before_provider",
+  "calling_provider",
+  "after_provider",
+] as const;
+export type AiJobExecutionPhase = (typeof AI_JOB_EXECUTION_PHASES)[number];
+
+export const AI_JOB_PROVIDER_OUTCOMES = [
+  "not_started",
+  "succeeded",
+  "failed",
+  "uncertain",
+] as const;
+export type AiJobProviderOutcome = (typeof AI_JOB_PROVIDER_OUTCOMES)[number];
+
+/**
+ * Persistent AI work queue (Phase 1A A5.5+). Claimed via SKIP LOCKED + fencing_token.
+ * Enqueue API / Worker land in later slices; this table is the contract foundation.
+ */
+export const aiJobs = pgTable(
+  "ai_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: userId(),
+    conversationId: uuid("conversation_id").notNull(),
+    userMessageId: uuid("user_message_id"),
+    resultMessageId: uuid("result_message_id"),
+    usageEventId: uuid("usage_event_id"),
+    clientRequestId: text("client_request_id").notNull(),
+    feature: text("feature").notNull(),
+    status: text("status").notNull().default("queued"),
+    attempt: integer("attempt").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    lockedBy: text("locked_by"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    /** Incremented on every successful claim; all writes must match this token. */
+    fencingToken: bigint("fencing_token", { mode: "number" })
+      .notNull()
+      .default(0),
+    executionPhase: text("execution_phase").notNull().default("queued"),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    providerOutcome: text("provider_outcome").notNull().default("not_started"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    pageContext: jsonb("page_context"),
+    targetContext: jsonb("target_context"),
+    resultPayload: jsonb("result_payload"),
+    provider: text("provider"),
+    model: text("model"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    check("ai_jobs_status_check", inListCheck(t.status.name, AI_JOB_STATUSES)),
+    check(
+      "ai_jobs_execution_phase_check",
+      inListCheck(t.executionPhase.name, AI_JOB_EXECUTION_PHASES),
+    ),
+    check(
+      "ai_jobs_provider_outcome_check",
+      inListCheck(t.providerOutcome.name, AI_JOB_PROVIDER_OUTCOMES),
+    ),
+    check(
+      "ai_jobs_attempt_nonneg_check",
+      sql`${t.attempt} >= 0 and ${t.maxAttempts} >= 1`,
+    ),
+    check("ai_jobs_fencing_nonneg_check", sql`${t.fencingToken} >= 0`),
+    unique("ai_jobs_user_client_request_uidx").on(t.userId, t.clientRequestId),
+    index("ai_jobs_status_created_idx").on(t.status, t.createdAt),
+    index("ai_jobs_status_lease_idx").on(t.status, t.leaseExpiresAt),
+    index("ai_jobs_user_created_idx").on(t.userId, t.createdAt),
+    index("ai_jobs_conversation_created_idx").on(
+      t.conversationId,
+      t.createdAt,
+    ),
+    foreignKey({
+      columns: [t.conversationId, t.userId],
+      foreignColumns: [aiConversations.id, aiConversations.userId],
+      name: "ai_jobs_conversation_user_fk",
+    }).onDelete("cascade"),
+    // RESTRICT: avoid multi-column SET NULL nulling NOT NULL user_id/conversation_id
+    // (same class of issue as bare SET NULL on usage conversation FK — see 0012).
+    foreignKey({
+      columns: [t.userMessageId, t.conversationId, t.userId],
+      foreignColumns: [
+        aiMessages.id,
+        aiMessages.conversationId,
+        aiMessages.userId,
+      ],
+      name: "ai_jobs_user_message_conversation_user_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [t.resultMessageId, t.conversationId, t.userId],
+      foreignColumns: [
+        aiMessages.id,
+        aiMessages.conversationId,
+        aiMessages.userId,
+      ],
+      name: "ai_jobs_result_message_conversation_user_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [t.usageEventId, t.userId],
+      foreignColumns: [aiUsageEvents.id, aiUsageEvents.userId],
+      name: "ai_jobs_usage_event_user_fk",
+    }).onDelete("restrict"),
   ],
 );
 

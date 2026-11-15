@@ -92,6 +92,13 @@
       "when": 1794738664915,
       "tag": "0012_ai_usage_conversation_user_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794751771754,
+      "tag": "0013_ai_jobs_queue",
+      "breakpoints": true
     }
   ]
 }
