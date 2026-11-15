@@ -8,45 +8,65 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string, values?: { label?: string }) => {
-    if (key === "targetCurrent") return `現在の対象：${values?.label ?? ""}`;
-    const map: Record<string, string> = {
-      toggle: "AI",
-      title: "AI アシスタント",
-      readonlyNote: "読み取り専用",
-      close: "閉じる",
-      page: "ページ",
-      target: "対象",
-      targetNone: "指定なし",
-      targetSelfPr: "自己PR",
-      targetJobSummary: "職務要約",
-      targetHeadline: "見出し",
-      targetOverview: "概要",
-      selectConversation: "会話を選択",
-      untitled: "無題の会話",
-      archivedPrefix: "［アーカイブ］",
-      new: "新規",
-      archive: "保管",
-      delete: "削除",
-      emptyMessages: "空",
-      roleYou: "あなた",
-      roleAi: "AI",
-      cancelJob: "キャンセル",
-      placeholder: "入力",
-      send: "送信",
-      sending: "送信中…",
-      statusQueued: "待機中…",
-      pageBoard: "応募進捗",
-      pageCareer: "My Career",
-      errCreateConversation: "err",
-      errBudget: "budget",
-      errRate: "rate",
-      errUnavailable: "off",
-      errSend: "send fail",
-      deleteConfirm: "confirm?",
-    };
-    return map[key] ?? key;
-  },
+  useTranslations: () =>
+    (key: string, values?: { label?: string; page?: string; target?: string }) => {
+      if (key === "targetCurrent") return `現在の焦点：${values?.label ?? ""}`;
+      if (key === "referencePage") return `参照：${values?.page ?? ""}`;
+      if (key === "referencePageTarget")
+        return `参照：${values?.page ?? ""} · ${values?.target ?? ""}`;
+      const map: Record<string, string> = {
+        toggle: "AI",
+        title: "AI アシスタント",
+        readonlyNote: "読み取り専用",
+        close: "閉じる",
+        adjustLead: "任意",
+        adjustFocus: "焦点",
+        targetNone: "指定なし",
+        targetSelfPr: "自己PR",
+        targetJobSummary: "職務要約",
+        targetHeadline: "見出し",
+        targetOverview: "概要",
+        selectConversation: "会話を選択",
+        untitled: "無題の会話",
+        archivedPrefix: "［アーカイブ］",
+        new: "新規",
+        archive: "保管",
+        delete: "削除",
+        emptyMessages: "まずは入力",
+        suggestLead: "よくある相談",
+        suggestImproveSelfPr: "自己PRを改善",
+        suggestAnalyzeCareer: "職務経歴を分析",
+        suggestCareerChat: "キャリアについて相談",
+        suggestBoardOrganize: "選考状況を整理",
+        suggestInterviewPrep: "面接準備の相談",
+        suggestApplyStrategy: "応募戦略を考える",
+        suggestResumeTips: "履歴書の書き方",
+        suggestPromptImproveSelfPr: "自己PRの改善について相談したいです。",
+        suggestPromptAnalyzeCareer: "職務経歴について相談したいです。",
+        suggestPromptCareerChat: "キャリアについて相談したいです。",
+        suggestPromptBoardOrganize: "選考整理について相談したいです。",
+        suggestPromptInterviewPrep: "面接準備について相談したいです。",
+        suggestPromptApplyStrategy: "応募戦略について相談したいです。",
+        suggestPromptResumeTips: "履歴書について相談したいです。",
+        roleYou: "あなた",
+        roleAi: "AI",
+        cancelJob: "キャンセル",
+        placeholder: "入力",
+        send: "送信",
+        sending: "送信中…",
+        statusQueued: "待機中…",
+        pageBoard: "応募進捗",
+        pageCareer: "My Career",
+        pageOther: "このページ",
+        errCreateConversation: "err",
+        errBudget: "budget",
+        errRate: "rate",
+        errUnavailable: "off",
+        errSend: "send fail",
+        deleteConfirm: "confirm?",
+      };
+      return map[key] ?? key;
+    },
 }));
 
 const api = vi.hoisted(() => ({
@@ -58,9 +78,9 @@ const api = vi.hoisted(() => ({
   cancelJob: vi.fn(),
   patchConversation: vi.fn(),
   deleteConversation: vi.fn(),
-  readPendingJob: vi.fn(() => null),
+  readPendingJob: vi.fn((): null => null),
   writePendingJob: vi.fn(),
-  readActiveConversationId: vi.fn(() => null),
+  readActiveConversationId: vi.fn((): string | null => null),
   writeActiveConversationId: vi.fn(),
 }));
 
@@ -126,7 +146,6 @@ describe("AiSidebar", () => {
       userMessageId: "m1",
       replayed: false,
     });
-    // Keep non-terminal so in-progress status UI stays visible (CI race-safe).
     api.getJob.mockResolvedValue({
       job: {
         id: "job-1",
@@ -193,22 +212,23 @@ describe("AiSidebar", () => {
     expect(next.targetContext).toEqual(prev.targetContext);
   });
 
-  it("enqueues with a stable clientRequestId and shows job status", async () => {
+  it("sends without requiring a Target selection", async () => {
     render(<AiSidebar />);
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
 
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-context-ref")).toHaveTextContent("参照：応募進捗");
+
     fireEvent.change(screen.getByTestId("ai-composer-input"), {
-      target: { value: "職務要約を改善して" },
+      target: { value: "キャリアについて相談したいです" },
     });
     fireEvent.click(screen.getByTestId("ai-composer-send"));
 
     await waitFor(() => expect(api.enqueueJob).toHaveBeenCalled());
     const body = api.enqueueJob.mock.calls[0][0];
-    expect(body.clientRequestId).toMatch(
-      /^[0-9a-f-]{36}$/i,
-    );
-    expect(body.content).toBe("職務要約を改善して");
+    expect(body.clientRequestId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(body.targetContext).toBeNull();
     expect(body.pageContext?.area).toBe("board");
 
     await waitFor(() =>
@@ -216,12 +236,68 @@ describe("AiSidebar", () => {
     );
   });
 
-  it("lets the user pick a target without losing it on navigation helper", () => {
+  it("fills composer from a suggestion without auto-sending", async () => {
+    pathnameRef.current = "/ja/profile";
     render(<AiSidebar />);
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(screen.getByTestId("ai-suggestions")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("ai-suggest-self_pr"));
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(
+      "自己PRの改善について相談したいです。",
+    );
+    expect(api.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it("lets the user optionally adjust focus near the composer", async () => {
+    render(<AiSidebar />);
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    fireEvent.click(screen.getByTestId("ai-context-ref"));
+    expect(screen.getByTestId("ai-context-adjuster")).toBeInTheDocument();
     fireEvent.change(screen.getByTestId("ai-target-select"), {
       target: { value: "profile:self_pr" },
     });
     expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
+    expect(screen.getByTestId("ai-context-ref")).toHaveTextContent("自己PR");
+  });
+
+  it("hides suggestions once messages exist", async () => {
+    api.listConversations.mockResolvedValue({
+      conversations: [
+        {
+          id: "conv-1",
+          title: "既存",
+          status: "active",
+          pinnedTarget: { type: "profile", section: "overview" },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          deletedAt: null,
+        },
+      ],
+      pagination: { limit: 50, offset: 0, total: 1 },
+    });
+    api.readActiveConversationId.mockReturnValue("conv-1");
+    api.listMessages.mockResolvedValue({
+      messages: [
+        {
+          id: "m1",
+          conversationId: "conv-1",
+          role: "user",
+          content: "hello",
+          pageContext: null,
+          targetContext: { type: "profile", section: "overview" },
+          clientMessageId: null,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      pagination: { limit: 100, offset: 0, total: 1 },
+    });
+
+    render(<AiSidebar />);
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-msg-user")).toHaveTextContent("hello"),
+    );
+    expect(screen.queryByTestId("ai-suggestions")).not.toBeInTheDocument();
   });
 });

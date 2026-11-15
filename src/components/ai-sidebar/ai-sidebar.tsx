@@ -22,17 +22,25 @@ import {
 } from "./ai-api";
 import { jobStatusLabel, isJobTerminal } from "./job-status-label";
 import { pageContextFromPath } from "./page-context";
+import {
+  ADJUSTABLE_TARGET_OPTIONS,
+  suggestionsForPage,
+  targetSelectValue,
+} from "./suggestions";
 import { useJobPolling } from "./use-job-polling";
 
 export function AiSidebar() {
   const t = useTranslations("AiSidebar");
   const pathname = usePathname() ?? "/";
   const titleId = useId();
+  const adjusterId = useId();
   const pageContext = pageContextFromPath(pathname);
   const [open, setOpen] = useState(false);
+  /** Optional field focus; default null so chat can start without picking a Target. */
   const [targetContext, setTargetContext] = useState<AiTargetContext | null>(
     null,
   );
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [conversations, setConversations] = useState<AiConversationDto[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessageDto[]>([]);
@@ -45,50 +53,27 @@ export function AiSidebar() {
   const sendingRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const targetOptions: {
-    value: string;
-    label: string;
-    target: AiTargetContext | null;
-  }[] = [
-    { value: "", label: t("targetNone"), target: null },
-    {
-      value: "profile:self_pr",
-      label: t("targetSelfPr"),
-      target: { type: "profile", section: "self_pr" },
-    },
-    {
-      value: "profile:job_summary",
-      label: t("targetJobSummary"),
-      target: { type: "profile", section: "job_summary" },
-    },
-    {
-      value: "profile:headline",
-      label: t("targetHeadline"),
-      target: { type: "profile", section: "headline" },
-    },
-    {
-      value: "profile:overview",
-      label: t("targetOverview"),
-      target: { type: "profile", section: "overview" },
-    },
-  ];
-
-  function targetSelectValue(tgt: AiTargetContext | null): string {
-    if (!tgt) return "";
-    if (tgt.type === "profile") return `profile:${tgt.section ?? "overview"}`;
-    return "";
-  }
-
   function formatTarget(tgt: AiTargetContext | null): string {
     if (!tgt) return t("targetNone");
-    const opt = targetOptions.find((o) => o.value === targetSelectValue(tgt));
-    return opt?.label ?? tgt.type;
+    const opt = ADJUSTABLE_TARGET_OPTIONS.find(
+      (o) => o.value === targetSelectValue(tgt),
+    );
+    return opt ? t(opt.labelKey) : tgt.type;
   }
 
   function pageLabel(): string {
     if (pageContext.area === "board") return t("pageBoard");
     if (pageContext.area === "my_career") return t("pageCareer");
-    return pageContext.path;
+    return t("pageOther");
+  }
+
+  function referenceLabel(): string {
+    const page = pageLabel();
+    if (!targetContext) return t("referencePage", { page });
+    return t("referencePageTarget", {
+      page,
+      target: formatTarget(targetContext),
+    });
   }
 
   const refreshMessages = useCallback(async (conversationId: string) => {
@@ -113,13 +98,21 @@ export function AiSidebar() {
   }, []);
 
   const selectConversation = useCallback(
-    async (id: string) => {
+    async (id: string, list?: AiConversationDto[]) => {
       setActiveId(id);
       writeActiveConversationId(id);
       setError(null);
+      setAdjustOpen(false);
+      if (list) {
+        const conv = list.find((c) => c.id === id);
+        // Preserve existing pinned Target in UI when present; do not invent one.
+        setTargetContext(
+          (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
+        );
+      }
       await refreshMessages(id);
     },
-    [refreshMessages],
+    [refreshMessages, setAdjustOpen],
   );
 
   useEffect(() => {
@@ -135,13 +128,15 @@ export function AiSidebar() {
         list.find((c) => c.status === "active")?.id ||
         null;
       if (pick) {
-        await selectConversation(pick);
+        await selectConversation(pick, list);
+      } else {
+        setTargetContext(null);
       }
       const pendingJob = readPendingJob();
       if (pendingJob) {
         setPending(pendingJob);
         if (pendingJob.conversationId !== pick) {
-          await selectConversation(pendingJob.conversationId);
+          await selectConversation(pendingJob.conversationId, list);
         }
       }
     })();
@@ -185,8 +180,8 @@ export function AiSidebar() {
       return null;
     }
     const id = created.conversation.id;
-    await refreshConversations();
-    await selectConversation(id);
+    const list = await refreshConversations();
+    await selectConversation(id, list);
     return id;
   }
 
@@ -196,6 +191,7 @@ export function AiSidebar() {
     sendingRef.current = true;
     setBusy(true);
     setError(null);
+    setAdjustOpen(false);
 
     const conversationId = await ensureConversation();
     if (!conversationId) {
@@ -279,12 +275,14 @@ export function AiSidebar() {
   }
 
   async function onNewConversation() {
+    setTargetContext(null);
+    setAdjustOpen(false);
     const created = await createConversation({
-      pinnedTarget: targetContext,
+      pinnedTarget: null,
     });
     if ("conversation" in created) {
-      await refreshConversations();
-      await selectConversation(created.conversation.id);
+      const list = await refreshConversations();
+      await selectConversation(created.conversation.id, list);
       setMessages([]);
       setJobSnap(null);
     }
@@ -303,15 +301,25 @@ export function AiSidebar() {
     writeActiveConversationId(null);
     setActiveId(null);
     setMessages([]);
+    setTargetContext(null);
     const list = await refreshConversations();
     const next = list.find((c) => c.status === "active");
-    if (next) await selectConversation(next.id);
+    if (next) await selectConversation(next.id, list);
   }
 
-  function onTargetChange(value: string) {
-    const opt = targetOptions.find((o) => o.value === value);
+  function onTargetAdjust(value: string) {
+    const opt = ADJUSTABLE_TARGET_OPTIONS.find((o) => o.value === value);
     setTargetContext(opt?.target ?? null);
   }
+
+  function applySuggestion(chip: ReturnType<typeof suggestionsForPage>[number]) {
+    setDraft(t(chip.promptKey));
+    setTargetContext(chip.target);
+    setAdjustOpen(false);
+  }
+
+  const showSuggestions = messages.length === 0 && !busy && !pending;
+  const chips = suggestionsForPage(pageContext);
 
   if (unauthorized) return null;
 
@@ -360,43 +368,13 @@ export function AiSidebar() {
           </button>
         </header>
 
-        <div className="ai-sidebar-context" data-testid="ai-sidebar-context">
-          <div>
-            <span className="ai-sidebar-k">{t("page")}</span>
-            <span data-testid="ai-page-context">
-              {pageLabel()}
-              {pageContext.area ? `（${pageContext.area}）` : ""}
-            </span>
-          </div>
-          <label className="ai-sidebar-target">
-            <span className="ai-sidebar-k">{t("target")}</span>
-            <select
-              data-testid="ai-target-select"
-              value={targetSelectValue(targetContext)}
-              onChange={(e) => onTargetChange(e.target.value)}
-            >
-              {targetOptions.map((o) => (
-                <option key={o.value || "none"} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div
-            className="ai-sidebar-target-view"
-            data-testid="ai-target-context"
-          >
-            {t("targetCurrent", { label: formatTarget(targetContext) })}
-          </div>
-        </div>
-
         <div className="ai-sidebar-conv-bar">
           <select
             data-testid="ai-conversation-select"
             value={activeId ?? ""}
             onChange={(e) => {
               const id = e.target.value;
-              if (id) void selectConversation(id);
+              if (id) void selectConversation(id, conversations);
             }}
           >
             <option value="" disabled>
@@ -441,7 +419,29 @@ export function AiSidebar() {
           ref={listRef}
           data-testid="ai-sidebar-messages"
         >
-          {messages.length === 0 ? (
+          {showSuggestions ? (
+            <div
+              className="ai-sidebar-suggestions"
+              data-testid="ai-suggestions"
+            >
+              <p className="ai-sidebar-empty">{t("emptyMessages")}</p>
+              <p className="ai-sidebar-suggest-lead">{t("suggestLead")}</p>
+              <div className="ai-sidebar-suggest-list">
+                {chips.map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    className="ai-sidebar-suggest-chip"
+                    data-testid={`ai-suggest-${chip.id}`}
+                    disabled={busy}
+                    onClick={() => applySuggestion(chip)}
+                  >
+                    {t(chip.labelKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <p className="ai-sidebar-empty">{t("emptyMessages")}</p>
           ) : (
             messages.map((m) => (
@@ -496,35 +496,83 @@ export function AiSidebar() {
           </p>
         ) : null}
 
-        <form
-          className="ai-sidebar-composer"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void onSend();
-          }}
-        >
-          <textarea
-            data-testid="ai-composer-input"
-            rows={3}
-            value={draft}
-            placeholder={t("placeholder")}
-            disabled={busy}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void onSend();
-              }
+        <div className="ai-sidebar-composer-wrap">
+          <div className="ai-sidebar-ref-row">
+            <button
+              type="button"
+              className="ai-sidebar-ref"
+              data-testid="ai-context-ref"
+              aria-expanded={adjustOpen}
+              aria-controls={adjusterId}
+              onClick={() => setAdjustOpen((v) => !v)}
+            >
+              {referenceLabel()}
+            </button>
+            <span className="ai-sidebar-ref-hint" data-testid="ai-page-context">
+              {pageContext.area ?? "other"}
+            </span>
+          </div>
+
+          {adjustOpen ? (
+            <div
+              id={adjusterId}
+              className="ai-sidebar-adjust"
+              data-testid="ai-context-adjuster"
+            >
+              <p className="ai-sidebar-adjust-lead">{t("adjustLead")}</p>
+              <label className="ai-sidebar-adjust-field">
+                <span>{t("adjustFocus")}</span>
+                <select
+                  data-testid="ai-target-select"
+                  value={targetSelectValue(targetContext)}
+                  onChange={(e) => onTargetAdjust(e.target.value)}
+                >
+                  {ADJUSTABLE_TARGET_OPTIONS.map((o) => (
+                    <option key={o.value || "none"} value={o.value}>
+                      {t(o.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p
+                className="ai-sidebar-target-view"
+                data-testid="ai-target-context"
+              >
+                {t("targetCurrent", { label: formatTarget(targetContext) })}
+              </p>
+            </div>
+          ) : null}
+
+          <form
+            className="ai-sidebar-composer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void onSend();
             }}
-          />
-          <button
-            type="submit"
-            data-testid="ai-composer-send"
-            disabled={busy || !draft.trim()}
           >
-            {busy ? t("sending") : t("send")}
-          </button>
-        </form>
+            <textarea
+              data-testid="ai-composer-input"
+              rows={3}
+              value={draft}
+              placeholder={t("placeholder")}
+              disabled={busy}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  void onSend();
+                }
+              }}
+            />
+            <button
+              type="submit"
+              data-testid="ai-composer-send"
+              disabled={busy || !draft.trim()}
+            >
+              {busy ? t("sending") : t("send")}
+            </button>
+          </form>
+        </div>
       </aside>
     </>
   );
