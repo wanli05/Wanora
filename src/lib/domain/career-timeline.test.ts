@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { yearMonthFromInput } from "@/lib/domain/dates";
-import { buildCareerTimeline, groupCareerTimelineByAt } from "./career-timeline";
+import {
+  buildCareerTimeline,
+  groupCareerTimelineByAt,
+  timelineEventSummaryJa,
+} from "./career-timeline";
+
+describe("timelineEventSummaryJa", () => {
+  it("maps event codes to Japanese business labels", () => {
+    expect(timelineEventSummaryJa("joined")).toBe("入社");
+    expect(timelineEventSummaryJa("left")).toBe("退社");
+    expect(timelineEventSummaryJa("enrolled")).toBe("入学");
+    expect(timelineEventSummaryJa("graduated")).toBe("卒業");
+    expect(timelineEventSummaryJa("withdrawn")).toBe("中退");
+    expect(timelineEventSummaryJa("completed")).toBe("修了");
+    expect(timelineEventSummaryJa("transferred")).toBe("異動");
+  });
+
+  it("never returns raw English event codes for unknown values", () => {
+    expect(timelineEventSummaryJa("unknown")).toBeUndefined();
+    expect(timelineEventSummaryJa("Joined")).toBeUndefined();
+  });
+});
 
 describe("buildCareerTimeline", () => {
   it("aggregates modules and skips pending projects", () => {
@@ -54,6 +75,11 @@ describe("buildCareerTimeline", () => {
     // Undated goals stay in Career Goals, not the timeline.
     expect(items.some((i) => i.module === "goals")).toBe(false);
     expect(items.some((i) => i.title === "長期目標")).toBe(false);
+
+    const edu = items.find((i) => i.id === "edu-e1");
+    const work = items.find((i) => i.id === "work-w1");
+    expect(edu?.summary).toBe("卒業");
+    expect(work?.summary).toBe("入社");
   });
 
   it("prefers employers over legacy work history rows", () => {
@@ -73,7 +99,7 @@ describe("buildCareerTimeline", () => {
           companyName: { ja: "新会社" },
           title: "PM",
           startYm: yearMonthFromInput(2024, 4),
-          endYm: null,
+          endYm: yearMonthFromInput(2025, 3),
         },
       ],
       licenses: [],
@@ -84,6 +110,11 @@ describe("buildCareerTimeline", () => {
 
     expect(items.some((i) => i.title.includes("新会社"))).toBe(true);
     expect(items.some((i) => i.title === "旧会社")).toBe(false);
+
+    const join = items.find((i) => i.id === "emp-e1-join");
+    const leave = items.find((i) => i.id === "emp-e1-leave");
+    expect(join?.summary).toBe("入社");
+    expect(leave?.summary).toBe("退社");
   });
 
   it("orders months by numeric year/month descending (9 before 10/12 as strings would be wrong)", () => {
