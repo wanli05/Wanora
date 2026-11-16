@@ -1,6 +1,6 @@
 import type { AiCompletionResult, AiTokenUsage } from "@/lib/ai/types";
+import { PRICING_CATALOG_VERSION } from "@/lib/ai/pricing/catalog";
 import { estimateCostUsd } from "@/lib/ai/pricing/estimate";
-import { getServerEnv } from "@/lib/env";
 
 export type SettledUsagePatch = {
   status: "ok" | "invalid_output";
@@ -19,6 +19,9 @@ export type SettledUsagePatch = {
 /**
  * Map provider completion → usage event patch + USD estimate (catalog, not invoice).
  * Empty text with usage → invalid_output but still billed.
+ *
+ * Pure: does not read process.env / getServerEnv. Pass `pricingVersion` from
+ * ServerEnv when settling in app code; unit tests can omit it.
  */
 export function buildSettledUsageFromCompletion(
   completion: AiCompletionResult,
@@ -28,8 +31,7 @@ export function buildSettledUsageFromCompletion(
     extraErrorCode?: string | null;
   },
 ): SettledUsagePatch {
-  const env = getServerEnv();
-  const pricingVersion = options?.pricingVersion ?? env.AI_PRICING_VERSION;
+  const pricingVersion = options?.pricingVersion ?? PRICING_CATALOG_VERSION;
   const usage = completion.usage;
   const cacheWrite =
     typeof (usage as AiTokenUsage & { cacheWriteTokens?: number })

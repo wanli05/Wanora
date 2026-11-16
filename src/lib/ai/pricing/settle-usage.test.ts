@@ -1,17 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { PRICING_CATALOG_VERSION } from "@/lib/ai/pricing/catalog";
 import { buildSettledUsageFromCompletion } from "@/lib/ai/pricing/settle-usage";
-import { resetServerEnvCache } from "@/lib/env";
 import type { AiCompletionResult } from "@/lib/ai/types";
-
-beforeEach(() => {
-  process.env.AI_PRICING_VERSION = "2026-11-17";
-  resetServerEnvCache();
-});
-
-afterEach(() => {
-  delete process.env.AI_PRICING_VERSION;
-  resetServerEnvCache();
-});
 
 function base(partial: Partial<AiCompletionResult>): AiCompletionResult {
   return {
@@ -26,10 +16,12 @@ function base(partial: Partial<AiCompletionResult>): AiCompletionResult {
 
 describe("buildSettledUsageFromCompletion", () => {
   it("marks ok and prices usage on success", () => {
-    const patch = buildSettledUsageFromCompletion(base({}));
+    const patch = buildSettledUsageFromCompletion(base({}), {
+      pricingVersion: PRICING_CATALOG_VERSION,
+    });
     expect(patch.status).toBe("ok");
     expect(patch.estimatedCostUsd).toBe("0.001200");
-    expect(patch.pricingVersion).toBe("2026-11-17");
+    expect(patch.pricingVersion).toBe(PRICING_CATALOG_VERSION);
   });
 
   it("bills empty text with usage as invalid_output", () => {
@@ -45,6 +37,7 @@ describe("buildSettledUsageFromCompletion", () => {
         model: "gpt-6.1-terra",
         providerResponseId: "resp_empty",
       }),
+      { pricingVersion: PRICING_CATALOG_VERSION },
     );
     expect(patch.status).toBe("invalid_output");
     expect(patch.errorCode).toBe("empty_output_with_usage");

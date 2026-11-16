@@ -268,7 +268,9 @@ async function settlePhase(
     };
   }
 
-  const patch = buildSettledUsageFromCompletion(result);
+  const patch = buildSettledUsageFromCompletion(result, {
+    pricingVersion: getServerEnv().AI_PRICING_VERSION,
+  });
 
   await db.transaction(async (tx) => {
     await withUserAiLock(tx, input.userId, async () => {
@@ -366,6 +368,8 @@ export async function guardedComplete(
     reserve = estimateReservation({
       messages: input.messages,
       model,
+      maxOutputTokens: env.AI_OPENAI_MAX_OUTPUT_TOKENS,
+      pricingVersion: env.AI_PRICING_VERSION,
     });
   } catch (err) {
     return {

@@ -1,9 +1,12 @@
 import type { AiChatMessage } from "@/lib/ai/types";
-import { estimateCostUsd } from "@/lib/ai/pricing/estimate";
 import {
-  estimateTokensFromMessages,
-} from "@/lib/ai/prompt-build";
-import { getServerEnv } from "@/lib/env";
+  PRICING_CATALOG_VERSION,
+} from "@/lib/ai/pricing/catalog";
+import { estimateCostUsd } from "@/lib/ai/pricing/estimate";
+import { estimateTokensFromMessages } from "@/lib/ai/prompt-build";
+
+/** Default max-output headroom when caller does not pass env.AI_OPENAI_MAX_OUTPUT_TOKENS. */
+export const DEFAULT_RESERVE_MAX_OUTPUT_TOKENS = 2048;
 
 export type ReserveEstimate = {
   estimatedTokens: number;
@@ -19,6 +22,9 @@ export type ReserveEstimate = {
 /**
  * Conservative pre-call reservation from the same message list execute will send
  * (plus max output headroom and TOCTOU slack for context growth enqueue→execute).
+ *
+ * Pure: does not read process.env / getServerEnv. Callers should pass
+ * `maxOutputTokens` / `pricingVersion` from ServerEnv when available.
  */
 export function estimateReservation(args: {
   messages: AiChatMessage[];
@@ -26,11 +32,9 @@ export function estimateReservation(args: {
   maxOutputTokens?: number;
   pricingVersion?: string;
 }): ReserveEstimate {
-  const env = getServerEnv();
   const model = args.model;
-  const pricingVersion = args.pricingVersion ?? env.AI_PRICING_VERSION;
-  const maxOut =
-    args.maxOutputTokens ?? env.AI_OPENAI_MAX_OUTPUT_TOKENS;
+  const pricingVersion = args.pricingVersion ?? PRICING_CATALOG_VERSION;
+  const maxOut = args.maxOutputTokens ?? DEFAULT_RESERVE_MAX_OUTPUT_TOKENS;
 
   const inputTokensEstimate = estimateTokensFromMessages(args.messages);
   // Context / history may grow between enqueue and execute — pad conservatively.

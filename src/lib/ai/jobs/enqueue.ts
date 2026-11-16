@@ -188,7 +188,12 @@ export async function enqueueAiJob(
 
   let reserve;
   try {
-    reserve = estimateReservation({ messages, model });
+    reserve = estimateReservation({
+      messages,
+      model,
+      maxOutputTokens: env.AI_OPENAI_MAX_OUTPUT_TOKENS,
+      pricingVersion: env.AI_PRICING_VERSION,
+    });
   } catch (err) {
     return {
       ok: false,

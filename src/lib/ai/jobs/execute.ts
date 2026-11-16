@@ -10,6 +10,7 @@ import { buildAiChatMessages } from "@/lib/ai/prompt-build";
 import { withUserAiLock } from "@/lib/ai/rate-limit";
 import type { AiProvider } from "@/lib/ai/types";
 import { updateAiUsageEventStatus } from "@/lib/ai/usage";
+import { getServerEnv } from "@/lib/env";
 import { getAiConversation } from "@/lib/data/ai-conversations";
 import {
   getAiJobById,
@@ -225,8 +226,9 @@ export async function executeAiJob(
           };
         }
 
-        // Actual cost uses current catalog/env pricing version (not OpenAI invoice).
+        // Actual cost uses current catalog pricing version (not OpenAI invoice).
         const patch = buildSettledUsageFromCompletion(completion, {
+          pricingVersion: getServerEnv().AI_PRICING_VERSION,
           extraErrorCode: discardAssistant
             ? "discarded_conversation_deleted"
             : emptyText

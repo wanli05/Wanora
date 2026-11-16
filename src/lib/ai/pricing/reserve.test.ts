@@ -1,19 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { PRICING_CATALOG_VERSION } from "@/lib/ai/pricing/catalog";
 import { estimateReservation } from "@/lib/ai/pricing/reserve";
 import { B1_SYSTEM_INSTRUCTIONS } from "@/lib/ai/prompts/b1-system";
-import { resetServerEnvCache } from "@/lib/env";
-
-beforeEach(() => {
-  process.env.AI_PRICING_VERSION = "2026-11-17";
-  process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "128";
-  resetServerEnvCache();
-});
-
-afterEach(() => {
-  delete process.env.AI_PRICING_VERSION;
-  delete process.env.AI_OPENAI_MAX_OUTPUT_TOKENS;
-  resetServerEnvCache();
-});
 
 describe("estimateReservation", () => {
   it("covers system + context + history + user + output + TOCTOU slack", () => {
@@ -27,7 +15,12 @@ describe("estimateReservation", () => {
       { role: "assistant" as const, content: "前回の回答" },
       { role: "user" as const, content: "今回の質問です" },
     ];
-    const r = estimateReservation({ messages, model: "mock-v1" });
+    const r = estimateReservation({
+      messages,
+      model: "mock-v1",
+      maxOutputTokens: 128,
+      pricingVersion: PRICING_CATALOG_VERSION,
+    });
     expect(r.inputTokensEstimate).toBeGreaterThan(50);
     expect(r.outputTokensReserved).toBe(128);
     expect(r.toctouSlackTokens).toBeGreaterThanOrEqual(256);
@@ -35,6 +28,6 @@ describe("estimateReservation", () => {
       r.inputTokensEstimate + r.outputTokensReserved + r.toctouSlackTokens,
     );
     expect(Number(r.estimatedCostUsd)).toBeGreaterThan(0);
-    expect(r.pricingVersion).toBe("2026-11-17");
+    expect(r.pricingVersion).toBe(PRICING_CATALOG_VERSION);
   });
 });
