@@ -215,4 +215,85 @@ describe("buildCareerTimeline", () => {
     const aprilGroup = groups.find((g) => g.at.includes("2024"));
     expect(aprilGroup?.items).toHaveLength(3);
   });
+
+  it("treats missing createdAt as entryOrder 0 within the same month", () => {
+    const items = buildCareerTimeline({
+      education: [],
+      workHistory: [],
+      employers: [],
+      licenses: [
+        {
+          id: "no-created",
+          acquiredYm: yearMonthFromInput(2025, 5),
+          name: { ja: "無作成時刻" },
+        },
+        {
+          id: "with-created",
+          acquiredYm: yearMonthFromInput(2025, 5),
+          name: { ja: "有作成時刻" },
+          createdAt: new Date("2025-05-10T00:00:00Z"),
+        },
+      ],
+      projects: [],
+      skills: [],
+    });
+
+    expect(items.map((i) => i.id)).toEqual([
+      "lic-no-created",
+      "lic-with-created",
+    ]);
+  });
+
+  it("is deterministic across rebuilds (post-refresh consistency)", () => {
+    const input = {
+      education: [
+        {
+          id: "e1",
+          yearMonth: yearMonthFromInput(2023, 3),
+          school: { ja: "A大学" },
+          eventCode: "graduated",
+          createdAt: new Date("2023-01-01T00:00:00Z"),
+        },
+      ],
+      workHistory: [],
+      employers: [
+        {
+          id: "emp1",
+          companyName: { ja: "B社" },
+          title: "Eng",
+          startYm: yearMonthFromInput(2024, 9),
+          endYm: yearMonthFromInput(2025, 10),
+          createdAt: new Date("2024-01-01T00:00:00Z"),
+        },
+      ],
+      licenses: [
+        {
+          id: "lic1",
+          acquiredYm: yearMonthFromInput(2025, 12),
+          name: { ja: "C資格" },
+          createdAt: new Date("2025-01-01T00:00:00Z"),
+        },
+      ],
+      projects: [],
+      skills: [],
+    };
+
+    const first = buildCareerTimeline(input).map((i) => ({
+      id: i.id,
+      at: i.at,
+      summary: i.summary,
+    }));
+    const second = buildCareerTimeline(input).map((i) => ({
+      id: i.id,
+      at: i.at,
+      summary: i.summary,
+    }));
+    expect(second).toEqual(first);
+    expect(first.map((i) => i.at)).toEqual([
+      "2025年12月",
+      "2025年10月",
+      "2024年9月",
+      "2023年3月",
+    ]);
+  });
 });
