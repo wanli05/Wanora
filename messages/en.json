@@ -482,6 +482,7 @@
     "errRate": "送信が多すぎます。少し待ってください",
     "errUnavailable": "AI は現在利用できません",
     "errSend": "送信に失敗しました",
+    "errJobTimeout": "応答がタイムアウトしました。ワーカーが起動しているか確認して、もう一度送信してください",
     "pageBoard": "応募進捗",
     "pageCareer": "My Career",
     "pageOther": "このページ"

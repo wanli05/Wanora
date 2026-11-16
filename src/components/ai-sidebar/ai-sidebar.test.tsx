@@ -63,6 +63,7 @@ vi.mock("next-intl", () => ({
         errRate: "rate",
         errUnavailable: "off",
         errSend: "send fail",
+        errJobTimeout: "timeout",
         deleteConfirm: "confirm?",
       };
       return map[key] ?? key;

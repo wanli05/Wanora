@@ -162,7 +162,15 @@ export function AiSidebar() {
     [refreshMessages],
   );
 
-  useJobPolling(pending, onJobUpdate, onJobTerminal);
+  const onJobTimeout = useCallback(() => {
+    setPending(null);
+    setJobSnap(null);
+    setBusy(false);
+    sendingRef.current = false;
+    setError(t("errJobTimeout"));
+  }, [t]);
+
+  useJobPolling(pending, onJobUpdate, onJobTerminal, onJobTimeout);
 
   useEffect(() => {
     if (!listRef.current) return;
