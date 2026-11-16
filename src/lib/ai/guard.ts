@@ -1,7 +1,8 @@
 import type { Db } from "@/db";
-import { getServerEnv } from "@/lib/env";
+import { getServerEnv, resolveAiModel } from "@/lib/env";
 import { getAiProvider } from "@/lib/ai/provider";
-import { mockEstimatedCostUsd } from "@/lib/ai/providers/mock";
+import { estimateReservation } from "@/lib/ai/pricing/reserve";
+import { buildSettledUsageFromCompletion } from "@/lib/ai/pricing/settle-usage";
 import { checkAndReserveBudgets, settleBudgets } from "@/lib/ai/budget";
 import { checkUserRateLimit, withUserAiLock } from "@/lib/ai/rate-limit";
 import {
@@ -9,6 +10,7 @@ import {
   insertAiUsageEvent,
   updateAiUsageEventStatus,
 } from "@/lib/ai/usage";
+import { usageLooksPresent } from "@/lib/ai/providers/openai-usage";
 import type {
   AiChatMessage,
   AiGuardOutcome,
@@ -37,19 +39,14 @@ type ReserveOk = {
 
 type ReserveEarly = { kind: "done"; outcome: AiGuardOutcome };
 
-function estimateInputTokens(messages: AiChatMessage[]): number {
-  const text = messages.map((m) => m.content).join("\n");
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return Math.max(1, Math.ceil(trimmed.length / 2));
-}
-
 async function reservePhase(
   db: Db,
   input: GuardedCompleteInput,
   provider: AiProvider,
   estimatedTokens: number,
   estimatedCostUsd: string,
+  pricingVersion: string,
+  model: string,
   now: Date,
 ): Promise<ReserveOk | ReserveEarly> {
   const env = getServerEnv();
@@ -63,7 +60,7 @@ async function reservePhase(
       );
 
       if (existing) {
-        if (existing.status === "ok") {
+        if (existing.status === "ok" || existing.status === "invalid_output") {
           return {
             kind: "done" as const,
             outcome: {
@@ -102,7 +99,6 @@ async function reservePhase(
           const ageMs = now.getTime() - existing.createdAt.getTime();
           const STALE_MS = 60_000;
           if (ageMs < STALE_MS) {
-            // In-flight duplicate — do not double-charge or steal the lock.
             return {
               kind: "done" as const,
               outcome: {
@@ -113,7 +109,6 @@ async function reservePhase(
               },
             };
           }
-          // Exception recovery: release stale reservation, mark abandoned.
           await settleBudgets(tx, {
             userId: input.userId,
             reservedUsd: existing.estimatedCostUsd,
@@ -138,12 +133,13 @@ async function reservePhase(
         const rejected = await insertAiUsageEvent(tx, input.userId, {
           feature: input.feature,
           provider: provider.id,
-          model: input.model ?? null,
+          model,
           status: "rejected_rate",
           errorCode: "rate_limited",
           requestId: input.requestId,
           conversationId: input.conversationId ?? null,
           estimatedCostUsd: "0",
+          pricingVersion,
         });
         return {
           kind: "done" as const,
@@ -170,12 +166,13 @@ async function reservePhase(
         const rejected = await insertAiUsageEvent(tx, input.userId, {
           feature: input.feature,
           provider: provider.id,
-          model: input.model ?? null,
+          model,
           status: "rejected_budget",
           errorCode: budget.reason,
           requestId: input.requestId,
           conversationId: input.conversationId ?? null,
           estimatedCostUsd: "0",
+          pricingVersion,
         });
         return {
           kind: "done" as const,
@@ -192,10 +189,11 @@ async function reservePhase(
       const reserved = await insertAiUsageEvent(tx, input.userId, {
         feature: input.feature,
         provider: provider.id,
-        model: input.model?.trim() || env.AI_DEFAULT_MODEL || "mock-v1",
+        model,
         inputTokens: estimatedTokens,
         outputTokens: 0,
         estimatedCostUsd,
+        pricingVersion,
         status: "reserved",
         requestId: input.requestId,
         conversationId: input.conversationId ?? null,
@@ -244,29 +242,68 @@ async function settlePhase(
     throw err;
   }
 
-  const actualTokens = result.usage.inputTokens + result.usage.outputTokens;
-  const actualCostUsd = mockEstimatedCostUsd(actualTokens);
+  const empty = !result.text.trim();
+  if (empty && !usageLooksPresent(result.usage)) {
+    await db.transaction(async (tx) => {
+      await withUserAiLock(tx, input.userId, async () => {
+        await settleBudgets(tx, {
+          userId: input.userId,
+          reservedUsd: reserved.reservedUsd,
+          actualUsd: "0",
+          success: false,
+          now,
+        });
+        await updateAiUsageEventStatus(tx, input.userId, reserved.usageEventId, {
+          status: "error",
+          errorCode: "invalid_output",
+          estimatedCostUsd: "0",
+        });
+      });
+    });
+    return {
+      ok: false,
+      code: "invalid_request",
+      message: "empty output without usage",
+      usageEventId: reserved.usageEventId,
+    };
+  }
+
+  const patch = buildSettledUsageFromCompletion(result);
 
   await db.transaction(async (tx) => {
     await withUserAiLock(tx, input.userId, async () => {
       await settleBudgets(tx, {
         userId: input.userId,
         reservedUsd: reserved.reservedUsd,
-        actualUsd: actualCostUsd,
+        actualUsd: patch.estimatedCostUsd,
         success: true,
         now,
       });
       await updateAiUsageEventStatus(tx, input.userId, reserved.usageEventId, {
-        status: "ok",
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        estimatedCostUsd: actualCostUsd,
-        latencyMs: result.latencyMs,
-        errorCode: null,
-        model: result.model,
+        status: patch.status,
+        inputTokens: patch.inputTokens,
+        outputTokens: patch.outputTokens,
+        cachedInputTokens: patch.cachedInputTokens,
+        reasoningTokens: patch.reasoningTokens,
+        estimatedCostUsd: patch.estimatedCostUsd,
+        pricingVersion: patch.pricingVersion,
+        providerResponseId: patch.providerResponseId,
+        latencyMs: patch.latencyMs,
+        errorCode: patch.errorCode,
+        model: patch.model,
       });
     });
   });
+
+  if (empty) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      message: "empty output with usage settled",
+      usageEventId: reserved.usageEventId,
+      detail: "empty_output_with_usage",
+    };
+  }
 
   return {
     ok: true,
@@ -313,15 +350,39 @@ export async function guardedComplete(
   }
 
   const provider = input.provider ?? getAiProvider();
-  const estimatedTokens = estimateInputTokens(input.messages) + 64;
-  const estimatedCostUsd = mockEstimatedCostUsd(estimatedTokens);
+  let model: string;
+  try {
+    model = resolveAiModel(input.model, env);
+  } catch (err) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      message: err instanceof Error ? err.message : "model not allowed",
+    };
+  }
+
+  let reserve;
+  try {
+    reserve = estimateReservation({
+      messages: input.messages,
+      model,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      message: err instanceof Error ? err.message : "pricing unavailable",
+    };
+  }
 
   const phase1 = await reservePhase(
     db,
     input,
     provider,
-    estimatedTokens,
-    estimatedCostUsd,
+    reserve.estimatedTokens,
+    reserve.estimatedCostUsd,
+    reserve.pricingVersion,
+    model,
     now,
   );
   if (phase1.kind === "done") {

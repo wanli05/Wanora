@@ -3,6 +3,7 @@ import type {
   AiCompletionResult,
   AiProvider,
 } from "@/lib/ai/types";
+import { estimateCostUsd } from "@/lib/ai/pricing/estimate";
 
 const MOCK_MODEL = "mock-v1";
 
@@ -32,7 +33,6 @@ export function createMockAiProvider(): AiProvider {
 
       const inputTokens = estimateTokens(inputText);
       const outputTokens = estimateTokens(text);
-      // Tiny synthetic cost so budget tests can use small caps.
       const latencyMs = Math.max(1, Date.now() - started);
 
       return {
@@ -46,7 +46,13 @@ export function createMockAiProvider(): AiProvider {
   };
 }
 
+/**
+ * Legacy helper: treat `tokens` as ordinary input on mock-v1 ($10 / 1M).
+ * Prefer estimateCostUsd for new code paths.
+ */
 export function mockEstimatedCostUsd(tokens: number): string {
-  // $0.00001 per token → easy to exhaust small test budgets.
-  return (tokens * 0.00001).toFixed(6);
+  return estimateCostUsd({
+    model: MOCK_MODEL,
+    usage: { inputTokens: tokens, outputTokens: 0 },
+  }).estimatedCostUsd;
 }

@@ -6,10 +6,7 @@ import {
   resolveAiModel,
   type ServerEnv,
 } from "@/lib/env";
-import {
-  ProviderCleanFailure,
-  ProviderUncertainFailure,
-} from "@/lib/ai/provider-errors";
+import { ProviderCleanFailure } from "@/lib/ai/provider-errors";
 import { mapOpenAiError } from "@/lib/ai/providers/openai-errors";
 import { mapMessagesToOpenAiInput } from "@/lib/ai/providers/openai-messages";
 import {
@@ -177,12 +174,13 @@ export function createOpenAiProvider(
       };
 
       if (!text) {
-        // Billing may have occurred — never treat as free clean release.
         if (usageLooksPresent(usage)) {
-          throw new ProviderUncertainFailure(
-            "openai returned usage but empty text",
-            "empty_output_with_usage",
-          );
+          // B1b: return empty text + usage so execute/guard can settle actual cost
+          // (do not hold as uncertain for 24h reconcile).
+          return {
+            text: "",
+            ...resultBase,
+          };
         }
         throw new ProviderCleanFailure(
           "openai returned empty output",

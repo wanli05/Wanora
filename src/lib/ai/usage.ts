@@ -33,7 +33,8 @@ export async function findAiUsageByRequestId(
   return row ?? null;
 }
 
-const TOKEN_STATUSES: AiUsageStatus[] = ["ok", "reserved"];
+/** Statuses that count toward daily token/cost budgets (billed empty = invalid_output). */
+const TOKEN_STATUSES: AiUsageStatus[] = ["ok", "reserved", "invalid_output"];
 
 export async function sumAiTokensForUserSince(
   db: Db,

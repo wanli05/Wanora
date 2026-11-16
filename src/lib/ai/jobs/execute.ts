@@ -5,9 +5,10 @@ import { settleBudgets } from "@/lib/ai/budget";
 import { resolveAiContext } from "@/lib/ai/context/resolve";
 import type { AiPageContext, AiTargetContext } from "@/lib/ai/context/types";
 import { getAiProvider } from "@/lib/ai/provider";
-import { mockEstimatedCostUsd } from "@/lib/ai/providers/mock";
+import { buildSettledUsageFromCompletion } from "@/lib/ai/pricing/settle-usage";
+import { buildAiChatMessages } from "@/lib/ai/prompt-build";
 import { withUserAiLock } from "@/lib/ai/rate-limit";
-import type { AiChatMessage, AiProvider } from "@/lib/ai/types";
+import type { AiProvider } from "@/lib/ai/types";
 import { updateAiUsageEventStatus } from "@/lib/ai/usage";
 import { getAiConversation } from "@/lib/data/ai-conversations";
 import {
@@ -22,6 +23,7 @@ import {
   ProviderCleanFailure,
   ProviderUncertainFailure,
 } from "@/lib/ai/provider-errors";
+import { usageLooksPresent } from "@/lib/ai/providers/openai-usage";
 
 export { ProviderCleanFailure, ProviderUncertainFailure };
 
@@ -43,7 +45,8 @@ export type ExecuteAiJobResult =
         | "provider_uncertain"
         | "missing_usage"
         | "aborted"
-        | "canceled";
+        | "canceled"
+        | "invalid_output";
       job?: AiJobRow;
     };
 
@@ -68,18 +71,6 @@ function asTargetContext(value: unknown): AiTargetContext | null {
   return value as AiTargetContext;
 }
 
-function formatContextForPrompt(
-  fragments: { label: string; data: unknown }[],
-): string {
-  if (fragments.length === 0) return "";
-  const parts = fragments.map((f) => {
-    const body =
-      typeof f.data === "string" ? f.data : JSON.stringify(f.data, null, 0);
-    return `### ${f.label}\n${body}`;
-  });
-  return `【参照コンテキスト】\n${parts.join("\n\n")}`;
-}
-
 async function loadReservedUsage(db: Db, userId: string, usageEventId: string) {
   const [row] = await db
     .select()
@@ -94,6 +85,10 @@ async function loadReservedUsage(db: Db, userId: string, usageEventId: string) {
 /**
  * Run one claimed job: resolve context + provider outside TX, then fenced settle.
  * Never awaits the provider inside a database transaction.
+ *
+ * Exactly-once against a third-party API is impossible with DB TX alone: if the
+ * worker crashes after the provider returns but before settle commits, reclaim
+ * may call the provider again (duplicate platform charge possible).
  */
 export async function executeAiJob(
   db: Db,
@@ -121,7 +116,6 @@ export async function executeAiJob(
     };
   }
 
-  // Phase B: cancel / soft-delete before provider — safe to release reserved.
   const preflight = await shouldStopBeforeProvider(db, job);
   if (preflight.stop) {
     return finalizeCanceled(db, fence, job, now, preflight.code);
@@ -135,7 +129,6 @@ export async function executeAiJob(
   }
 
   if (input.signal?.aborted) {
-    // Abort after entering calling_provider → billing unknown.
     return finalizeUncertain(db, fence, job, now, "aborted_calling_provider");
   }
 
@@ -150,16 +143,10 @@ export async function executeAiJob(
   });
 
   const history = await listAiMessages(db, job.userId, job.conversationId);
-  const chatMessages: AiChatMessage[] = [];
-  const contextBlock = formatContextForPrompt(resolved.fragments);
-  if (contextBlock) {
-    chatMessages.push({ role: "system", content: contextBlock });
-  }
-  for (const m of history) {
-    if (m.role === "system" || m.role === "user" || m.role === "assistant") {
-      chatMessages.push({ role: m.role, content: m.content });
-    }
-  }
+  const chatMessages = buildAiChatMessages({
+    fragments: resolved.fragments,
+    history: history.map((m) => ({ role: m.role, content: m.content })),
+  });
 
   let completion;
   try {
@@ -167,6 +154,8 @@ export async function executeAiJob(
       feature: job.feature,
       model: job.model ?? undefined,
       messages: chatMessages,
+      signal: input.signal,
+      requestKey: job.id,
     });
   } catch (err) {
     if (input.signal?.aborted || err instanceof ProviderUncertainFailure) {
@@ -190,10 +179,20 @@ export async function executeAiJob(
     return finalizeCleanFailure(db, fence, job, now, clean);
   }
 
-  // Phase D: provider returned — billing assumed for mock; never treat as free cancel.
-  // Soft-deleted conversation: settle usage but do not write a new assistant message.
   const conv = await getAiConversation(db, job.userId, job.conversationId);
   const discardAssistant = !conv || conv.status === "deleted";
+  const emptyText = !completion.text.trim();
+
+  // Empty text + usage: bill actual cost; do not release as free / uncertain.
+  if (emptyText && !usageLooksPresent(completion.usage)) {
+    return finalizeCleanFailure(
+      db,
+      fence,
+      job,
+      now,
+      new ProviderCleanFailure("empty output without usage", "invalid_output"),
+    );
+  }
 
   try {
     const settled = await db.transaction(async (tx) => {
@@ -203,8 +202,40 @@ export async function executeAiJob(
           return { kind: "missing_usage" as const };
         }
 
+        // Idempotent: already settled (e.g. duplicate worker) — do not double-charge.
+        if (usage.status !== "reserved") {
+          const fin = await updateAiJobWithFence(tx, fence, {
+            status:
+              usage.status === "ok"
+                ? discardAssistant
+                  ? "canceled"
+                  : "succeeded"
+                : "failed",
+            executionPhase: "after_provider",
+            providerOutcome:
+              usage.status === "ok" ? "succeeded" : "failed",
+            finishedAt: now,
+            clearLock: true,
+          });
+          if (!fin.ok) throw new StaleFenceAbort();
+          return {
+            kind: "already_settled" as const,
+            job: fin.job,
+            status: usage.status,
+          };
+        }
+
+        // Actual cost uses current catalog/env pricing version (not OpenAI invoice).
+        const patch = buildSettledUsageFromCompletion(completion, {
+          extraErrorCode: discardAssistant
+            ? "discarded_conversation_deleted"
+            : emptyText
+              ? "empty_output_with_usage"
+              : null,
+        });
+
         let resultMessageId: string | null = null;
-        if (!discardAssistant) {
+        if (!discardAssistant && !emptyText) {
           const assistant = await createAiMessage(
             tx,
             job.userId,
@@ -219,45 +250,58 @@ export async function executeAiJob(
           resultMessageId = assistant.id;
         }
 
-        const actualTokens =
-          completion.usage.inputTokens + completion.usage.outputTokens;
-        const actualCostUsd = mockEstimatedCostUsd(actualTokens);
-
         await settleBudgets(tx, {
           userId: job.userId,
           reservedUsd: usage.estimatedCostUsd,
-          actualUsd: actualCostUsd,
+          actualUsd: patch.estimatedCostUsd,
           success: true,
           now,
         });
 
         await updateAiUsageEventStatus(tx, job.userId, usage.id, {
-          status: "ok",
-          inputTokens: completion.usage.inputTokens,
-          outputTokens: completion.usage.outputTokens,
-          estimatedCostUsd: actualCostUsd,
-          latencyMs: completion.latencyMs,
-          errorCode: discardAssistant ? "discarded_conversation_deleted" : null,
-          model: completion.model,
+          status: patch.status,
+          inputTokens: patch.inputTokens,
+          outputTokens: patch.outputTokens,
+          cachedInputTokens: patch.cachedInputTokens,
+          reasoningTokens: patch.reasoningTokens,
+          estimatedCostUsd: patch.estimatedCostUsd,
+          pricingVersion: patch.pricingVersion,
+          providerResponseId: patch.providerResponseId,
+          latencyMs: patch.latencyMs,
+          errorCode: patch.errorCode,
+          model: patch.model,
         });
 
+        const jobStatus = emptyText
+          ? "failed"
+          : discardAssistant
+            ? "canceled"
+            : "succeeded";
         const fin = await updateAiJobWithFence(tx, fence, {
-          status: discardAssistant ? "canceled" : "succeeded",
+          status: jobStatus,
           executionPhase: "after_provider",
-          providerOutcome: "succeeded",
+          providerOutcome: emptyText ? "failed" : "succeeded",
           resultMessageId,
           resultPayload: {
             text: completion.text,
             model: completion.model,
             provider: completion.provider,
             discarded: discardAssistant,
+            emptyOutput: emptyText,
+            providerResponseId: completion.providerResponseId ?? null,
           },
           provider: completion.provider,
           model: completion.model,
-          errorCode: discardAssistant ? "conversation_deleted" : null,
-          errorMessage: discardAssistant
-            ? "provider result discarded; conversation deleted"
-            : null,
+          errorCode: emptyText
+            ? "empty_output_with_usage"
+            : discardAssistant
+              ? "conversation_deleted"
+              : null,
+          errorMessage: emptyText
+            ? "provider returned usage but empty text; cost settled"
+            : discardAssistant
+              ? "provider result discarded; conversation deleted"
+              : null,
           finishedAt: now,
           clearLock: true,
         });
@@ -271,12 +315,23 @@ export async function executeAiJob(
           job: fin.job,
           resultMessageId: resultMessageId ?? "",
           discarded: discardAssistant,
+          emptyOutput: emptyText,
         };
       });
     });
 
     if (settled.kind === "missing_usage") {
       return { ok: false, reason: "missing_usage" };
+    }
+    if (settled.kind === "already_settled") {
+      return {
+        ok: false,
+        reason: settled.status === "ok" ? "stale_fence" : "invalid_output",
+        job: settled.job,
+      };
+    }
+    if (settled.emptyOutput) {
+      return { ok: false, reason: "invalid_output", job: settled.job };
     }
     if (settled.discarded) {
       return { ok: false, reason: "canceled", job: settled.job };

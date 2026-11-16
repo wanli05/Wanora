@@ -36,6 +36,8 @@ function setAiEnv(overrides: Record<string, string> = {}) {
   process.env.AI_DAILY_TOKEN_BUDGET = "100000";
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
+  process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
+  process.env.AI_PRICING_VERSION = "2026-11-17";
   Object.assign(process.env, overrides);
   resetServerEnvCache();
 }
@@ -264,5 +266,108 @@ describe("executeAiJob / worker", () => {
       ...c2.map((job) => executeAiJob(db, { job, workerId: "wb" })),
     ]);
     expect(results.every((r) => r.ok)).toBe(true);
+  });
+
+  it("settles empty text with usage as invalid_output (billed, not uncertain)", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id);
+    const [claimed] = await claimAiJobs(db, { workerId: "w-empty" });
+
+    const emptyBilled: AiProvider = {
+      id: "mock",
+      async complete() {
+        return {
+          text: "",
+          usage: {
+            inputTokens: 500,
+            outputTokens: 20,
+            cachedInputTokens: 100,
+            reasoningTokens: 5,
+          },
+          provider: "mock",
+          model: "mock-v1",
+          latencyMs: 3,
+          providerResponseId: "resp_empty_test",
+        };
+      },
+    };
+
+    const result = await executeAiJob(db, {
+      job: claimed,
+      workerId: "w-empty",
+      provider: emptyBilled,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("invalid_output");
+
+    const job = await getAiJobById(db, enq.job.id);
+    expect(job?.status).toBe("failed");
+    expect(job?.providerOutcome).toBe("failed");
+    expect(job?.errorCode).toBe("empty_output_with_usage");
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, enq.job.usageEventId!));
+    expect(usage.status).toBe("invalid_output");
+    expect(usage.cachedInputTokens).toBe(100);
+    expect(usage.reasoningTokens).toBe(5);
+    expect(usage.providerResponseId).toBe("resp_empty_test");
+    expect(Number(usage.estimatedCostUsd)).toBeGreaterThan(0);
+    expect(usage.pricingVersion).toBe("2026-11-17");
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBe(0);
+    expect(Number(budget!.spentUsd)).toBeGreaterThan(0);
+  });
+
+  it("settles when actual usage cost exceeds the reservation", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id, "短い");
+    const [claimed] = await claimAiJobs(db, { workerId: "w-over" });
+    const reservedUsd = (
+      await db
+        .select()
+        .from(aiUsageEvents)
+        .where(eq(aiUsageEvents.id, enq.job.usageEventId!))
+    )[0]!.estimatedCostUsd;
+
+    const expensive: AiProvider = {
+      id: "mock",
+      async complete() {
+        return {
+          text: "長い応答",
+          usage: { inputTokens: 50_000, outputTokens: 10_000 },
+          provider: "mock",
+          model: "mock-v1",
+          latencyMs: 2,
+        };
+      },
+    };
+
+    const result = await executeAiJob(db, {
+      job: claimed,
+      workerId: "w-over",
+      provider: expensive,
+    });
+    expect(result.ok).toBe(true);
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, enq.job.usageEventId!));
+    expect(usage.status).toBe("ok");
+    expect(Number(usage.estimatedCostUsd)).toBeGreaterThan(Number(reservedUsd));
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBe(0);
+    expect(Number(budget!.spentUsd)).toBeCloseTo(
+      Number(usage.estimatedCostUsd),
+      5,
+    );
   });
 });

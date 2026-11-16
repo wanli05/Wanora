@@ -20,6 +20,8 @@ export type AiTokenUsage = {
   outputTokens: number;
   /** Present when the provider reports cache hits. */
   cachedInputTokens?: number;
+  /** Cache write tokens when reported (priced separately when catalog has a rate). */
+  cacheWriteTokens?: number;
   /** Detail within output tokens; do not add again to totals. */
   reasoningTokens?: number;
   totalTokens?: number;
