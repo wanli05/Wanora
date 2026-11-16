@@ -95,9 +95,41 @@ describe("parseServerEnv", () => {
     expect(env.AI_PURGE_SECRET).toBe("purge-test-secret");
   });
 
-  it("rejects unknown AI_PROVIDER values in Phase 1A", () => {
+  it("rejects unknown AI_PROVIDER values", () => {
     expect(() =>
       parseServerEnv({ ...base, AI_PROVIDER: "openai_compatible" }),
     ).toThrow();
+  });
+
+  it("accepts AI_PROVIDER=openai when OPENAI_API_KEY is set", () => {
+    const env = parseServerEnv({
+      ...base,
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "sk-test",
+      AI_DEFAULT_MODEL: "gpt-5-mini",
+    });
+    expect(env.AI_PROVIDER).toBe("openai");
+    expect(env.OPENAI_API_KEY).toBe("sk-test");
+    expect(env.AI_OPENAI_TIMEOUT_MS).toBe(60_000);
+    expect(env.AI_LIVE_SMOKE).toBe(false);
+  });
+
+  it("requires OPENAI_API_KEY when AI_PROVIDER=openai", () => {
+    expect(() =>
+      parseServerEnv({ ...base, AI_PROVIDER: "openai" }),
+    ).toThrow(/OPENAI_API_KEY/);
+  });
+
+  it("rejects enabled openai when default model is outside allowlist", () => {
+    expect(() =>
+      parseServerEnv({
+        ...base,
+        AI_ENABLED: "true",
+        AI_PROVIDER: "openai",
+        OPENAI_API_KEY: "sk-test",
+        AI_DEFAULT_MODEL: "not-allowed",
+        AI_ALLOWED_MODELS: "gpt-5-mini",
+      }),
+    ).toThrow(/AI_ALLOWED_MODELS/);
   });
 });

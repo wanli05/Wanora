@@ -9,11 +9,20 @@ export type AiCompletionRequest = {
   feature: string;
   model?: string;
   messages: AiChatMessage[];
+  /** Abort / worker stop / hard timeout — real providers must honor this. */
+  signal?: AbortSignal;
+  /** Optional idempotency / audit hint (e.g. job id). */
+  requestKey?: string;
 };
 
 export type AiTokenUsage = {
   inputTokens: number;
   outputTokens: number;
+  /** Present when the provider reports cache hits. */
+  cachedInputTokens?: number;
+  /** Detail within output tokens; do not add again to totals. */
+  reasoningTokens?: number;
+  totalTokens?: number;
 };
 
 export type AiCompletionResult = {
@@ -22,9 +31,12 @@ export type AiCompletionResult = {
   provider: string;
   model: string;
   latencyMs: number;
+  providerResponseId?: string;
+  /** Scrubbed numeric usage only — never message content or secrets. */
+  rawUsage?: Record<string, unknown>;
 };
 
-/** Unified provider contract — only mock is implemented in Phase 1A. */
+/** Unified provider contract — mock (1A) + openai (1B B1a). */
 export interface AiProvider {
   readonly id: string;
   complete(request: AiCompletionRequest): Promise<AiCompletionResult>;

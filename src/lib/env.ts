@@ -9,6 +9,9 @@ function boolFromEnv(defaultValue: boolean) {
   }, z.boolean());
 }
 
+/** Tentative B1 default; product may switch after gpt-5-mini shutdown (2026-12-11). */
+export const AI_B1_DEFAULT_MODEL = "gpt-5-mini";
+
 const serverEnvSchema = z
   .object({
     DATABASE_URL: z.url(),
@@ -23,9 +26,32 @@ const serverEnvSchema = z
     S3_REGION: z.string().min(1).optional(),
     /** Master switch for AI features. Default off. */
     AI_ENABLED: boolFromEnv(false),
-    /** Phase 1A only ships mock; real ids are added when a provider is implemented. */
-    AI_PROVIDER: z.enum(["mock"]).default("mock"),
+    /** mock for CI/local; openai for real Responses API (requires key). */
+    AI_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
     AI_DEFAULT_MODEL: z.string().min(1).optional(),
+    /** Required when AI_PROVIDER=openai. Never expose to the browser. */
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    /** Hard timeout for OpenAI Responses calls (adapter AbortSignal). */
+    AI_OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+    AI_OPENAI_MAX_OUTPUT_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(2048),
+    /**
+     * Soft caps for later budget/context wiring (B1b+). Documented in B1a so
+     * operators can set them early; unused by Job settle in B1a.
+     */
+    AI_MAX_HISTORY_MESSAGES: z.coerce.number().int().positive().default(40),
+    AI_MAX_INPUT_CHARS: z.coerce.number().int().positive().default(100_000),
+    /** Comma-separated model allowlist; empty = only enforce when set. */
+    AI_ALLOWED_MODELS: z.string().optional(),
+    /** Pricing table version id (settlement uses this in B1b). */
+    AI_PRICING_VERSION: z.string().min(1).default("2026-11-16"),
+    /**
+     * Opt-in live smoke only. Must stay false in CI — never call paid APIs by default.
+     */
+    AI_LIVE_SMOKE: boolFromEnv(false),
     AI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
     AI_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(100_000),
     AI_DAILY_COST_BUDGET_USD: z.coerce.number().nonnegative().default(1),
@@ -67,9 +93,40 @@ const serverEnvSchema = z
       message:
         "S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, and S3_BUCKET must be set together",
     },
+  )
+  .refine(
+    (env) => env.AI_PROVIDER !== "openai" || Boolean(env.OPENAI_API_KEY),
+    {
+      message: "OPENAI_API_KEY is required when AI_PROVIDER=openai",
+      path: ["OPENAI_API_KEY"],
+    },
+  )
+  .refine(
+    (env) => {
+      if (env.AI_PROVIDER !== "openai" || !env.AI_ENABLED) return true;
+      const model = env.AI_DEFAULT_MODEL?.trim() || AI_B1_DEFAULT_MODEL;
+      const allowed = parseAllowedModels(env.AI_ALLOWED_MODELS);
+      if (allowed.length === 0) return true;
+      return allowed.includes(model);
+    },
+    {
+      message:
+        "AI_DEFAULT_MODEL must be in AI_ALLOWED_MODELS when AI is enabled with openai",
+      path: ["AI_DEFAULT_MODEL"],
+    },
   );
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+
+export function parseAllowedModels(
+  raw: string | undefined | null,
+): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export function parseServerEnv(
   source: Record<string, string | undefined>,
@@ -106,4 +163,20 @@ export function isObjectStorageConfigured(
 
 export function isAiEnabled(env: ServerEnv = getServerEnv()): boolean {
   return env.AI_ENABLED;
+}
+
+/** Resolve model for a request; enforces allowlist when configured. */
+export function resolveAiModel(
+  requested: string | undefined,
+  env: ServerEnv = getServerEnv(),
+): string {
+  const model =
+    requested?.trim() ||
+    env.AI_DEFAULT_MODEL?.trim() ||
+    (env.AI_PROVIDER === "openai" ? AI_B1_DEFAULT_MODEL : "mock-v1");
+  const allowed = parseAllowedModels(env.AI_ALLOWED_MODELS);
+  if (allowed.length > 0 && !allowed.includes(model)) {
+    throw new Error(`model_not_allowed:${model}`);
+  }
+  return model;
 }

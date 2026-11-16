@@ -12,6 +12,16 @@ export type {
 } from "@/lib/ai/types";
 export { getAiProvider } from "@/lib/ai/provider";
 export { createMockAiProvider, mockEstimatedCostUsd } from "@/lib/ai/providers/mock";
+export {
+  createOpenAiProvider,
+  OPENAI_PROVIDER_ID,
+  type CreateOpenAiProviderOptions,
+  type OpenAiResponsesClient,
+} from "@/lib/ai/providers/openai";
+export {
+  ProviderCleanFailure,
+  ProviderUncertainFailure,
+} from "@/lib/ai/provider-errors";
 export { guardedComplete, type GuardedCompleteInput } from "@/lib/ai/guard";
 export { checkAndReserveBudgets, settleBudgets } from "@/lib/ai/budget";
 export { checkUserRateLimit, withUserAiLock } from "@/lib/ai/rate-limit";

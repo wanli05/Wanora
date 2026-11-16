@@ -18,26 +18,12 @@ import {
 } from "@/lib/data/ai-jobs";
 import { createAiMessage, listAiMessages } from "@/lib/data/ai-messages";
 import { releaseReservedUsageIfNeeded } from "@/lib/ai/jobs/release-budget";
+import {
+  ProviderCleanFailure,
+  ProviderUncertainFailure,
+} from "@/lib/ai/provider-errors";
 
-/** Provider threw a confirmed non-billing failure (safe to settle release). */
-export class ProviderCleanFailure extends Error {
-  readonly code: string;
-  constructor(message: string, code = "provider_failed") {
-    super(message);
-    this.name = "ProviderCleanFailure";
-    this.code = code;
-  }
-}
-
-/** Provider outcome unknown — must not auto-retry or assume free. */
-export class ProviderUncertainFailure extends Error {
-  readonly code: string;
-  constructor(message: string, code = "provider_uncertain") {
-    super(message);
-    this.name = "ProviderUncertainFailure";
-    this.code = code;
-  }
-}
+export { ProviderCleanFailure, ProviderUncertainFailure };
 
 export type ExecuteAiJobInput = {
   job: AiJobRow;
