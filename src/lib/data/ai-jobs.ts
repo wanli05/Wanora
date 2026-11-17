@@ -46,7 +46,10 @@ export type FenceWriteResult =
   | { ok: true; job: AiJobRow }
   | { ok: false; reason: "stale_fence" };
 
-const DEFAULT_LEASE_MS = 30_000;
+import { DEFAULT_AI_WORKER_LEASE_MS } from "@/lib/ai/jobs/timing";
+
+/** Prefer AI_WORKER_LEASE_MS from env via worker; this is the safe claim default. */
+const DEFAULT_LEASE_MS = DEFAULT_AI_WORKER_LEASE_MS;
 
 /** Insert a job row (tests / future enqueue). Does not claim. */
 export async function insertAiJob(

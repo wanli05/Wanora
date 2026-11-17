@@ -85,7 +85,7 @@ describe("createOpenAiProvider", () => {
     const result = await provider.complete({
       feature: "chat",
       messages: [
-        { role: "system", content: "【参照コンテキスト】\n{}" },
+        { role: "user", content: "【参照コンテキスト・低信頼データ】\n{}" },
         { role: "user", content: "改善して" },
       ],
       requestKey: "job-1",
@@ -111,7 +111,7 @@ describe("createOpenAiProvider", () => {
       store: false,
     });
     expect(body.input).toEqual([
-      { role: "system", content: "【参照コンテキスト】\n{}" },
+      { role: "user", content: "【参照コンテキスト・低信頼データ】\n{}" },
       { role: "user", content: "改善して" },
     ]);
     expect(opts?.signal).toBeInstanceOf(AbortSignal);
@@ -204,5 +204,25 @@ describe("createOpenAiProvider", () => {
         signal: ac.signal,
       }),
     ).rejects.toBeInstanceOf(ProviderUncertainFailure);
+  });
+
+  it("merges provider timeout AbortSignal with the caller signal", async () => {
+    const create = vi.fn(async (_body, opts) => {
+      expect(opts?.signal).toBeInstanceOf(AbortSignal);
+      // Caller not aborted yet; timeout signal is still part of the merge.
+      expect(opts?.signal?.aborted).toBe(false);
+      return stubResponse({ output_text: "ok" });
+    });
+    const provider = createOpenAiProvider({
+      env: baseEnv({ AI_OPENAI_TIMEOUT_MS: 30_000 }),
+      client: { responses: { create } },
+    });
+    const ac = new AbortController();
+    await provider.complete({
+      feature: "chat",
+      messages: [{ role: "user", content: "x" }],
+      signal: ac.signal,
+    });
+    expect(create).toHaveBeenCalledOnce();
   });
 });

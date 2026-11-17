@@ -31,6 +31,18 @@ describe("createMockAiProvider", () => {
     });
     expect(result.model).toBe("mock-custom");
   });
+
+  it("throws AbortError when signal is already aborted", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      createMockAiProvider().complete({
+        feature: "chat",
+        messages: [{ role: "user", content: "x" }],
+        signal: ac.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
 });
 
 describe("mockEstimatedCostUsd", () => {

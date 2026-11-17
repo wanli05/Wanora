@@ -124,6 +124,11 @@ export async function executeAiJob(
     return finalizeCanceled(db, fence, job, now, preflight.code);
   }
 
+  // Abort before entering calling_provider → safe release (provider not started).
+  if (input.signal?.aborted) {
+    return finalizeCanceled(db, fence, job, now, "aborted_before_provider");
+  }
+
   const phase = await updateAiJobWithFence(db, fence, {
     executionPhase: "calling_provider",
   });
@@ -131,6 +136,7 @@ export async function executeAiJob(
     return { ok: false, reason: "stale_fence" };
   }
 
+  // After calling_provider: billing may be in flight → uncertain, never auto-retry.
   if (input.signal?.aborted) {
     return finalizeUncertain(db, fence, job, now, "aborted_calling_provider");
   }
@@ -161,7 +167,11 @@ export async function executeAiJob(
       requestKey: job.id,
     });
   } catch (err) {
-    if (input.signal?.aborted || err instanceof ProviderUncertainFailure) {
+    const abortLike =
+      input.signal?.aborted ||
+      err instanceof ProviderUncertainFailure ||
+      (err instanceof Error && err.name === "AbortError");
+    if (abortLike) {
       return finalizeUncertain(
         db,
         fence,

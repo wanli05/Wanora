@@ -7,8 +7,8 @@ export type OpenAiEasyMessage = {
 
 /**
  * Map Wanora chat messages to Responses easy input items.
- * System/context stay as `system` role in `input` (not high-priority instructions).
- * Product system instructions are passed separately via `instructions` when set.
+ * Privileged policy stays `system`; My Career context must already be `user`
+ * (low-trust reference). Optional `instructions` is for fixed product policy only.
  */
 export function mapMessagesToOpenAiInput(
   messages: AiChatMessage[],
