@@ -87,9 +87,11 @@ async function loadReservedUsage(db: Db, userId: string, usageEventId: string) {
  * Run one claimed job: resolve context + provider outside TX, then fenced settle.
  * Never awaits the provider inside a database transaction.
  *
- * Exactly-once against a third-party API is impossible with DB TX alone: if the
- * worker crashes after the provider returns but before settle commits, reclaim
- * may call the provider again (duplicate platform charge possible).
+ * Crash after `executionPhase=calling_provider` (including provider returned but
+ * settle TX not committed): `recoverExpiredAiJobLeases` marks the job
+ * `failed`+`uncertain` and `claimAiJobs` will NOT auto-retry — so reclaim does
+ * not re-call the provider. Local usage may stay `reserved` until reconcile;
+ * platform billing may already have occurred (catalog ≠ invoice).
  */
 export async function executeAiJob(
   db: Db,
