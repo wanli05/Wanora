@@ -85,7 +85,7 @@ describe("createOpenAiProvider", () => {
     const result = await provider.complete({
       feature: "chat",
       messages: [
-        { role: "system", content: "【参照コンテキスト】\n{}" },
+        { role: "user", content: "【参照コンテキスト・低信頼データ】\n{}" },
         { role: "user", content: "改善して" },
       ],
       requestKey: "job-1",
@@ -111,7 +111,7 @@ describe("createOpenAiProvider", () => {
       store: false,
     });
     expect(body.input).toEqual([
-      { role: "system", content: "【参照コンテキスト】\n{}" },
+      { role: "user", content: "【参照コンテキスト・低信頼データ】\n{}" },
       { role: "user", content: "改善して" },
     ]);
     expect(opts?.signal).toBeInstanceOf(AbortSignal);

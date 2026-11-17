@@ -8,8 +8,11 @@ describe("estimateReservation", () => {
     const messages = [
       { role: "system" as const, content: B1_SYSTEM_INSTRUCTIONS },
       {
-        role: "system" as const,
-        content: "【参照コンテキスト】\n### profile\n長い職歴テキスト".repeat(20),
+        role: "user" as const,
+        content:
+          "【参照コンテキスト・低信頼データ】\n### profile\n長い職歴テキスト".repeat(
+            20,
+          ),
       },
       { role: "user" as const, content: "前回の質問" },
       { role: "assistant" as const, content: "前回の回答" },
