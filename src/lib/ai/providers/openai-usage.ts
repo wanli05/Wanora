@@ -43,6 +43,7 @@ export function mapOpenAiUsage(usage: OpenAiUsageLike | null | undefined): {
     totalTokens,
   };
   if (cachedInputTokens > 0) mapped.cachedInputTokens = cachedInputTokens;
+  if (cacheWriteTokens > 0) mapped.cacheWriteTokens = cacheWriteTokens;
   if (reasoningTokens > 0) mapped.reasoningTokens = reasoningTokens;
 
   const scrubbed: Record<string, unknown> = {

@@ -18,6 +18,7 @@ describe("mapOpenAiUsage", () => {
       outputTokens: 40,
       totalTokens: 140,
       cachedInputTokens: 20,
+      cacheWriteTokens: 5,
       reasoningTokens: 12,
     });
     expect(scrubbed.reasoning_tokens).toBe(12);

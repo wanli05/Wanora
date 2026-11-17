@@ -23,6 +23,8 @@ function setAiEnv(overrides: Record<string, string> = {}) {
   process.env.AI_DAILY_TOKEN_BUDGET = "100000";
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
+  process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
+  process.env.AI_PRICING_VERSION = "2026-11-17";
   Object.assign(process.env, overrides);
   resetServerEnvCache();
 }
@@ -37,6 +39,8 @@ afterEach(() => {
   delete process.env.AI_DAILY_TOKEN_BUDGET;
   delete process.env.AI_DAILY_COST_BUDGET_USD;
   delete process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD;
+  delete process.env.AI_OPENAI_MAX_OUTPUT_TOKENS;
+  delete process.env.AI_PRICING_VERSION;
   resetServerEnvCache();
 });
 
@@ -243,8 +247,13 @@ describe("guardedComplete integration", () => {
   });
 
   it("handles concurrent calls without overspending the user budget", async () => {
-    // Cap just above one typical mock call (~tens of tokens * 1e-5).
-    setAiEnv({ AI_DAILY_COST_BUDGET_USD: "0.001", AI_RATE_LIMIT_PER_MINUTE: "50" });
+    // Full-context reserve (system + max-out + TOCTOU slack) is larger than
+    // legacy content-only estimates; cap allows ~1–2 mock settles.
+    setAiEnv({
+      AI_DAILY_COST_BUDGET_USD: "0.01",
+      AI_RATE_LIMIT_PER_MINUTE: "50",
+      AI_OPENAI_MAX_OUTPUT_TOKENS: "64",
+    });
     const db = getDb();
     const user = newUser();
     await db.insert(users).values(user);
@@ -276,7 +285,7 @@ describe("guardedComplete integration", () => {
 
     const budget = await getAiDailyBudgetCounter(db, "user", user.id);
     expect(Number(budget!.reservedUsd)).toBe(0);
-    expect(Number(budget!.spentUsd)).toBeLessThanOrEqual(0.001 + 1e-9);
+    expect(Number(budget!.spentUsd)).toBeLessThanOrEqual(0.01 + 1e-9);
   });
 
   it("recovers from a stale reserved row (crash simulation)", async () => {

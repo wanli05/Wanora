@@ -38,6 +38,8 @@ function setAiEnv() {
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
   process.env.AI_CHAT_HARD_DELETE_AFTER_DAYS = "30";
+  process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
+  process.env.AI_PRICING_VERSION = "2026-11-17";
   resetServerEnvCache();
 }
 

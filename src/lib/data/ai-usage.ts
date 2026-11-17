@@ -11,7 +11,11 @@ export type AiUsageEventInput = {
   promptVersion?: string | null;
   inputTokens?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
   estimatedCostUsd?: string;
+  pricingVersion?: string | null;
+  providerResponseId?: string | null;
   latencyMs?: number | null;
   status: AiUsageStatus;
   errorCode?: string | null;
@@ -34,7 +38,11 @@ export async function insertAiUsageEvent(
       promptVersion: input.promptVersion ?? null,
       inputTokens: input.inputTokens ?? 0,
       outputTokens: input.outputTokens ?? 0,
+      cachedInputTokens: input.cachedInputTokens ?? 0,
+      reasoningTokens: input.reasoningTokens ?? 0,
       estimatedCostUsd: input.estimatedCostUsd ?? "0",
+      pricingVersion: input.pricingVersion ?? null,
+      providerResponseId: input.providerResponseId ?? null,
       latencyMs: input.latencyMs ?? null,
       status: input.status,
       errorCode: input.errorCode ?? null,
@@ -53,7 +61,11 @@ export async function updateAiUsageEventStatus(
     status: AiUsageStatus;
     inputTokens?: number;
     outputTokens?: number;
+    cachedInputTokens?: number;
+    reasoningTokens?: number;
     estimatedCostUsd?: string;
+    pricingVersion?: string | null;
+    providerResponseId?: string | null;
     latencyMs?: number | null;
     errorCode?: string | null;
     model?: string | null;
@@ -69,8 +81,20 @@ export async function updateAiUsageEventStatus(
       ...(patch.outputTokens !== undefined
         ? { outputTokens: patch.outputTokens }
         : {}),
+      ...(patch.cachedInputTokens !== undefined
+        ? { cachedInputTokens: patch.cachedInputTokens }
+        : {}),
+      ...(patch.reasoningTokens !== undefined
+        ? { reasoningTokens: patch.reasoningTokens }
+        : {}),
       ...(patch.estimatedCostUsd !== undefined
         ? { estimatedCostUsd: patch.estimatedCostUsd }
+        : {}),
+      ...(patch.pricingVersion !== undefined
+        ? { pricingVersion: patch.pricingVersion }
+        : {}),
+      ...(patch.providerResponseId !== undefined
+        ? { providerResponseId: patch.providerResponseId }
         : {}),
       ...(patch.latencyMs !== undefined ? { latencyMs: patch.latencyMs } : {}),
       ...(patch.errorCode !== undefined ? { errorCode: patch.errorCode } : {}),

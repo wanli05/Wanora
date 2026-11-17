@@ -905,12 +905,23 @@ export const aiUsageEvents = pgTable(
     promptVersion: text("prompt_version"),
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
+    /** Cache-hit tokens (subset of input); priced at cached rate. */
+    cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
+    /**
+     * Reasoning tokens are a subset of output_tokens — recorded for audit only,
+     * never added again when summing billable output.
+     */
+    reasoningTokens: integer("reasoning_tokens").notNull().default(0),
     estimatedCostUsd: numeric("estimated_cost_usd", {
       precision: 12,
       scale: 6,
     })
       .notNull()
       .default("0"),
+    /** Catalog version used for estimated_cost_usd (not OpenAI invoice). */
+    pricingVersion: text("pricing_version"),
+    /** Provider response id for audit; not the sole idempotency key. */
+    providerResponseId: text("provider_response_id"),
     latencyMs: integer("latency_ms"),
     status: text("status").notNull(),
     errorCode: text("error_code"),
@@ -927,7 +938,7 @@ export const aiUsageEvents = pgTable(
     ),
     check(
       "ai_usage_events_tokens_nonneg_check",
-      sql`${t.inputTokens} >= 0 and ${t.outputTokens} >= 0`,
+      sql`${t.inputTokens} >= 0 and ${t.outputTokens} >= 0 and ${t.cachedInputTokens} >= 0 and ${t.reasoningTokens} >= 0`,
     ),
     unique("ai_usage_events_id_user_uidx").on(t.id, t.userId),
     index("ai_usage_events_user_created_idx").on(t.userId, t.createdAt),

@@ -21,6 +21,7 @@ import {
 } from "@/lib/data/ai-jobs";
 import { getAiDailyBudgetCounter } from "@/lib/data/ai-budget";
 import { resetServerEnvCache } from "@/lib/env";
+import type { AiProvider } from "@/lib/ai/types";
 
 function newUser() {
   return {
@@ -38,6 +39,8 @@ function setAiEnv() {
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
   process.env.AI_UNCERTAIN_RECONCILE_AFTER_HOURS = "24";
+  process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
+  process.env.AI_PRICING_VERSION = "2026-11-17";
   resetServerEnvCache();
 }
 
@@ -143,6 +146,84 @@ describe("lease recovery + uncertain reconcile", () => {
       .from(aiUsageEvents)
       .where(eq(aiUsageEvents.id, job.usageEventId!));
     expect(usage.status).toBe("reserved");
+  });
+
+  it("does not re-call provider after calling_provider crash before settle (scenario E)", async () => {
+    // Simulates: execute entered calling_provider → provider returned → worker
+    // died before settle TX → lease expired → another worker claims/recovers.
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const job = await enqueue(user.id);
+    const [claimed] = await claimAiJobs(db, {
+      workerId: "dead-worker",
+      leaseMs: 60_000,
+    });
+
+    // executeAiJob sets this BEFORE awaiting provider.complete.
+    await updateAiJobWithFence(
+      db,
+      {
+        jobId: claimed.id,
+        workerId: "dead-worker",
+        fencingToken: claimed.fencingToken,
+      },
+      { executionPhase: "calling_provider" },
+    );
+    // Provider already returned in memory but settle never committed:
+    // usage remains reserved (no ok / invalid_output row yet).
+    const [usageBefore] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, job.usageEventId!));
+    expect(usageBefore.status).toBe("reserved");
+
+    await forceAiJobLeaseExpiry(db, job.id, new Date(Date.now() - 1_000));
+    const recovered = await recoverExpiredAiJobLeases(db);
+    expect(recovered.markedUncertain).toBeGreaterThanOrEqual(1);
+
+    const afterRecover = await getAiJobById(db, job.id);
+    expect(afterRecover?.status).toBe("failed");
+    expect(afterRecover?.providerOutcome).toBe("uncertain");
+    expect(afterRecover?.lockedBy).toBeNull();
+
+    let providerCalls = 0;
+    const spyProvider: AiProvider = {
+      id: "mock",
+      async complete() {
+        providerCalls += 1;
+        throw new Error("must not be called after calling_provider recover");
+      },
+    };
+
+    const reclaimed = await claimAiJobs(db, {
+      workerId: "other-worker",
+      limit: 10,
+    });
+    expect(reclaimed.find((j) => j.id === job.id)).toBeUndefined();
+
+    // Stale dead worker cannot settle or re-enter provider.
+    const stale = await executeAiJob(db, {
+      job: claimed,
+      workerId: "dead-worker",
+      provider: spyProvider,
+    });
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) expect(stale.reason).toBe("stale_fence");
+    expect(providerCalls).toBe(0);
+
+    // Worker drain path also must not pick this job up for a second call.
+    await drainAiWorker(db, {
+      workerIdPrefix: "scenario-e",
+      provider: spyProvider,
+    });
+    expect(providerCalls).toBe(0);
+
+    const [usageAfter] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, job.usageEventId!));
+    expect(usageAfter.status).toBe("reserved");
   });
 
   it("reconciles uncertain reserved budget after the window (concurrent-safe)", async () => {

@@ -24,6 +24,8 @@ function setAiEnv(overrides: Record<string, string> = {}) {
   process.env.AI_DAILY_TOKEN_BUDGET = "100000";
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
+  process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
+  process.env.AI_PRICING_VERSION = "2026-11-17";
   Object.assign(process.env, overrides);
   resetServerEnvCache();
 }

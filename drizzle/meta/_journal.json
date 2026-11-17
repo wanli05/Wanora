@@ -99,6 +99,13 @@
       "when": 1794751771754,
       "tag": "0013_ai_jobs_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794843353504,
+      "tag": "0014_ai_usage_pricing_fields",
+      "breakpoints": true
     }
   ]
 }

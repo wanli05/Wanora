@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/providers/openai";
 import type { ServerEnv } from "@/lib/env";
 import { AI_B1_DEFAULT_MODEL } from "@/lib/env";
+import { PRICING_CATALOG_VERSION } from "@/lib/ai/pricing/catalog";
 
 function baseEnv(overrides: Partial<ServerEnv> = {}): ServerEnv {
   return {
@@ -24,7 +25,7 @@ function baseEnv(overrides: Partial<ServerEnv> = {}): ServerEnv {
     AI_OPENAI_MAX_OUTPUT_TOKENS: 256,
     AI_MAX_HISTORY_MESSAGES: 40,
     AI_MAX_INPUT_CHARS: 100_000,
-    AI_PRICING_VERSION: "2026-11-16",
+    AI_PRICING_VERSION: PRICING_CATALOG_VERSION,
     AI_LIVE_SMOKE: false,
     AI_RATE_LIMIT_PER_MINUTE: 10,
     AI_DAILY_TOKEN_BUDGET: 100_000,
@@ -116,7 +117,7 @@ describe("createOpenAiProvider", () => {
     expect(opts?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("throws uncertain when usage exists but text is empty", async () => {
+  it("returns empty text with usage for billed settle (not uncertain)", async () => {
     const client: OpenAiResponsesClient = {
       responses: {
         create: async () =>
@@ -133,15 +134,13 @@ describe("createOpenAiProvider", () => {
       },
     };
     const provider = createOpenAiProvider({ env: baseEnv(), client });
-    await expect(
-      provider.complete({
-        feature: "chat",
-        messages: [{ role: "user", content: "hi" }],
-      }),
-    ).rejects.toMatchObject({
-      name: "ProviderUncertainFailure",
-      code: "empty_output_with_usage",
-    } satisfies Partial<ProviderUncertainFailure>);
+    const result = await provider.complete({
+      feature: "chat",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(result.text).toBe("");
+    expect(result.usage.inputTokens).toBe(50);
+    expect(result.usage.outputTokens).toBe(1);
   });
 
   it("throws clean invalid_output when empty with zero usage", async () => {

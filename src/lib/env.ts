@@ -9,8 +9,11 @@ function boolFromEnv(defaultValue: boolean) {
   }, z.boolean());
 }
 
-/** Tentative B1 default; product may switch after gpt-5-mini shutdown (2026-12-11). */
-export const AI_B1_DEFAULT_MODEL = "gpt-5-mini";
+/**
+ * B1 default model candidate (Responses API). Org entitlement is env-specific —
+ * verify OPENAI access before enabling AI_PROVIDER=openai in production.
+ */
+export const AI_B1_DEFAULT_MODEL = "gpt-6.1-terra";
 
 const serverEnvSchema = z
   .object({
@@ -38,16 +41,13 @@ const serverEnvSchema = z
       .int()
       .positive()
       .default(2048),
-    /**
-     * Soft caps for later budget/context wiring (B1b+). Documented in B1a so
-     * operators can set them early; unused by Job settle in B1a.
-     */
+    /** Soft caps for context / history in reserve + execute prompt build. */
     AI_MAX_HISTORY_MESSAGES: z.coerce.number().int().positive().default(40),
     AI_MAX_INPUT_CHARS: z.coerce.number().int().positive().default(100_000),
     /** Comma-separated model allowlist; empty = only enforce when set. */
     AI_ALLOWED_MODELS: z.string().optional(),
-    /** Pricing table version id (settlement uses this in B1b). */
-    AI_PRICING_VERSION: z.string().min(1).default("2026-11-16"),
+    /** Must match pricing catalog.version used for estimates / settlement. */
+    AI_PRICING_VERSION: z.string().min(1).default("2026-11-17"),
     /**
      * Opt-in live smoke only. Must stay false in CI — never call paid APIs by default.
      */

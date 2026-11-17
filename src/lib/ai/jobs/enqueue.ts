@@ -1,11 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { aiMessages } from "@/db/schema";
-import { getServerEnv } from "@/lib/env";
+import { getServerEnv, resolveAiModel } from "@/lib/env";
 import { checkAndReserveBudgets } from "@/lib/ai/budget";
+import { resolveAiContext } from "@/lib/ai/context/resolve";
 import type { AiPageContext, AiTargetContext } from "@/lib/ai/context/types";
 import { getAiProvider } from "@/lib/ai/provider";
-import { mockEstimatedCostUsd } from "@/lib/ai/providers/mock";
+import { estimateReservation } from "@/lib/ai/pricing/reserve";
+import { buildAiChatMessages } from "@/lib/ai/prompt-build";
+import { B1_PROMPT_VERSION } from "@/lib/ai/prompts/b1-system";
 import { checkUserRateLimit, withUserAiLock } from "@/lib/ai/rate-limit";
 import { insertAiUsageEvent } from "@/lib/ai/usage";
 import { getActiveAiConversation } from "@/lib/data/ai-conversations";
@@ -14,7 +17,7 @@ import {
   insertAiJob,
   type AiJobRow,
 } from "@/lib/data/ai-jobs";
-import { createAiMessage, type AiMessageRow } from "@/lib/data/ai-messages";
+import { createAiMessage, listAiMessages, type AiMessageRow } from "@/lib/data/ai-messages";
 
 export type EnqueueAiJobInput = {
   userId: string;
@@ -58,12 +61,6 @@ function isUniqueViolation(error: unknown): boolean {
   return Boolean(cause && "code" in cause && String(cause.code) === "23505");
 }
 
-function estimateInputTokens(text: string): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return Math.max(1, Math.ceil(trimmed.length / 2));
-}
-
 async function loadUserMessage(
   db: Db,
   userId: string,
@@ -95,6 +92,10 @@ async function replayExisting(
 /**
  * Atomically enqueue an AI job: rate/budget reserve + usage + user message + job.
  * Concurrent-safe idempotency via UNIQUE(user_id, client_request_id).
+ *
+ * Reservation uses the same prompt-build path as execute (system + context +
+ * history + current user message + max output + TOCTOU slack). Char/token
+ * estimates are predictions, not hard tokenizer caps.
  */
 export async function enqueueAiJob(
   db: Db,
@@ -151,14 +152,55 @@ export async function enqueueAiJob(
   }
 
   const provider = getAiProvider();
-  const estimatedTokens = estimateInputTokens(content) + 64;
-  const estimatedCostUsd = mockEstimatedCostUsd(estimatedTokens);
-  const model = input.model?.trim() || env.AI_DEFAULT_MODEL || "mock-v1";
+  let model: string;
+  try {
+    model = resolveAiModel(input.model, env);
+  } catch {
+    return {
+      ok: false,
+      code: "invalid_request",
+      message: "model not allowed",
+    };
+  }
+
   const pageContext = input.pageContext ?? null;
   const targetContext =
     input.targetContext !== undefined
       ? input.targetContext
       : ((conversation.pinnedTarget as AiTargetContext | null) ?? null);
+
+  // Resolve context + history outside the TX (same sources execute will use).
+  // TOCTOU: profile/history may grow before execute — reserve includes slack.
+  const resolved = await resolveAiContext(db, {
+    userId: input.userId,
+    pageContext,
+    targetContext,
+    conversation: { conversationId: input.conversationId },
+  });
+  const history = await listAiMessages(db, input.userId, input.conversationId);
+  const messages = buildAiChatMessages({
+    fragments: resolved.fragments,
+    history: [
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content },
+    ],
+  });
+
+  let reserve;
+  try {
+    reserve = estimateReservation({
+      messages,
+      model,
+      maxOutputTokens: env.AI_OPENAI_MAX_OUTPUT_TOKENS,
+      pricingVersion: env.AI_PRICING_VERSION,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      message: err instanceof Error ? err.message : "pricing unavailable",
+    };
+  }
 
   try {
     const created = await db.transaction(async (tx) => {
@@ -188,8 +230,8 @@ export async function enqueueAiJob(
 
         const budget = await checkAndReserveBudgets(tx, {
           userId: input.userId,
-          estimatedCostUsd,
-          estimatedTokens,
+          estimatedCostUsd: reserve.estimatedCostUsd,
+          estimatedTokens: reserve.estimatedTokens,
           userDailyTokenBudget: env.AI_DAILY_TOKEN_BUDGET,
           userDailyCostBudgetUsd: env.AI_DAILY_COST_BUDGET_USD,
           globalDailyCostBudgetUsd: env.AI_GLOBAL_DAILY_COST_BUDGET_USD,
@@ -208,9 +250,11 @@ export async function enqueueAiJob(
           feature,
           provider: provider.id,
           model,
-          inputTokens: estimatedTokens,
+          promptVersion: B1_PROMPT_VERSION,
+          inputTokens: reserve.estimatedTokens,
           outputTokens: 0,
-          estimatedCostUsd,
+          estimatedCostUsd: reserve.estimatedCostUsd,
+          pricingVersion: reserve.pricingVersion,
           status: "reserved",
           requestId: clientRequestId,
           conversationId: input.conversationId,
