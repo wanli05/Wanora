@@ -40,11 +40,9 @@ export function buildAiChatMessages(args: {
     messages.push({ role: "system", content: contextBlock });
   }
 
+  // History must not inject system roles (instructions stay first + fixed).
   const history = args.history
-    .filter(
-      (m) =>
-        m.role === "system" || m.role === "user" || m.role === "assistant",
-    )
+    .filter((m) => m.role === "user" || m.role === "assistant")
     .slice(-maxHistory);
 
   for (const m of history) {

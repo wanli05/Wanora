@@ -5,7 +5,14 @@ import { sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { claimAiJobs } from "@/lib/data/ai-jobs";
 import { executeAiJob } from "@/lib/ai/jobs/execute";
+import { aiWorkerLog } from "@/lib/ai/jobs/log";
 import { runAiJobMaintenance } from "@/lib/ai/jobs/recover";
+import {
+  assertWorkerLeaseCoversProvider,
+  DEFAULT_AI_OPENAI_TIMEOUT_MS,
+  DEFAULT_AI_WORKER_LEASE_MS,
+  DEFAULT_AI_WORKER_SETTLE_SLACK_MS,
+} from "@/lib/ai/jobs/timing";
 import type { AiProvider } from "@/lib/ai/types";
 
 export type AiWorkerOptions = {
@@ -14,6 +21,11 @@ export type AiWorkerOptions = {
   /** Jobs claimed per poll. */
   batchSize?: number;
   leaseMs?: number;
+  /** Used with settleSlackMs for startup lease assertion. */
+  providerTimeoutMs?: number;
+  settleSlackMs?: number;
+  /** Skip lease vs timeout assertion (tests that inject short leases). */
+  skipLeaseAssert?: boolean;
   /** Idle sleep between polls (ms). */
   pollIntervalMs?: number;
   /** Health HTTP port; 0 disables. */
@@ -33,26 +45,31 @@ export type AiWorkerHandle = {
   stop: () => Promise<void>;
 };
 
-function defaultLog(msg: string, extra?: Record<string, unknown>) {
-  if (extra) {
-    console.log(`[ai-worker] ${msg}`, extra);
-  } else {
-    console.log(`[ai-worker] ${msg}`);
-  }
-}
-
 /**
- * Long-running mock AI worker: claim → execute (provider outside TX) → repeat.
- * Supports SIGTERM-friendly stop and optional /healthz.
+ * Long-running AI worker: claim → execute (provider outside TX) → repeat.
+ * Stop aborts the in-flight AbortSignal passed to executeAiJob → provider.
  */
 export function startAiWorker(options: AiWorkerOptions): AiWorkerHandle {
   const workerId =
     options.workerId ??
     `worker-${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
   const batchSize = options.batchSize ?? 1;
-  const leaseMs = options.leaseMs ?? 30_000;
+  const leaseMs = options.leaseMs ?? DEFAULT_AI_WORKER_LEASE_MS;
+  const providerTimeoutMs =
+    options.providerTimeoutMs ?? DEFAULT_AI_OPENAI_TIMEOUT_MS;
+  const settleSlackMs =
+    options.settleSlackMs ?? DEFAULT_AI_WORKER_SETTLE_SLACK_MS;
   const pollIntervalMs = options.pollIntervalMs ?? 1_000;
-  const log = options.log ?? defaultLog;
+  const log = options.log ?? aiWorkerLog;
+
+  if (!options.skipLeaseAssert) {
+    assertWorkerLeaseCoversProvider({
+      leaseMs,
+      providerTimeoutMs,
+      settleSlackMs,
+    });
+  }
+
   let stopping = false;
   let wake: (() => void) | null = null;
   let processed = 0;
@@ -112,7 +129,12 @@ export function startAiWorker(options: AiWorkerOptions): AiWorkerHandle {
   }
 
   const done = (async () => {
-    log("started", { workerId });
+    log("started", {
+      workerId,
+      leaseMs,
+      providerTimeoutMs,
+      settleSlackMs,
+    });
     while (!stopping) {
       if (options.maxJobs !== undefined && processed >= options.maxJobs) {
         break;
@@ -151,6 +173,7 @@ export function startAiWorker(options: AiWorkerOptions): AiWorkerHandle {
       } catch (err) {
         log("cycle error", {
           error: err instanceof Error ? err.message : String(err),
+          errorName: err instanceof Error ? err.name : undefined,
         });
       }
 
@@ -184,7 +207,7 @@ export async function runAiWorkerOnce(
   const jobs = await claimAiJobs(db, {
     workerId,
     limit: options?.limit ?? 1,
-    leaseMs: options?.leaseMs,
+    leaseMs: options?.leaseMs ?? DEFAULT_AI_WORKER_LEASE_MS,
   });
   const results = [];
   for (const job of jobs) {

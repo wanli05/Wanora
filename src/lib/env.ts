@@ -41,6 +41,23 @@ const serverEnvSchema = z
       .int()
       .positive()
       .default(2048),
+    /**
+     * Worker job lease. Must be > AI_OPENAI_TIMEOUT_MS + AI_WORKER_SETTLE_SLACK_MS
+     * (validated at worker start via assertWorkerLeaseCoversProvider).
+     */
+    AI_WORKER_LEASE_MS: z.coerce.number().int().positive().default(90_000),
+    /** Headroom after provider returns for fenced DB settle. */
+    AI_WORKER_SETTLE_SLACK_MS: z.coerce
+      .number()
+      .int()
+      .nonnegative()
+      .default(15_000),
+    /** Max wait for in-flight job after SIGTERM abort before exit. */
+    AI_WORKER_SHUTDOWN_WAIT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(120_000),
     /** Soft caps for context / history in reserve + execute prompt build. */
     AI_MAX_HISTORY_MESSAGES: z.coerce.number().int().positive().default(40),
     AI_MAX_INPUT_CHARS: z.coerce.number().int().positive().default(100_000),
@@ -113,6 +130,16 @@ const serverEnvSchema = z
       message:
         "AI_DEFAULT_MODEL must be in AI_ALLOWED_MODELS when AI is enabled with openai",
       path: ["AI_DEFAULT_MODEL"],
+    },
+  )
+  .refine(
+    (env) =>
+      env.AI_WORKER_LEASE_MS >
+      env.AI_OPENAI_TIMEOUT_MS + env.AI_WORKER_SETTLE_SLACK_MS,
+    {
+      message:
+        "AI_WORKER_LEASE_MS must be greater than AI_OPENAI_TIMEOUT_MS + AI_WORKER_SETTLE_SLACK_MS",
+      path: ["AI_WORKER_LEASE_MS"],
     },
   );
 

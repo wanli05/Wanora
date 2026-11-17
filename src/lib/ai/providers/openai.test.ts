@@ -205,4 +205,24 @@ describe("createOpenAiProvider", () => {
       }),
     ).rejects.toBeInstanceOf(ProviderUncertainFailure);
   });
+
+  it("merges provider timeout AbortSignal with the caller signal", async () => {
+    const create = vi.fn(async (_body, opts) => {
+      expect(opts?.signal).toBeInstanceOf(AbortSignal);
+      // Caller not aborted yet; timeout signal is still part of the merge.
+      expect(opts?.signal?.aborted).toBe(false);
+      return stubResponse({ output_text: "ok" });
+    });
+    const provider = createOpenAiProvider({
+      env: baseEnv({ AI_OPENAI_TIMEOUT_MS: 30_000 }),
+      client: { responses: { create } },
+    });
+    const ac = new AbortController();
+    await provider.complete({
+      feature: "chat",
+      messages: [{ role: "user", content: "x" }],
+      signal: ac.signal,
+    });
+    expect(create).toHaveBeenCalledOnce();
+  });
 });

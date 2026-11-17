@@ -21,6 +21,11 @@ export function createMockAiProvider(): AiProvider {
   return {
     id: "mock",
     async complete(request: AiCompletionRequest): Promise<AiCompletionResult> {
+      if (request.signal?.aborted) {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        throw err;
+      }
       const started = Date.now();
       const inputText = request.messages.map((m) => m.content).join("\n");
       const lastUser = [...request.messages]
