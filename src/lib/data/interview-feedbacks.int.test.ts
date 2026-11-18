@@ -65,6 +65,29 @@ describe("interview feedbacks", () => {
     expect(structured.question).toBe("志望動機は？");
     expect(structured.body).toBeNull();
 
+    const multiQa = await createInterviewFeedback(db, userId, interview.interview.id, {
+      source: "self",
+      qaItems: [
+        { question: "自己紹介してください", answer: "大学で…", tag: "導入" },
+        { question: "なぜ当社ですか？", answer: "プロダクトです" },
+      ],
+      recordedOn: "2026-11-04",
+    });
+    expect(multiQa.question).toBe("自己紹介してください");
+    expect(multiQa.ownAnswer).toBe("大学で…");
+    expect(multiQa.qaItems).toEqual([
+      { question: "自己紹介してください", answer: "大学で…", tag: "導入" },
+      { question: "なぜ当社ですか？", answer: "プロダクトです" },
+    ]);
+
+    await updateInterviewFeedback(db, userId, multiQa.id, {
+      source: "self",
+      qaItems: [
+        { question: "更新後の質問", answer: "更新後の回答" },
+      ],
+      recordedOn: "2026-11-04",
+    });
+
     await updateInterviewFeedback(db, userId, first.id, {
       source: "company",
       body: "会社フィードバック更新",
@@ -73,14 +96,19 @@ describe("interview feedbacks", () => {
 
     const board = await loadBoard(db, userId);
     const stageInterview = board.applications[0]?.stageInterviews[0];
-    expect(stageInterview?.feedbacks).toHaveLength(3);
+    expect(stageInterview?.feedbacks).toHaveLength(4);
     expect(stageInterview?.feedbacks.map((item) => item.body)).toEqual([
       "会社フィードバック更新",
       "エージェントからのフィードバック",
       null,
+      null,
     ]);
     expect(stageInterview?.feedbacks[2]?.question).toBe("志望動機は？");
     expect(stageInterview?.feedbacks[2]?.resultText).toBe("保留");
+    expect(stageInterview?.feedbacks[3]?.qaItems).toEqual([
+      { question: "更新後の質問", answer: "更新後の回答" },
+    ]);
+    expect(stageInterview?.feedbacks[3]?.question).toBe("更新後の質問");
     expect(board.applications[0]?.hasFeedback).toBe(true);
 
     await deleteInterviewFeedback(db, userId, second.id);
