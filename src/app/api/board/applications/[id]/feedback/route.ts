@@ -30,11 +30,23 @@ export async function PUT(
       body = null,
       question = null,
       ownAnswer = null,
+      qaItems = null,
       resultText = null,
       reflection = null,
       recordedOn,
     } = parsed.data;
-    const content = { source, body, question, ownAnswer, resultText, reflection, recordedOn };
+    // UI sends multi-block qaItems; must persist them (legacy question/ownAnswer
+    // are mirrored inside validateFeedbackContent when only qaItems are present).
+    const content = {
+      source,
+      body,
+      question,
+      ownAnswer,
+      qaItems,
+      resultText,
+      reflection,
+      recordedOn,
+    };
     if (feedbackId) {
       await updateInterviewFeedback(getDb(), user.id, feedbackId, content);
     } else {
