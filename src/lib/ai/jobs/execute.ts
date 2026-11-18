@@ -195,15 +195,23 @@ export async function executeAiJob(
   const conv = await getAiConversation(db, job.userId, job.conversationId);
   const discardAssistant = !conv || conv.status === "deleted";
   const emptyText = !completion.text.trim();
+  const incomplete = completion.rejectReason === "incomplete";
+  // Incomplete (with or without partial text) and empty text are not success replies.
+  const rejectOutput = emptyText || incomplete;
 
-  // Empty text + usage: bill actual cost; do not release as free / uncertain.
-  if (emptyText && !usageLooksPresent(completion.usage)) {
+  // Empty/incomplete without usage: clean fail (no known billable tokens).
+  if (rejectOutput && !usageLooksPresent(completion.usage)) {
     return finalizeCleanFailure(
       db,
       fence,
       job,
       now,
-      new ProviderCleanFailure("empty output without usage", "invalid_output"),
+      new ProviderCleanFailure(
+        incomplete
+          ? "incomplete output without usage"
+          : "empty output without usage",
+        incomplete ? "incomplete_output" : "invalid_output",
+      ),
     );
   }
 
@@ -239,17 +247,23 @@ export async function executeAiJob(
         }
 
         // Actual cost uses current catalog pricing version (not OpenAI invoice).
-        const patch = buildSettledUsageFromCompletion(completion, {
-          pricingVersion: getServerEnv().AI_PRICING_VERSION,
-          extraErrorCode: discardAssistant
-            ? "discarded_conversation_deleted"
-            : emptyText
-              ? "empty_output_with_usage"
-              : null,
-        });
+        // For incomplete/empty rejects, force invalid_output settle while keeping usage $.
+        const patch = buildSettledUsageFromCompletion(
+          rejectOutput ? { ...completion, text: "" } : completion,
+          {
+            pricingVersion: getServerEnv().AI_PRICING_VERSION,
+            extraErrorCode: discardAssistant
+              ? "discarded_conversation_deleted"
+              : incomplete
+                ? "incomplete_output"
+                : emptyText
+                  ? "empty_output_with_usage"
+                  : null,
+          },
+        );
 
         let resultMessageId: string | null = null;
-        if (!discardAssistant && !emptyText) {
+        if (!discardAssistant && !rejectOutput) {
           const assistant = await createAiMessage(
             tx,
             job.userId,
@@ -286,7 +300,7 @@ export async function executeAiJob(
           model: patch.model,
         });
 
-        const jobStatus = emptyText
+        const jobStatus = rejectOutput
           ? "failed"
           : discardAssistant
             ? "canceled"
@@ -294,7 +308,7 @@ export async function executeAiJob(
         const fin = await updateAiJobWithFence(tx, fence, {
           status: jobStatus,
           executionPhase: "after_provider",
-          providerOutcome: emptyText ? "failed" : "succeeded",
+          providerOutcome: rejectOutput ? "failed" : "succeeded",
           resultMessageId,
           resultPayload: {
             text: completion.text,
@@ -302,17 +316,22 @@ export async function executeAiJob(
             provider: completion.provider,
             discarded: discardAssistant,
             emptyOutput: emptyText,
+            incomplete,
             providerResponseId: completion.providerResponseId ?? null,
           },
           provider: completion.provider,
           model: completion.model,
-          errorCode: emptyText
-            ? "empty_output_with_usage"
+          errorCode: rejectOutput
+            ? incomplete
+              ? "incomplete_output"
+              : "empty_output_with_usage"
             : discardAssistant
               ? "conversation_deleted"
               : null,
-          errorMessage: emptyText
-            ? "provider returned usage but empty text; cost settled"
+          errorMessage: rejectOutput
+            ? incomplete
+              ? "provider returned incomplete output; cost settled, reply discarded"
+              : "provider returned usage but empty text; cost settled"
             : discardAssistant
               ? "provider result discarded; conversation deleted"
               : null,
@@ -329,7 +348,7 @@ export async function executeAiJob(
           job: fin.job,
           resultMessageId: resultMessageId ?? "",
           discarded: discardAssistant,
-          emptyOutput: emptyText,
+          emptyOutput: rejectOutput,
         };
       });
     });

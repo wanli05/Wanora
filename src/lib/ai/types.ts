@@ -36,6 +36,12 @@ export type AiCompletionResult = {
   providerResponseId?: string;
   /** Scrubbed numeric usage only — never message content or secrets. */
   rawUsage?: Record<string, unknown>;
+  /**
+   * When set, Job must not treat `text` as a successful assistant reply.
+   * Usage (if present) is still settled via the invalid_output / billed path —
+   * never forged as a clean failure that zeroes known provider cost.
+   */
+  rejectReason?: "incomplete";
 };
 
 /** Unified provider contract — mock (1A) + openai (1B B1a). */

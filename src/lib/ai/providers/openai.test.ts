@@ -117,6 +117,71 @@ describe("createOpenAiProvider", () => {
     expect(opts?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("rejects incomplete Responses with usage (does not succeed)", async () => {
+    const create = vi.fn(async () =>
+      stubResponse({
+        status: "incomplete",
+        output_text: "途中までの文章",
+        incomplete_details: { reason: "max_output_tokens" },
+        usage: {
+          input_tokens: 80,
+          output_tokens: 20,
+          total_tokens: 100,
+          input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as Partial<OpenAIResponse> & { output_text?: string }),
+    );
+    const provider = createOpenAiProvider({
+      env: baseEnv(),
+      client: { responses: { create } },
+    });
+    const result = await provider.complete({
+      feature: "chat",
+      messages: [{ role: "user", content: "書いて" }],
+    });
+    expect(result.rejectReason).toBe("incomplete");
+    expect(result.text).toContain("途中");
+    expect(result.usage.inputTokens).toBe(80);
+    expect(result.usage.outputTokens).toBe(20);
+    expect(result.rawUsage).toMatchObject({ response_status: "incomplete" });
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("throws clean failure for incomplete without usage", async () => {
+    const provider = createOpenAiProvider({
+      env: baseEnv(),
+      client: {
+        responses: {
+          create: async () =>
+            stubResponse({
+              status: "incomplete",
+              output_text: "断片",
+              usage: {
+                input_tokens: 0,
+                output_tokens: 0,
+                total_tokens: 0,
+                input_tokens_details: {
+                  cached_tokens: 0,
+                  cache_write_tokens: 0,
+                },
+                output_tokens_details: { reasoning_tokens: 0 },
+              },
+            } as Partial<OpenAIResponse> & { output_text?: string }),
+        },
+      },
+    });
+    await expect(
+      provider.complete({
+        feature: "chat",
+        messages: [{ role: "user", content: "x" }],
+      }),
+    ).rejects.toMatchObject({
+      name: "ProviderCleanFailure",
+      code: "incomplete_output",
+    });
+  });
+
   it("returns empty text with usage for billed settle (not uncertain)", async () => {
     const client: OpenAiResponsesClient = {
       responses: {

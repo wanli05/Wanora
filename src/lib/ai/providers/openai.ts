@@ -173,6 +173,43 @@ export function createOpenAiProvider(
         rawUsage: scrubbed,
       };
 
+      // Only a completed Responses payload may become a successful assistant reply.
+      // Incomplete (even with partial text) must not succeed; preserve usage for settle.
+      if (response.status === "incomplete") {
+        if (usageLooksPresent(usage)) {
+          return {
+            // Keep partial text for audit payload; execute rejects it as assistant output.
+            text,
+            ...resultBase,
+            rawUsage: { ...scrubbed, response_status: "incomplete" },
+            rejectReason: "incomplete",
+          };
+        }
+        throw new ProviderCleanFailure(
+          "openai returned incomplete output without usage",
+          "incomplete_output",
+        );
+      }
+
+      if (response.status && response.status !== "completed") {
+        if (usageLooksPresent(usage)) {
+          // Non-completed, non-incomplete statuses with usage: bill, do not succeed.
+          return {
+            text: "",
+            ...resultBase,
+            rawUsage: {
+              ...scrubbed,
+              response_status: String(response.status),
+            },
+            rejectReason: "incomplete",
+          };
+        }
+        throw new ProviderCleanFailure(
+          `openai response status ${response.status}`,
+          "invalid_output",
+        );
+      }
+
       if (!text) {
         if (usageLooksPresent(usage)) {
           // B1b: return empty text + usage so execute/guard can settle actual cost
