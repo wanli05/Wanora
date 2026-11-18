@@ -402,6 +402,59 @@ describe("ProgressBoard", () => {
     expect(screen.queryByText("评分（1–5）")).not.toBeInTheDocument();
   });
 
+  it("locks filled Q&A blocks when adding the next question", async () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(
+          sampleApp({
+            currentStageKind: "interview_1",
+            stageInterviews: [
+              {
+                id: "iv-1",
+                stageId: "st-1",
+                stageKind: "interview_1",
+                start: "2026-11-01T05:00:00.000Z",
+                end: "2026-11-01T06:00:00.000Z",
+                mode: "google_meet",
+                meetingUrl: null,
+                locationText: null,
+                interviewers: null,
+                status: "scheduled",
+                canWriteFeedback: true,
+                feedbacks: [],
+              },
+            ],
+          }),
+        )}
+      />,
+      "zh-CN",
+    );
+    fireEvent.click(screen.getByTestId("edit-app-1-detail"));
+    await waitFor(() => {
+      expect(screen.getByTestId("append-feedback-iv-1")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("append-feedback-iv-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-panel")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("feedback-qa-add"));
+    expect(screen.getByTestId("feedback-qa-add-error")).toBeInTheDocument();
+    expect(screen.getAllByTestId(/feedback-qa-\d+/)).toHaveLength(1);
+
+    const question = screen.getByTestId("feedback-qa-0").querySelector("textarea");
+    expect(question).toBeTruthy();
+    fireEvent.change(question!, { target: { value: "志望動機は？" } });
+    fireEvent.click(screen.getByTestId("feedback-qa-add"));
+
+    expect(screen.queryByTestId("feedback-qa-add-error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("feedback-qa-0")).toHaveAttribute("data-locked", "true");
+    expect(screen.getByTestId("feedback-qa-1")).toHaveAttribute("data-locked", "false");
+    expect(screen.getByTestId("feedback-qa-0").querySelector("textarea")).toHaveAttribute(
+      "readOnly",
+    );
+  });
+
   it("labels withdraw as 辞退", () => {
     renderWithIntl(
       <ProgressBoard
