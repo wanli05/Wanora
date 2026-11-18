@@ -9,6 +9,14 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { AiRefineButton } from "@/components/ai-sidebar/ai-refine-button";
+import { useAiAssistOptional } from "@/components/ai-sidebar/ai-assist-context";
+import {
+  canApplyToProfileDraft,
+  canApplyToRecordDraft,
+} from "@/components/ai-sidebar/assist-apply-guard";
+import { useLiveRef } from "@/components/ai-sidebar/use-live-ref";
 import {
   ProfilePageForm,
   type ProfilePageFormLabels,
@@ -211,9 +219,31 @@ export function MyCareerCenter(props: Props) {
   const [exportDoc, setExportDoc] = useState<"rirekisho" | "shokumu">(
     "rirekisho",
   );
+  const assist = useAiAssistOptional();
+  const tAi = useTranslations("AiSidebar");
+
+  useEffect(() => {
+    return () => {
+      assist?.invalidateAssistApply();
+    };
+    // Intentionally only on unmount — drop form write-back when leaving My Page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup
+  }, []);
 
   return (
     <div className="mc-shell">
+      {assist?.bridgeError === "ai_unavailable" ? (
+        <p className="mc-banner" data-testid="ai-bridge-unavailable" role="alert">
+          {tAi("aiUnavailableShort")}
+          <button
+            type="button"
+            className="mc-btn mc-btn-ghost"
+            onClick={() => assist.clearBridgeError()}
+          >
+            {props.labels.cancel}
+          </button>
+        </p>
+      ) : null}
       <div className="mc-layout">
         <aside className="mc-side mc-no-print">
           <h2>My Career</h2>
@@ -222,7 +252,12 @@ export function MyCareerCenter(props: Props) {
               key={id}
               type="button"
               aria-current={module === id ? "page" : undefined}
-              onClick={() => setModule(id)}
+              onClick={() => {
+                if (id !== module) {
+                  assist?.invalidateAssistApply();
+                }
+                setModule(id);
+              }}
             >
               <span className="mc-n">{id === "export" ? "↓" : index + 1}</span>
               <span>{props.labels.modules[id]}</span>
@@ -311,6 +346,15 @@ function ProfileModule({
   const wasPending = useRef(false);
   const [langs, setLangs] = useState(extras.languages);
   const [nationality, setNationality] = useState(extras.nationality);
+  const [selfPrJa, setSelfPrJa] = useState(extras.selfPrJa);
+  const [jobSummaryJa, setJobSummaryJa] = useState(extras.jobSummaryJa);
+  const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const tAi = useTranslations("AiSidebar");
+  const assist = useAiAssistOptional();
+  const mountedRef = useRef(true);
+  const editingRef = useLiveRef(editing);
+  const selfPrJaRef = useLiveRef(selfPrJa);
+  const jobSummaryJaRef = useLiveRef(jobSummaryJa);
   const japanese = isJapaneseNationality(nationality);
   const recentGroups = useMemo(
     () => groupCareerTimelineByAt(timeline).slice(0, 4),
@@ -318,12 +362,23 @@ function ProfileModule({
   );
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      assist?.invalidateAssistApply();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup
+  }, []);
+
+  useEffect(() => {
     if (wasPending.current && !pending && state.ok) {
+      assist?.invalidateAssistApply();
       setEditing(false);
+      setDraftDirtyHint(null);
       router.refresh();
     }
     wasPending.current = pending;
-  }, [pending, state.ok, router]);
+  }, [pending, state.ok, router, assist]);
 
   const name = jaOf(profileForm.initial.fullName as LocalizedText);
   const tags = extras.directionTags
@@ -348,6 +403,7 @@ function ProfileModule({
             type="button"
             className="mc-btn mc-btn-ghost"
             onClick={() => {
+              assist?.invalidateAssistApply();
               setLangs(extras.languages);
               setNationality(extras.nationality);
               setEditing(false);
@@ -360,8 +416,12 @@ function ProfileModule({
             type="button"
             className="mc-btn"
             onClick={() => {
+              assist?.invalidateAssistApply();
               setLangs(extras.languages);
               setNationality(extras.nationality);
+              setSelfPrJa(extras.selfPrJa);
+              setJobSummaryJa(extras.jobSummaryJa);
+              setDraftDirtyHint(null);
               setEditing(true);
             }}
           >
@@ -492,21 +552,76 @@ function ProfileModule({
               />
             </label>
             <label className="mc-field">
-              {labels.fields.selfPr}
+              <span className="flex items-center justify-between gap-2">
+                {labels.fields.selfPr}
+                <AiRefineButton
+                  fieldKey="selfPr_ja"
+                  draftText={selfPrJa}
+                  getCurrentDraft={() => selfPrJaRef.current}
+                  onApplyToDraft={(text) => {
+                    if (
+                      !canApplyToProfileDraft({
+                        mounted: mountedRef.current,
+                        editorOpen: editingRef.current,
+                      })
+                    ) {
+                      return false;
+                    }
+                    setSelfPrJa(text);
+                    setDraftDirtyHint(tAi("applyDraftOnly"));
+                    return true;
+                  }}
+                />
+              </span>
               <textarea
                 name="selfPr_ja"
                 rows={4}
-                defaultValue={extras.selfPrJa}
+                value={selfPrJa}
+                data-testid="mc-self-pr-input"
+                onChange={(e) => {
+                  setSelfPrJa(e.target.value);
+                  setDraftDirtyHint(null);
+                }}
               />
             </label>
             <label className="mc-field">
-              {labels.fields.jobSummary}
+              <span className="flex items-center justify-between gap-2">
+                {labels.fields.jobSummary}
+                <AiRefineButton
+                  fieldKey="jobSummary_ja"
+                  draftText={jobSummaryJa}
+                  getCurrentDraft={() => jobSummaryJaRef.current}
+                  onApplyToDraft={(text) => {
+                    if (
+                      !canApplyToProfileDraft({
+                        mounted: mountedRef.current,
+                        editorOpen: editingRef.current,
+                      })
+                    ) {
+                      return false;
+                    }
+                    setJobSummaryJa(text);
+                    setDraftDirtyHint(tAi("applyDraftOnly"));
+                    return true;
+                  }}
+                />
+              </span>
               <textarea
                 name="jobSummary_ja"
                 rows={4}
-                defaultValue={extras.jobSummaryJa}
+                value={jobSummaryJa}
+                data-testid="mc-job-summary-input"
+                onChange={(e) => {
+                  setJobSummaryJa(e.target.value);
+                  setDraftDirtyHint(null);
+                }}
               />
             </label>
+            {draftDirtyHint ? (
+              <p className="text-sm text-amber-800" data-testid="mc-ai-draft-hint">
+                {draftDirtyHint}
+              </p>
+            ) : null}
             <label className="mc-field">
               {labels.fields.strengths}
               <textarea
@@ -702,8 +817,30 @@ function WorkModule({
 }) {
   const [state, action, pending] = useActionState(saveCareerEmployerAction, {});
   const [editing, setEditing] = useState<CareerEmployerDto | null>(null);
+  const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const tAi = useTranslations("AiSidebar");
+  const assist = useAiAssistOptional();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const editingRef = useLiveRef(editing);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      assist?.invalidateAssistApply();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup
+  }, []);
+
+  function openEmployerEditor(row: CareerEmployerDto) {
+    if (editingRef.current?.id !== row.id) {
+      assist?.invalidateAssistApply();
+    }
+    setEditing(row);
+    setDraftDirtyHint(null);
+  }
 
   return (
     <div className="mc-stack">
@@ -715,7 +852,8 @@ function WorkModule({
         <button
           type="button"
           className="mc-btn"
-          onClick={() =>
+          onClick={() => {
+            assist?.invalidateAssistApply();
             setEditing({
               id: "",
               companyNameJa: "",
@@ -729,8 +867,9 @@ function WorkModule({
               revenueText: "",
               employeesText: "",
               narrativeJa: "",
-            })
-          }
+            });
+            setDraftDirtyHint(null);
+          }}
         >
           {labels.add}
         </button>
@@ -742,11 +881,11 @@ function WorkModule({
             className="mc-card mc-card-clickable"
             role="button"
             tabIndex={0}
-            onClick={() => setEditing(row)}
+            onClick={() => openEmployerEditor(row)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setEditing(row);
+                openEmployerEditor(row);
               }
             }}
           >
@@ -767,7 +906,7 @@ function WorkModule({
                 className="mc-btn mc-btn-ghost"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setEditing(row);
+                  openEmployerEditor(row);
                 }}
               >
                 編集
@@ -791,7 +930,12 @@ function WorkModule({
         ))}
       </div>
       {editing ? (
-        <form action={action} className="mc-card mc-stack">
+        <form
+          key={editing.id || "new-employer"}
+          action={action}
+          className="mc-card mc-stack"
+          data-testid="mc-employer-form"
+        >
           <input type="hidden" name="id" value={editing.id} />
           <label className="mc-field">
             会社名
@@ -833,13 +977,64 @@ function WorkModule({
             <input name="employeesText" defaultValue={editing.employeesText} />
           </label>
           <label className="mc-field">
-            叙述
+            <span className="flex items-center justify-between gap-2">
+              叙述
+              <AiRefineButton
+                fieldKey="narrative_ja"
+                draftText={editing.narrativeJa}
+                recordId={editing.id || null}
+                testId="ai-refine-narrative_ja"
+                getCurrentDraft={() => editingRef.current?.narrativeJa ?? ""}
+                onApplyToDraft={(text) => {
+                  // Click-time id is the intentional binding; live state comes from editingRef.
+                  const expectedRecordId = editing.id || null;
+                  if (
+                    !canApplyToRecordDraft({
+                      mounted: mountedRef.current,
+                      editorOpen: editingRef.current != null,
+                      currentRecordId: editingRef.current?.id,
+                      expectedRecordId,
+                    })
+                  ) {
+                    return false;
+                  }
+                  setEditing((prev) => {
+                    if (
+                      !prev ||
+                      !canApplyToRecordDraft({
+                        mounted: true,
+                        editorOpen: true,
+                        currentRecordId: prev.id,
+                        expectedRecordId,
+                      })
+                    ) {
+                      return prev;
+                    }
+                    return { ...prev, narrativeJa: text };
+                  });
+                  setDraftDirtyHint(tAi("applyDraftOnly"));
+                  return true;
+                }}
+              />
+            </span>
             <textarea
               name="narrative_ja"
               rows={3}
-              defaultValue={editing.narrativeJa}
+              value={editing.narrativeJa}
+              data-testid="mc-employer-narrative-input"
+              onChange={(e) => {
+                setEditing((prev) =>
+                  prev ? { ...prev, narrativeJa: e.target.value } : prev,
+                );
+                setDraftDirtyHint(null);
+              }}
             />
           </label>
+          {draftDirtyHint ? (
+            <p className="text-sm text-amber-800" data-testid="mc-ai-draft-hint">
+              {draftDirtyHint}
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <button className="mc-btn" type="submit" disabled={pending}>
               {labels.save}
@@ -847,7 +1042,11 @@ function WorkModule({
             <button
               type="button"
               className="mc-btn mc-btn-ghost"
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                assist?.invalidateAssistApply();
+                setEditing(null);
+                setDraftDirtyHint(null);
+              }}
             >
               閉じる
             </button>
@@ -868,8 +1067,22 @@ function ProjectsModule({
 }) {
   const [state, action, pending] = useActionState(saveCareerProjectAction, {});
   const [editing, setEditing] = useState<CareerProjectDto | null>(null);
+  const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const tAi = useTranslations("AiSidebar");
+  const assist = useAiAssistOptional();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const editingRef = useLiveRef(editing);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      assist?.invalidateAssistApply();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup
+  }, []);
 
   const empty = (): CareerProjectDto => ({
     id: "",
@@ -891,6 +1104,14 @@ function ProjectsModule({
     status: "confirmed",
   });
 
+  function openProjectEditor(row: CareerProjectDto) {
+    if (editingRef.current?.id !== row.id) {
+      assist?.invalidateAssistApply();
+    }
+    setEditing(row);
+    setDraftDirtyHint(null);
+  }
+
   return (
     <div className="mc-stack">
       <div className="mc-sec-head">
@@ -898,7 +1119,15 @@ function ProjectsModule({
           <h2>{labels.modules.projects}</h2>
           <p>{labels.projectsSub}</p>
         </div>
-        <button type="button" className="mc-btn" onClick={() => setEditing(empty())}>
+        <button
+          type="button"
+          className="mc-btn"
+          onClick={() => {
+            assist?.invalidateAssistApply();
+            setEditing(empty());
+            setDraftDirtyHint(null);
+          }}
+        >
           {labels.add}
         </button>
       </div>
@@ -910,11 +1139,11 @@ function ProjectsModule({
             className="mc-card mc-card-clickable"
             role="button"
             tabIndex={0}
-            onClick={() => setEditing(row)}
+            onClick={() => openProjectEditor(row)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setEditing(row);
+                openProjectEditor(row);
               }
             }}
           >
@@ -947,7 +1176,7 @@ function ProjectsModule({
                 className="mc-btn mc-btn-ghost"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setEditing(row);
+                  openProjectEditor(row);
                 }}
               >
                 編集
@@ -987,7 +1216,12 @@ function ProjectsModule({
         ))}
       </div>
       {editing ? (
-        <form action={action} className="mc-card mc-stack">
+        <form
+          key={editing.id || "new-project"}
+          action={action}
+          className="mc-card mc-stack"
+          data-testid="mc-project-form"
+        >
           <input type="hidden" name="id" value={editing.id} />
           <label className="mc-field">
             タイトル
@@ -1020,13 +1254,63 @@ function ProjectsModule({
             </select>
           </label>
           <label className="mc-field">
-            概要
+            <span className="flex items-center justify-between gap-2">
+              概要
+              <AiRefineButton
+                fieldKey="overview_ja"
+                draftText={editing.overviewJa}
+                recordId={editing.id || null}
+                testId="ai-refine-overview_ja"
+                getCurrentDraft={() => editingRef.current?.overviewJa ?? ""}
+                onApplyToDraft={(text) => {
+                  const expectedRecordId = editing.id || null;
+                  if (
+                    !canApplyToRecordDraft({
+                      mounted: mountedRef.current,
+                      editorOpen: editingRef.current != null,
+                      currentRecordId: editingRef.current?.id,
+                      expectedRecordId,
+                    })
+                  ) {
+                    return false;
+                  }
+                  setEditing((prev) => {
+                    if (
+                      !prev ||
+                      !canApplyToRecordDraft({
+                        mounted: true,
+                        editorOpen: true,
+                        currentRecordId: prev.id,
+                        expectedRecordId,
+                      })
+                    ) {
+                      return prev;
+                    }
+                    return { ...prev, overviewJa: text };
+                  });
+                  setDraftDirtyHint(tAi("applyDraftOnly"));
+                  return true;
+                }}
+              />
+            </span>
             <textarea
               name="overview_ja"
               rows={3}
-              defaultValue={editing.overviewJa}
+              value={editing.overviewJa}
+              data-testid="mc-project-overview-input"
+              onChange={(e) => {
+                setEditing((prev) =>
+                  prev ? { ...prev, overviewJa: e.target.value } : prev,
+                );
+                setDraftDirtyHint(null);
+              }}
             />
           </label>
+          {draftDirtyHint ? (
+            <p className="text-sm text-amber-800" data-testid="mc-ai-draft-hint">
+              {draftDirtyHint}
+            </p>
+          ) : null}
           <label className="mc-field">
             担当フェーズ
             <textarea name="phases_ja" rows={2} defaultValue={editing.phasesJa} />
@@ -1074,7 +1358,11 @@ function ProjectsModule({
             <button
               type="button"
               className="mc-btn mc-btn-ghost"
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                assist?.invalidateAssistApply();
+                setEditing(null);
+                setDraftDirtyHint(null);
+              }}
             >
               閉じる
             </button>

@@ -7,6 +7,16 @@ import type { AiTargetContext } from "@/lib/ai/context/types";
 import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
 import {
+  useAiAssist,
+  type OpenWithAssistInput,
+} from "@/components/ai-sidebar/ai-assist-context";
+import { extractRefinedText } from "@/components/ai-sidebar/extract-refined-text";
+import {
+  buildRefinePrompt,
+  type RefineFeature,
+  type RefineFieldKey,
+} from "@/components/ai-sidebar/refine-prompts";
+import {
   cancelJob,
   createConversation,
   deleteConversation,
@@ -29,12 +39,30 @@ import {
 } from "./suggestions";
 import { useJobPolling } from "./use-job-polling";
 
+type AssistSession = {
+  requestId: string;
+  fieldKey: RefineFieldKey;
+  feature: RefineFeature;
+  target: AiTargetContext | null;
+  recordId: string | null;
+  draftSnapshot: string;
+  getCurrentDraft: () => string;
+  /** Returns false when binding is stale / unmounted. */
+  onApplyToDraft: (refined: string) => boolean;
+  limitedContext?: boolean;
+  clientRequestId?: string;
+  applyMessageId?: string | null;
+  /** When true, chat may remain but form write-back is disabled. */
+  applyRevoked?: boolean;
+};
+
 export function AiSidebar() {
   const t = useTranslations("AiSidebar");
   const pathname = usePathname() ?? "/";
   const titleId = useId();
   const adjusterId = useId();
   const pageContext = pageContextFromPath(pathname);
+  const { registerOpenHandler, registerInvalidateHandler } = useAiAssist();
   const [open, setOpen] = useState(false);
   /** Optional field focus; default null so chat can start without picking a Target. */
   const [targetContext, setTargetContext] = useState<AiTargetContext | null>(
@@ -50,15 +78,27 @@ export function AiSidebar() {
   const [jobSnap, setJobSnap] = useState<AiJobDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
+  const [assistSession, setAssistSession] = useState<AssistSession | null>(
+    null,
+  );
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  /** When set (including null), open/select must not clobber Target with conversation pin. */
+  const assistTargetLockRef = useRef<AiTargetContext | null | undefined>(
+    undefined,
+  );
 
   function formatTarget(tgt: AiTargetContext | null): string {
     if (!tgt) return t("targetNone");
+    if (tgt.type === "career_employer") return t("targetCareerEmployer");
+    if (tgt.type === "career_project") return t("targetCareerProject");
     const opt = ADJUSTABLE_TARGET_OPTIONS.find(
       (o) => o.value === targetSelectValue(tgt),
     );
-    return opt ? t(opt.labelKey) : tgt.type;
+    if (opt) return t(opt.labelKey);
+    return tgt.type;
   }
 
   function pageLabel(): string {
@@ -103,12 +143,20 @@ export function AiSidebar() {
       writeActiveConversationId(id);
       setError(null);
       setAdjustOpen(false);
+      // Switching threads must not let an old assistant reply apply to a new field.
+      setAssistSession((prev) =>
+        prev ? { ...prev, applyMessageId: null, clientRequestId: undefined } : null,
+      );
       if (list) {
         const conv = list.find((c) => c.id === id);
-        // Preserve existing pinned Target in UI when present; do not invent one.
-        setTargetContext(
-          (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
-        );
+        if (assistTargetLockRef.current !== undefined) {
+          setTargetContext(assistTargetLockRef.current);
+        } else {
+          // Preserve existing pinned Target in UI when present; do not invent one.
+          setTargetContext(
+            (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
+          );
+        }
       }
       await refreshMessages(id);
     },
@@ -129,6 +177,8 @@ export function AiSidebar() {
         null;
       if (pick) {
         await selectConversation(pick, list);
+      } else if (assistTargetLockRef.current !== undefined) {
+        setTargetContext(assistTargetLockRef.current);
       } else {
         setTargetContext(null);
       }
@@ -154,13 +204,97 @@ export function AiSidebar() {
       setJobSnap(job);
       setPending(null);
       if (job.status === "succeeded" && job.conversationId) {
-        await refreshMessages(job.conversationId);
+        const res = await listMessages(job.conversationId, { limit: 100 });
+        if ("messages" in res && res.messages) {
+          setMessages(res.messages);
+          setAssistSession((prev) => {
+            if (!prev?.clientRequestId) return prev;
+            const userIdx = res.messages.findIndex(
+              (m) =>
+                m.role === "user" &&
+                m.clientMessageId === prev.clientRequestId,
+            );
+            if (userIdx < 0) return prev;
+            const assistant = res.messages
+              .slice(userIdx + 1)
+              .find((m) => m.role === "assistant");
+            if (!assistant) return prev;
+            return { ...prev, applyMessageId: assistant.id };
+          });
+        }
       }
       setBusy(false);
       sendingRef.current = false;
     },
-    [refreshMessages],
+    [],
   );
+
+  const revokeAssistApply = useCallback(() => {
+    assistTargetLockRef.current = undefined;
+    setAssistSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            applyMessageId: null,
+            applyRevoked: true,
+            getCurrentDraft: () => "",
+            onApplyToDraft: () => false,
+          }
+        : null,
+    );
+    setApplyNotice(null);
+  }, []);
+
+  useEffect(() => {
+    return registerInvalidateHandler(revokeAssistApply);
+  }, [registerInvalidateHandler, revokeAssistApply]);
+
+  // Leaving My Career must drop form write-back; conversation messages may stay.
+  const prevPathRef = useRef(pathname);
+  useEffect(() => {
+    const prev = prevPathRef.current;
+    prevPathRef.current = pathname;
+    const wasCareer = pageContextFromPath(prev).area === "my_career";
+    const isCareer = pageContextFromPath(pathname).area === "my_career";
+    if (wasCareer && !isCareer) {
+      revokeAssistApply();
+    }
+  }, [pathname, revokeAssistApply]);
+
+  useEffect(() => {
+    return registerOpenHandler((input: OpenWithAssistInput) => {
+      const requestId = crypto.randomUUID();
+      assistTargetLockRef.current = input.target;
+      setOpen(true);
+      setError(null);
+      setApplyNotice(null);
+      setAdjustOpen(false);
+      // Always rebind Target for this assist request — never keep a stale pin.
+      setTargetContext(input.target);
+      setDraft(
+        buildRefinePrompt({
+          feature: input.feature,
+          draftText: input.draftText,
+          promptSeed: input.promptSeed,
+          limitedContext: input.limitedContext,
+        }),
+      );
+      setAssistSession({
+        requestId,
+        fieldKey: input.fieldKey,
+        feature: input.feature,
+        target: input.target,
+        recordId: input.recordId ?? null,
+        draftSnapshot: input.draftSnapshot,
+        getCurrentDraft: input.getCurrentDraft,
+        onApplyToDraft: input.onApplyToDraft,
+        limitedContext: input.limitedContext,
+        applyMessageId: null,
+        applyRevoked: false,
+      });
+      queueMicrotask(() => composerRef.current?.focus());
+    });
+  }, [registerOpenHandler]);
 
   const onJobTimeout = useCallback(() => {
     setPending(null);
@@ -209,13 +343,26 @@ export function AiSidebar() {
     }
 
     const clientRequestId = crypto.randomUUID();
+    const sendTarget = assistSession?.target ?? targetContext;
+    const sendFeature = assistSession?.feature;
+    // Keep draftSnapshot from assist-open time so form edits after open
+    // still trigger overwrite confirm (do not re-baseline on send).
+    setAssistSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            clientRequestId,
+            applyMessageId: null,
+          }
+        : null,
+    );
     const optimistic: AiMessageDto = {
       id: `local-${clientRequestId}`,
       conversationId,
       role: "user",
       content,
       pageContext,
-      targetContext,
+      targetContext: sendTarget,
       clientMessageId: clientRequestId,
       createdAt: new Date().toISOString(),
     };
@@ -227,7 +374,8 @@ export function AiSidebar() {
       clientRequestId,
       content,
       pageContext,
-      targetContext,
+      targetContext: sendTarget,
+      feature: sendFeature,
     });
 
     if ("error" in res && res.error) {
@@ -262,8 +410,12 @@ export function AiSidebar() {
     if (isJobTerminal(res.job.status)) {
       writePendingJob(null);
       setPending(null);
-      setBusy(false);
-      sendingRef.current = false;
+      if (res.job.status === "succeeded") {
+        await onJobTerminal(res.job);
+      } else {
+        setBusy(false);
+        sendingRef.current = false;
+      }
     }
   }
 
@@ -283,7 +435,10 @@ export function AiSidebar() {
   }
 
   async function onNewConversation() {
+    assistTargetLockRef.current = undefined;
     setTargetContext(null);
+    setAssistSession(null);
+    setApplyNotice(null);
     setAdjustOpen(false);
     const created = await createConversation({
       pinnedTarget: null,
@@ -321,12 +476,44 @@ export function AiSidebar() {
   }
 
   function applySuggestion(chip: ReturnType<typeof suggestionsForPage>[number]) {
+    assistTargetLockRef.current = undefined;
     setDraft(t(chip.promptKey));
     setTargetContext(chip.target);
+    setAssistSession(null);
+    setApplyNotice(null);
     setAdjustOpen(false);
   }
 
-  const showSuggestions = messages.length === 0 && !busy && !pending;
+  function applyAssistantToDraft(message: AiMessageDto) {
+    if (
+      !assistSession ||
+      assistSession.applyRevoked ||
+      assistSession.applyMessageId !== message.id
+    ) {
+      return;
+    }
+    const refined = extractRefinedText(message.content);
+    if (!refined) {
+      setApplyNotice(t("applyExtractFailed"));
+      return;
+    }
+    // Conflict check against the live draft (ref-backed), not click-time state.
+    const current = assistSession.getCurrentDraft();
+    if (current !== assistSession.draftSnapshot) {
+      const ok = window.confirm(t("applyOverwriteConfirm"));
+      if (!ok) return;
+    }
+    const applied = assistSession.onApplyToDraft(refined);
+    if (!applied) {
+      setApplyNotice(t("applyRejectedStale"));
+      revokeAssistApply();
+      return;
+    }
+    setApplyNotice(t("applyDraftOnly"));
+  }
+
+  const showSuggestions =
+    messages.length === 0 && !busy && !pending && !assistSession;
   const chips = suggestionsForPage(pageContext);
 
   if (unauthorized) return null;
@@ -366,6 +553,14 @@ export function AiSidebar() {
             {t("title")}
           </h2>
           <p className="ai-sidebar-note">{t("readonlyNote")}</p>
+          {assistSession?.limitedContext ? (
+            <p
+              className="ai-sidebar-note"
+              data-testid="ai-assist-limited-context"
+            >
+              {t("limitedContextNote")}
+            </p>
+          ) : null}
           <button
             type="button"
             className="ai-sidebar-close"
@@ -452,23 +647,55 @@ export function AiSidebar() {
           ) : messages.length === 0 ? (
             <p className="ai-sidebar-empty">{t("emptyMessages")}</p>
           ) : (
-            messages.map((m) => (
-              <div
-                key={m.id}
-                className="ai-sidebar-msg"
-                data-role={m.role}
-                data-testid={`ai-msg-${m.role}`}
-              >
-                <span className="ai-sidebar-msg-role">
-                  {m.role === "user"
-                    ? t("roleYou")
-                    : m.role === "assistant"
-                      ? t("roleAi")
-                      : m.role}
-                </span>
-                <p>{m.content}</p>
-              </div>
-            ))
+            messages.map((m) => {
+              const applyArmed =
+                !!assistSession &&
+                !assistSession.applyRevoked &&
+                assistSession.applyMessageId === m.id;
+              const canApply =
+                m.role === "assistant" &&
+                applyArmed &&
+                extractRefinedText(m.content) != null;
+              const copyOnly =
+                m.role === "assistant" &&
+                applyArmed &&
+                extractRefinedText(m.content) == null;
+              return (
+                <div
+                  key={m.id}
+                  className="ai-sidebar-msg"
+                  data-role={m.role}
+                  data-testid={`ai-msg-${m.role}`}
+                >
+                  <span className="ai-sidebar-msg-role">
+                    {m.role === "user"
+                      ? t("roleYou")
+                      : m.role === "assistant"
+                        ? t("roleAi")
+                        : m.role}
+                  </span>
+                  <p>{m.content}</p>
+                  {canApply ? (
+                    <button
+                      type="button"
+                      className="ai-sidebar-suggest-chip"
+                      data-testid="ai-apply-to-draft"
+                      onClick={() => applyAssistantToDraft(m)}
+                    >
+                      {t("applyToDraft")}
+                    </button>
+                  ) : null}
+                  {copyOnly ? (
+                    <p
+                      className="ai-sidebar-ref-hint"
+                      data-testid="ai-apply-copy-only"
+                    >
+                      {t("applyExtractFailed")}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })
           )}
           {jobSnap && !isJobTerminal(jobSnap.status) ? (
             <div className="ai-sidebar-job" data-testid="ai-job-status">
@@ -501,6 +728,15 @@ export function AiSidebar() {
             role="alert"
           >
             {error}
+          </p>
+        ) : null}
+        {applyNotice ? (
+          <p
+            className="ai-sidebar-note"
+            data-testid="ai-apply-notice"
+            role="status"
+          >
+            {applyNotice}
           </p>
         ) : null}
 
@@ -559,6 +795,7 @@ export function AiSidebar() {
             }}
           >
             <textarea
+              ref={composerRef}
               data-testid="ai-composer-input"
               rows={3}
               value={draft}

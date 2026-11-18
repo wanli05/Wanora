@@ -106,6 +106,7 @@ export async function enqueueJob(body: {
   conversationId: string;
   clientRequestId: string;
   content: string;
+  feature?: string;
   pageContext?: AiPageContext | null;
   targetContext?: AiTargetContext | null;
 }) {
