@@ -93,9 +93,18 @@ vi.mock("./ai-api", async () => {
   };
 });
 
+import { AiAssistProvider } from "./ai-assist-context";
 import { AiSidebar } from "./ai-sidebar";
 import { applyPageNavigation } from "@/lib/ai/context/navigation";
 import { pageContextFromPath } from "./page-context";
+
+function renderSidebar() {
+  return render(
+    <AiAssistProvider>
+      <AiSidebar />
+    </AiAssistProvider>,
+  );
+}
 
 describe("AiSidebar", () => {
   beforeEach(() => {
@@ -181,7 +190,7 @@ describe("AiSidebar", () => {
   });
 
   it("opens and closes the panel", async () => {
-    render(<AiSidebar />);
+    renderSidebar();
     expect(screen.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-open",
       "false",
@@ -214,7 +223,7 @@ describe("AiSidebar", () => {
   });
 
   it("sends without requiring a Target selection", async () => {
-    render(<AiSidebar />);
+    renderSidebar();
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
 
@@ -239,7 +248,7 @@ describe("AiSidebar", () => {
 
   it("fills composer from a suggestion without auto-sending", async () => {
     pathnameRef.current = "/ja/profile";
-    render(<AiSidebar />);
+    renderSidebar();
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
     await waitFor(() => expect(screen.getByTestId("ai-suggestions")).toBeInTheDocument());
 
@@ -251,7 +260,7 @@ describe("AiSidebar", () => {
   });
 
   it("lets the user optionally adjust focus near the composer", async () => {
-    render(<AiSidebar />);
+    renderSidebar();
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
     fireEvent.click(screen.getByTestId("ai-context-ref"));
     expect(screen.getByTestId("ai-context-adjuster")).toBeInTheDocument();
@@ -294,7 +303,7 @@ describe("AiSidebar", () => {
       pagination: { limit: 100, offset: 0, total: 1 },
     });
 
-    render(<AiSidebar />);
+    renderSidebar();
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
     await waitFor(() =>
       expect(screen.getByTestId("ai-msg-user")).toHaveTextContent("hello"),

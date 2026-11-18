@@ -1,10 +1,43 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { useEffect, type ReactNode } from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import {
+  AiAssistProvider,
+  useAiAssist,
+  type OpenWithAssistInput,
+} from "@/components/ai-sidebar/ai-assist-context";
 import { MyCareerCenter, type MyCareerLabels } from "./my-career-center";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 
+function AssistSpy({
+  onOpen,
+  children,
+}: {
+  onOpen: (input: OpenWithAssistInput) => void;
+  children: ReactNode;
+}) {
+  const { registerOpenHandler } = useAiAssist();
+  useEffect(() => registerOpenHandler(onOpen), [registerOpenHandler, onOpen]);
+  return <>{children}</>;
+}
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
+}));
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => {
+    const map: Record<string, string> = {
+      aiUnavailableShort: "AIオフ",
+      applyDraftOnly: "未保存です",
+      applyToDraft: "この内容を使用",
+    };
+    return map[key] ?? key;
+  },
+}));
+
+vi.mock("@/components/ai-sidebar/ai-api", () => ({
+  fetchAiStatus: vi.fn(async () => ({ enabled: true, provider: "mock" })),
 }));
 
 vi.mock("@/components/profile-page-form", () => ({
@@ -139,9 +172,14 @@ const emptySnapshot: ExportSnapshot = {
   selfStudyLinks: [],
 };
 
+
+function renderCareer(ui: ReactNode) {
+  return render(<AiAssistProvider>{ui}</AiAssistProvider>);
+}
+
 describe("MyCareerCenter", () => {
   it("renders six module nav plus export", () => {
-    render(
+    renderCareer(
       <MyCareerCenter
         labels={labels}
         profileForm={{
@@ -272,7 +310,7 @@ describe("MyCareerCenter", () => {
   });
 
   it("opens 書類出力 with Word/PDF downloads and no print button", () => {
-    render(
+    renderCareer(
       <MyCareerCenter
         labels={labels}
         profileForm={{
@@ -559,7 +597,7 @@ describe("MyCareerCenter", () => {
       exportSnapshot: emptySnapshot,
     };
 
-    render(<MyCareerCenter {...baseProps} />);
+    renderCareer(<MyCareerCenter {...baseProps} />);
 
     fireEvent.click(screen.getByRole("button", { name: /タイムライン/ }));
     const cluster = document.querySelector(".mc-tl-cluster");
@@ -580,5 +618,192 @@ describe("MyCareerCenter", () => {
     expect(screen.queryByDisplayValue("作品A")).toBeNull();
     fireEvent.click(screen.getByText("概要"));
     expect(screen.getByDisplayValue("作品A")).toBeInTheDocument();
+  });
+
+  it("exposes AI refine entry points with draft priority and employer target", async () => {
+    const openSpy = vi.fn();
+    const baseProps = {
+      labels,
+      profileForm: {
+        initial: {
+          fullName: { ja: "山田" },
+          fullNameKana: "",
+          birthDate: "",
+          age: null,
+          gender: {},
+          postalCode: "",
+          dateFormat: "wareki" as const,
+          address: {},
+          addressKana: "",
+          phone: "",
+          email: "",
+          altContact: {},
+          nearestStation: "",
+          commuteHours: "",
+          commuteMinutes: "",
+          dependentsCount: "",
+          hasSpouse: "" as const,
+          spouseDependent: "" as const,
+          education: [],
+          licenses: [],
+          storageReady: false,
+          hasPhoto: false,
+        },
+        labels: {
+          edit: "編集",
+          save: "s",
+          addRow: "a",
+          removeRow: "r",
+          savedMessage: "ok",
+          errorMessages: {
+            unauthenticated: "",
+            fullNameRequired: "",
+            invalidEmail: "",
+            invalidDateFormat: "",
+            saveFailed: "",
+          },
+          sections: { basic: "", education: "", licenses: "" },
+          basic: {
+            fullName: "",
+            fullNameKana: "",
+            birthDate: "",
+            ageSuffix: "",
+            gender: "",
+            postalCode: "",
+            dateFormat: "",
+            dateFormatWareki: "",
+            dateFormatSeireki: "",
+            address: "",
+            addressKana: "",
+            phone: "",
+            email: "",
+            altContact: "",
+            nearestStation: "",
+            commuteTime: "",
+            commuteHours: "",
+            commuteMinutes: "",
+            commuteApprox: "",
+            dependentsCount: "",
+            dependentsUnit: "",
+            hasSpouse: "",
+            spouseDependent: "",
+            yesNoYes: "",
+            yesNoNo: "",
+            photo: "",
+            photoAlt: "",
+            postalLookupHint: "",
+            postalLookingUp: "",
+            postalNotFound: "",
+            postalLookupFailed: "",
+            postalLineRemainderHint: "",
+          },
+          japaneseHint: "",
+          education: { empty: "", school: "", event: "", yearMonth: "" },
+          licenses: { empty: "", name: "", yearMonth: "" },
+          events: {
+            education: {
+              enrolled: "",
+              graduated: "",
+              withdrawn: "",
+              completed: "",
+            },
+          },
+        },
+      },
+      extras: {
+        headline: "",
+        directionTags: "",
+        selfPrJa: "旧PR",
+        jobSummaryJa: "旧要約",
+        strengthsText: "",
+        languages: [],
+        nationality: "",
+        residenceStatus: "",
+        residenceUntil: "",
+        salaryAnnualMan: "",
+        salaryMonthlyMan: "",
+        salaryHope: "",
+        personalHopeJa: "",
+      },
+      employers: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          companyNameJa: "テスト会社",
+          title: "",
+          startYm: "2020-01",
+          endYm: "",
+          capitalText: "",
+          revenueText: "",
+          employeesText: "",
+          narrativeJa: "叙述草稿",
+        },
+      ],
+      projects: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          titleJa: "作品A",
+          titleUrl: "",
+          startYm: "2021-01",
+          endYm: "",
+          overviewJa: "概要草稿",
+          phasesJa: "",
+          responsibilitiesJa: "",
+          resultsJa: "",
+          environment: "",
+          roleText: "",
+          scaleText: "",
+          teamSizeText: "",
+          status: "confirmed" as const,
+        },
+      ],
+      skills: [],
+      licenses: [],
+      goals: [],
+      timeline: [],
+      exportSnapshot: emptySnapshot,
+    };
+
+    render(
+      <AiAssistProvider>
+        <AssistSpy onOpen={openSpy}>
+          <MyCareerCenter {...baseProps} />
+        </AssistSpy>
+      </AiAssistProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^編集$/ }));
+    expect(screen.getByTestId("ai-refine-selfPr_ja")).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("mc-self-pr-input"), {
+      target: { value: "未保存PR" },
+    });
+    fireEvent.click(screen.getByTestId("ai-refine-selfPr_ja"));
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    expect(openSpy.mock.calls[0][0].draftText).toBe("未保存PR");
+    expect(openSpy.mock.calls[0][0].target).toEqual({
+      type: "profile",
+      section: "self_pr",
+    });
+
+    openSpy.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /職歴/ }));
+    fireEvent.click(screen.getByText("テスト会社"));
+    fireEvent.click(screen.getByTestId("ai-refine-narrative_ja"));
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    expect(openSpy.mock.calls[0][0].target).toEqual({
+      type: "career_employer",
+      id: "11111111-1111-4111-8111-111111111111",
+    });
+
+    openSpy.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /プロジェクト/ }));
+    fireEvent.click(screen.getByRole("button", { name: labels.add }));
+    fireEvent.change(screen.getByTestId("mc-project-overview-input"), {
+      target: { value: "新規概要" },
+    });
+    fireEvent.click(screen.getByTestId("ai-refine-overview_ja"));
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    expect(openSpy.mock.calls[0][0].target).toBeNull();
+    expect(openSpy.mock.calls[0][0].limitedContext).toBe(true);
+    expect(openSpy.mock.calls[0][0].draftText).toBe("新規概要");
   });
 });

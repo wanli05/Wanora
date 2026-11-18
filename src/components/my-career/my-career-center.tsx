@@ -9,6 +9,9 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { AiRefineButton } from "@/components/ai-sidebar/ai-refine-button";
+import { useAiAssistOptional } from "@/components/ai-sidebar/ai-assist-context";
 import {
   ProfilePageForm,
   type ProfilePageFormLabels,
@@ -211,9 +214,23 @@ export function MyCareerCenter(props: Props) {
   const [exportDoc, setExportDoc] = useState<"rirekisho" | "shokumu">(
     "rirekisho",
   );
+  const assist = useAiAssistOptional();
+  const tAi = useTranslations("AiSidebar");
 
   return (
     <div className="mc-shell">
+      {assist?.bridgeError === "ai_unavailable" ? (
+        <p className="mc-banner" data-testid="ai-bridge-unavailable" role="alert">
+          {tAi("aiUnavailableShort")}
+          <button
+            type="button"
+            className="mc-btn mc-btn-ghost"
+            onClick={() => assist.clearBridgeError()}
+          >
+            {props.labels.cancel}
+          </button>
+        </p>
+      ) : null}
       <div className="mc-layout">
         <aside className="mc-side mc-no-print">
           <h2>My Career</h2>
@@ -311,6 +328,10 @@ function ProfileModule({
   const wasPending = useRef(false);
   const [langs, setLangs] = useState(extras.languages);
   const [nationality, setNationality] = useState(extras.nationality);
+  const [selfPrJa, setSelfPrJa] = useState(extras.selfPrJa);
+  const [jobSummaryJa, setJobSummaryJa] = useState(extras.jobSummaryJa);
+  const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const tAi = useTranslations("AiSidebar");
   const japanese = isJapaneseNationality(nationality);
   const recentGroups = useMemo(
     () => groupCareerTimelineByAt(timeline).slice(0, 4),
@@ -320,6 +341,7 @@ function ProfileModule({
   useEffect(() => {
     if (wasPending.current && !pending && state.ok) {
       setEditing(false);
+      setDraftDirtyHint(null);
       router.refresh();
     }
     wasPending.current = pending;
@@ -362,6 +384,9 @@ function ProfileModule({
             onClick={() => {
               setLangs(extras.languages);
               setNationality(extras.nationality);
+              setSelfPrJa(extras.selfPrJa);
+              setJobSummaryJa(extras.jobSummaryJa);
+              setDraftDirtyHint(null);
               setEditing(true);
             }}
           >
@@ -492,21 +517,58 @@ function ProfileModule({
               />
             </label>
             <label className="mc-field">
-              {labels.fields.selfPr}
+              <span className="flex items-center justify-between gap-2">
+                {labels.fields.selfPr}
+                <AiRefineButton
+                  fieldKey="selfPr_ja"
+                  draftText={selfPrJa}
+                  getCurrentDraft={() => selfPrJa}
+                  onApplyToDraft={(text) => {
+                    setSelfPrJa(text);
+                    setDraftDirtyHint(tAi("applyDraftOnly"));
+                  }}
+                />
+              </span>
               <textarea
                 name="selfPr_ja"
                 rows={4}
-                defaultValue={extras.selfPrJa}
+                value={selfPrJa}
+                data-testid="mc-self-pr-input"
+                onChange={(e) => {
+                  setSelfPrJa(e.target.value);
+                  setDraftDirtyHint(null);
+                }}
               />
             </label>
             <label className="mc-field">
-              {labels.fields.jobSummary}
+              <span className="flex items-center justify-between gap-2">
+                {labels.fields.jobSummary}
+                <AiRefineButton
+                  fieldKey="jobSummary_ja"
+                  draftText={jobSummaryJa}
+                  getCurrentDraft={() => jobSummaryJa}
+                  onApplyToDraft={(text) => {
+                    setJobSummaryJa(text);
+                    setDraftDirtyHint(tAi("applyDraftOnly"));
+                  }}
+                />
+              </span>
               <textarea
                 name="jobSummary_ja"
                 rows={4}
-                defaultValue={extras.jobSummaryJa}
+                value={jobSummaryJa}
+                data-testid="mc-job-summary-input"
+                onChange={(e) => {
+                  setJobSummaryJa(e.target.value);
+                  setDraftDirtyHint(null);
+                }}
               />
             </label>
+            {draftDirtyHint ? (
+              <p className="text-sm text-amber-800" data-testid="mc-ai-draft-hint">
+                {draftDirtyHint}
+              </p>
+            ) : null}
             <label className="mc-field">
               {labels.fields.strengths}
               <textarea
@@ -702,6 +764,8 @@ function WorkModule({
 }) {
   const [state, action, pending] = useActionState(saveCareerEmployerAction, {});
   const [editing, setEditing] = useState<CareerEmployerDto | null>(null);
+  const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const tAi = useTranslations("AiSidebar");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -833,13 +897,36 @@ function WorkModule({
             <input name="employeesText" defaultValue={editing.employeesText} />
           </label>
           <label className="mc-field">
-            叙述
+            <span className="flex items-center justify-between gap-2">
+              叙述
+              <AiRefineButton
+                fieldKey="narrative_ja"
+                draftText={editing.narrativeJa}
+                recordId={editing.id || null}
+                testId="ai-refine-narrative_ja"
+                getCurrentDraft={() => editing.narrativeJa}
+                onApplyToDraft={(text) => {
+                  setEditing({ ...editing, narrativeJa: text });
+                  setDraftDirtyHint(tAi("applyDraftOnly"));
+                }}
+              />
+            </span>
             <textarea
               name="narrative_ja"
               rows={3}
-              defaultValue={editing.narrativeJa}
+              value={editing.narrativeJa}
+              data-testid="mc-employer-narrative-input"
+              onChange={(e) => {
+                setEditing({ ...editing, narrativeJa: e.target.value });
+                setDraftDirtyHint(null);
+              }}
             />
           </label>
+          {draftDirtyHint ? (
+            <p className="text-sm text-amber-800" data-testid="mc-ai-draft-hint">
+              {draftDirtyHint}
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <button className="mc-btn" type="submit" disabled={pending}>
               {labels.save}
@@ -847,7 +934,10 @@ function WorkModule({
             <button
               type="button"
               className="mc-btn mc-btn-ghost"
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                setEditing(null);
+                setDraftDirtyHint(null);
+              }}
             >
               閉じる
             </button>
@@ -868,6 +958,8 @@ function ProjectsModule({
 }) {
   const [state, action, pending] = useActionState(saveCareerProjectAction, {});
   const [editing, setEditing] = useState<CareerProjectDto | null>(null);
+  const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const tAi = useTranslations("AiSidebar");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -1020,13 +1112,36 @@ function ProjectsModule({
             </select>
           </label>
           <label className="mc-field">
-            概要
+            <span className="flex items-center justify-between gap-2">
+              概要
+              <AiRefineButton
+                fieldKey="overview_ja"
+                draftText={editing.overviewJa}
+                recordId={editing.id || null}
+                testId="ai-refine-overview_ja"
+                getCurrentDraft={() => editing.overviewJa}
+                onApplyToDraft={(text) => {
+                  setEditing({ ...editing, overviewJa: text });
+                  setDraftDirtyHint(tAi("applyDraftOnly"));
+                }}
+              />
+            </span>
             <textarea
               name="overview_ja"
               rows={3}
-              defaultValue={editing.overviewJa}
+              value={editing.overviewJa}
+              data-testid="mc-project-overview-input"
+              onChange={(e) => {
+                setEditing({ ...editing, overviewJa: e.target.value });
+                setDraftDirtyHint(null);
+              }}
             />
           </label>
+          {draftDirtyHint ? (
+            <p className="text-sm text-amber-800" data-testid="mc-ai-draft-hint">
+              {draftDirtyHint}
+            </p>
+          ) : null}
           <label className="mc-field">
             担当フェーズ
             <textarea name="phases_ja" rows={2} defaultValue={editing.phasesJa} />
@@ -1074,7 +1189,10 @@ function ProjectsModule({
             <button
               type="button"
               className="mc-btn mc-btn-ghost"
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                setEditing(null);
+                setDraftDirtyHint(null);
+              }}
             >
               閉じる
             </button>
