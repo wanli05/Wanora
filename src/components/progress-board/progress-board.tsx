@@ -837,6 +837,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       )}
         </>
       )}
+      </div>
 
       {addingApp ? (
         <Modal title={t("addApplication")} closeLabel={t("cancel")} onClose={() => setAddingApp(false)}>
@@ -994,7 +995,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             type="button"
             data-testid="feedback-backdrop"
             aria-label={t("cancel")}
-            className="fixed inset-0 z-30 bg-black/30"
+            className="fixed inset-0 z-[70] bg-black/30"
             onClick={() => {
               setFeedbackFor(null);
               setConflictMsg(null);
@@ -1005,7 +1006,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             aria-modal="true"
             aria-label={t("feedbackTitle")}
             data-testid="feedback-panel"
-            className="fixed inset-x-4 top-16 z-40 mx-auto max-h-[85vh] max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:inset-x-auto md:right-8"
+            className="fixed inset-x-4 top-20 z-[80] mx-auto max-h-[85vh] max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950 md:inset-x-auto md:right-8"
           >
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
@@ -1126,7 +1127,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           </div>
         </>
       ) : null}
-      </div>
     </div>
   );
 }
@@ -1590,6 +1590,23 @@ function FeedbackForm({
     }
     return [{ question: "", answer: "", tag: "" }];
   });
+  /** Indices [0, lockedCount) are committed read-only blocks after 「質問を追加」. */
+  const [lockedCount, setLockedCount] = useState(0);
+  const [qaAddError, setQaAddError] = useState<string | null>(null);
+
+  function addQaBlock() {
+    const last = qaItems[qaItems.length - 1];
+    const hasContent = Boolean(
+      last?.question?.trim() || last?.answer?.trim(),
+    );
+    if (!hasContent) {
+      setQaAddError(t("feedbackQaAddNeedContent"));
+      return;
+    }
+    setQaAddError(null);
+    setLockedCount(qaItems.length);
+    setQaItems((rows) => [...rows, { question: "", answer: "", tag: "" }]);
+  }
 
   return (
     <form
@@ -1669,19 +1686,35 @@ function FeedbackForm({
         {t("feedbackQaHeading")}
       </h3>
       <div data-testid="feedback-qa-list">
-        {qaItems.map((item, index) => (
-          <div key={index} className="pb-qa" data-testid={`feedback-qa-${index}`}>
+        {qaItems.map((item, index) => {
+          const locked = index < lockedCount;
+          return (
+          <div
+            key={index}
+            className="pb-qa"
+            data-testid={`feedback-qa-${index}`}
+            data-locked={locked ? "true" : "false"}
+          >
             <div className="mb-2 flex items-center justify-between gap-2">
               <strong className="text-sm text-[var(--pb-teal-deep)]">
                 {t("feedbackQaQuestionN", { n: String(index + 1).padStart(2, "0") })}
+                {locked ? (
+                  <span className="ml-2 text-[11px] font-medium text-[var(--pb-muted)]">
+                    {t("feedbackQaLocked")}
+                  </span>
+                ) : null}
               </strong>
               {qaItems.length > 1 ? (
                 <button
                   type="button"
                   className="text-xs text-[var(--pb-red)]"
-                  onClick={() =>
-                    setQaItems((rows) => rows.filter((_, i) => i !== index))
-                  }
+                  onClick={() => {
+                    setQaItems((rows) => rows.filter((_, i) => i !== index));
+                    setLockedCount((count) =>
+                      index < count ? Math.max(0, count - 1) : count,
+                    );
+                    setQaAddError(null);
+                  }}
                 >
                   {t("feedbackQaRemove")}
                 </button>
@@ -1689,9 +1722,13 @@ function FeedbackForm({
             </div>
             <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
               {t("feedbackQaTag")}
+              <span className="font-normal text-[10px] leading-snug text-[var(--pb-muted)]">
+                {t("feedbackQaTagHint")}
+              </span>
               <input
                 lang="ja"
                 value={item.tag ?? ""}
+                readOnly={locked}
                 onChange={(event) =>
                   setQaItems((rows) =>
                     rows.map((row, i) =>
@@ -1699,7 +1736,9 @@ function FeedbackForm({
                     ),
                   )
                 }
-                className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
+                className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
+                  locked ? "bg-[var(--pb-teal-soft)]/50" : ""
+                }`}
               />
             </label>
             <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
@@ -1708,6 +1747,7 @@ function FeedbackForm({
                 lang="ja"
                 rows={2}
                 value={item.question ?? ""}
+                readOnly={locked}
                 onChange={(event) =>
                   setQaItems((rows) =>
                     rows.map((row, i) =>
@@ -1715,7 +1755,9 @@ function FeedbackForm({
                     ),
                   )
                 }
-                className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
+                className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
+                  locked ? "bg-[var(--pb-teal-soft)]/50" : ""
+                }`}
               />
             </label>
             <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
@@ -1724,6 +1766,7 @@ function FeedbackForm({
                 lang="ja"
                 rows={2}
                 value={item.answer ?? ""}
+                readOnly={locked}
                 onChange={(event) =>
                   setQaItems((rows) =>
                     rows.map((row, i) =>
@@ -1731,19 +1774,25 @@ function FeedbackForm({
                     ),
                   )
                 }
-                className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
+                className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
+                  locked ? "bg-[var(--pb-teal-soft)]/50" : ""
+                }`}
               />
             </label>
           </div>
-        ))}
+          );
+        })}
       </div>
+      {qaAddError ? (
+        <p role="alert" className="text-sm text-red-700" data-testid="feedback-qa-add-error">
+          {qaAddError}
+        </p>
+      ) : null}
       <button
         type="button"
         data-testid="feedback-qa-add"
         className="w-full rounded-full border border-dashed border-[#b9cfc7] bg-[var(--pb-teal-soft)] px-3 py-2 text-sm font-semibold text-[var(--pb-teal-deep)]"
-        onClick={() =>
-          setQaItems((rows) => [...rows, { question: "", answer: "", tag: "" }])
-        }
+        onClick={addQaBlock}
       >
         {t("feedbackQaAdd")}
       </button>
