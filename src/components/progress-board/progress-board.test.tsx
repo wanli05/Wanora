@@ -91,6 +91,26 @@ describe("ProgressBoard", () => {
     expect(screen.queryByRole("button", { name: "辞退" })).not.toBeInTheDocument();
   });
 
+  it("keeps the card ⋯ menu open through the opening click (no same-tick document close)", async () => {
+    vi.useFakeTimers();
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "interview_1" }))}
+      />,
+      "zh-CN",
+    );
+    fireEvent.click(screen.getByTestId("card-menu-app-1"));
+    expect(screen.getByTestId("card-menu-panel-app-1")).toBeInTheDocument();
+    // Flush deferred outside-click listener attachment from the opening click.
+    await vi.runAllTimersAsync();
+    expect(screen.getByTestId("card-menu-panel-app-1")).toBeInTheDocument();
+    expect(screen.getByTestId("card-app-1")).toHaveAttribute("data-menu-open", "true");
+    // A later outside click should close it.
+    fireEvent.click(document.body);
+    expect(screen.queryByTestId("card-menu-panel-app-1")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it("hides the info-session column until an in-progress card is in it", () => {
     const { unmount } = renderWithIntl(
       <ProgressBoard

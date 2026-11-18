@@ -152,13 +152,33 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Outside-click closes the card ⋯ menu. Attach only while open, and defer
+  // so the same opening click cannot immediately clear menuAppId (that race
+  // made the menu look dead in the browser even though tests with fireEvent passed).
   useEffect(() => {
-    function onDocClick() {
+    if (!menuAppId) return;
+    function onDocClick(event: Event) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        setMenuAppId(null);
+        return;
+      }
+      if (
+        target.closest(`[data-testid="card-menu-${menuAppId}"]`) ||
+        target.closest(`[data-testid="card-menu-panel-${menuAppId}"]`)
+      ) {
+        return;
+      }
       setMenuAppId(null);
     }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
+    const timer = window.setTimeout(() => {
+      document.addEventListener("click", onDocClick);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("click", onDocClick);
+    };
+  }, [menuAppId]);
 
   const platformLabel = (code: string | null, name: string | null) =>
     code ? tp(code as Parameters<typeof tp>[0]) : (name ?? "");
@@ -1844,6 +1864,7 @@ function ApplicationCard({
       data-testid={`card-${app.id}`}
       data-pulse={pulse ? "true" : "false"}
       data-conflict={app.conflict ? "true" : "false"}
+      data-menu-open={menuOpen ? "true" : "false"}
       className="pb-card"
     >
       <div className="flex items-start justify-between gap-2">

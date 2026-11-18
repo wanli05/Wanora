@@ -1114,6 +1114,7 @@ body {
   padding: 8px;
   min-height: 28rem;
   min-width: 0;
+  overflow: visible;
 }
 .pb-col[data-occupied="false"] {
   opacity: 0.6;
@@ -1125,6 +1126,7 @@ body {
   padding: 12px;
   margin-bottom: 8px;
   position: relative;
+  overflow: visible;
   transition: box-shadow 0.15s, outline 0.15s;
 }
 .pb-card[data-pulse="true"] {
@@ -1134,11 +1136,14 @@ body {
 .pb-card[data-conflict="true"] {
   border-left: 4px solid var(--pb-red);
 }
+.pb-card[data-menu-open="true"] {
+  z-index: 40;
+}
 .pb-menu {
   position: absolute;
   top: 34px;
   right: 8px;
-  z-index: 20;
+  z-index: 50;
   background: var(--pb-card);
   border: 1px solid var(--pb-line);
   border-radius: 10px;
