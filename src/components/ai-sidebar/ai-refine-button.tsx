@@ -9,12 +9,14 @@ import {
 
 type Props = {
   fieldKey: RefineFieldKey;
-  /** Latest draft text at click time. */
+  /** Latest draft text at click time (snapshot seed). */
   draftText: string;
   /** Saved row id when available; omit / empty for unsaved new rows. */
   recordId?: string | null;
+  /** Live draft reader — must not close over stale render consts. */
   getCurrentDraft: () => string;
-  onApplyToDraft: (refined: string) => void;
+  /** Returns false when binding is stale / unmounted. */
+  onApplyToDraft: (refined: string) => boolean;
   label?: string;
   disabled?: boolean;
   testId?: string;
@@ -46,12 +48,15 @@ export function AiRefineButton({
       onClick={() => {
         const id = recordId?.trim() || null;
         const target = targetForRefineField(fieldKey, id);
-        const limitedContext = target == null && (fieldKey === "narrative_ja" || fieldKey === "overview_ja");
+        const limitedContext =
+          target == null &&
+          (fieldKey === "narrative_ja" || fieldKey === "overview_ja");
         void assist.openWithAssist({
           target,
           draftText,
           feature: refineFeatureForField(fieldKey),
           fieldKey,
+          recordId: id,
           draftSnapshot: draftText,
           limitedContext,
           getCurrentDraft,

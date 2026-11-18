@@ -44,12 +44,16 @@ type AssistSession = {
   fieldKey: RefineFieldKey;
   feature: RefineFeature;
   target: AiTargetContext | null;
+  recordId: string | null;
   draftSnapshot: string;
   getCurrentDraft: () => string;
-  onApplyToDraft: (refined: string) => void;
+  /** Returns false when binding is stale / unmounted. */
+  onApplyToDraft: (refined: string) => boolean;
   limitedContext?: boolean;
   clientRequestId?: string;
   applyMessageId?: string | null;
+  /** When true, chat may remain but form write-back is disabled. */
+  applyRevoked?: boolean;
 };
 
 export function AiSidebar() {
@@ -58,7 +62,7 @@ export function AiSidebar() {
   const titleId = useId();
   const adjusterId = useId();
   const pageContext = pageContextFromPath(pathname);
-  const { registerOpenHandler } = useAiAssist();
+  const { registerOpenHandler, registerInvalidateHandler } = useAiAssist();
   const [open, setOpen] = useState(false);
   /** Optional field focus; default null so chat can start without picking a Target. */
   const [targetContext, setTargetContext] = useState<AiTargetContext | null>(
@@ -225,6 +229,38 @@ export function AiSidebar() {
     [],
   );
 
+  const revokeAssistApply = useCallback(() => {
+    assistTargetLockRef.current = undefined;
+    setAssistSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            applyMessageId: null,
+            applyRevoked: true,
+            getCurrentDraft: () => "",
+            onApplyToDraft: () => false,
+          }
+        : null,
+    );
+    setApplyNotice(null);
+  }, []);
+
+  useEffect(() => {
+    return registerInvalidateHandler(revokeAssistApply);
+  }, [registerInvalidateHandler, revokeAssistApply]);
+
+  // Leaving My Career must drop form write-back; conversation messages may stay.
+  const prevPathRef = useRef(pathname);
+  useEffect(() => {
+    const prev = prevPathRef.current;
+    prevPathRef.current = pathname;
+    const wasCareer = pageContextFromPath(prev).area === "my_career";
+    const isCareer = pageContextFromPath(pathname).area === "my_career";
+    if (wasCareer && !isCareer) {
+      revokeAssistApply();
+    }
+  }, [pathname, revokeAssistApply]);
+
   useEffect(() => {
     return registerOpenHandler((input: OpenWithAssistInput) => {
       const requestId = crypto.randomUUID();
@@ -248,11 +284,13 @@ export function AiSidebar() {
         fieldKey: input.fieldKey,
         feature: input.feature,
         target: input.target,
+        recordId: input.recordId ?? null,
         draftSnapshot: input.draftSnapshot,
         getCurrentDraft: input.getCurrentDraft,
         onApplyToDraft: input.onApplyToDraft,
         limitedContext: input.limitedContext,
         applyMessageId: null,
+        applyRevoked: false,
       });
       queueMicrotask(() => composerRef.current?.focus());
     });
@@ -307,12 +345,13 @@ export function AiSidebar() {
     const clientRequestId = crypto.randomUUID();
     const sendTarget = assistSession?.target ?? targetContext;
     const sendFeature = assistSession?.feature;
+    // Keep draftSnapshot from assist-open time so form edits after open
+    // still trigger overwrite confirm (do not re-baseline on send).
     setAssistSession((prev) =>
       prev
         ? {
             ...prev,
             clientRequestId,
-            draftSnapshot: prev.getCurrentDraft(),
             applyMessageId: null,
           }
         : null,
@@ -446,18 +485,30 @@ export function AiSidebar() {
   }
 
   function applyAssistantToDraft(message: AiMessageDto) {
-    if (!assistSession || assistSession.applyMessageId !== message.id) return;
+    if (
+      !assistSession ||
+      assistSession.applyRevoked ||
+      assistSession.applyMessageId !== message.id
+    ) {
+      return;
+    }
     const refined = extractRefinedText(message.content);
     if (!refined) {
       setApplyNotice(t("applyExtractFailed"));
       return;
     }
+    // Conflict check against the live draft (ref-backed), not click-time state.
     const current = assistSession.getCurrentDraft();
     if (current !== assistSession.draftSnapshot) {
       const ok = window.confirm(t("applyOverwriteConfirm"));
       if (!ok) return;
     }
-    assistSession.onApplyToDraft(refined);
+    const applied = assistSession.onApplyToDraft(refined);
+    if (!applied) {
+      setApplyNotice(t("applyRejectedStale"));
+      revokeAssistApply();
+      return;
+    }
     setApplyNotice(t("applyDraftOnly"));
   }
 
@@ -597,13 +648,17 @@ export function AiSidebar() {
             <p className="ai-sidebar-empty">{t("emptyMessages")}</p>
           ) : (
             messages.map((m) => {
+              const applyArmed =
+                !!assistSession &&
+                !assistSession.applyRevoked &&
+                assistSession.applyMessageId === m.id;
               const canApply =
                 m.role === "assistant" &&
-                assistSession?.applyMessageId === m.id &&
+                applyArmed &&
                 extractRefinedText(m.content) != null;
               const copyOnly =
                 m.role === "assistant" &&
-                assistSession?.applyMessageId === m.id &&
+                applyArmed &&
                 extractRefinedText(m.content) == null;
               return (
                 <div

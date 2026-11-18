@@ -21,22 +21,32 @@ export type OpenWithAssistInput = {
   draftText: string;
   feature: RefineFeature;
   fieldKey: RefineFieldKey;
+  /** Bound record id when applicable; null for unsaved new rows; omit for profile fields. */
+  recordId?: string | null;
   promptSeed?: string;
   /** True when Target could not be pinned (e.g. unsaved new row). */
   limitedContext?: boolean;
   /** Snapshot of draft at assist open / send time for conflict checks. */
   draftSnapshot: string;
+  /** Must read the live draft (typically via a synced ref). */
   getCurrentDraft: () => string;
-  onApplyToDraft: (refined: string) => void;
+  /**
+   * Apply refined text to the bound draft.
+   * Must validate mount / record / field before mutating; return false if rejected.
+   */
+  onApplyToDraft: (refined: string) => boolean;
 };
 
 export type AiAssistBridgeError = "ai_unavailable" | null;
 
 type AiAssistContextValue = {
   openWithAssist: (input: OpenWithAssistInput) => Promise<void>;
+  /** Clear Apply write-back rights; chat history may remain. */
+  invalidateAssistApply: () => void;
   registerOpenHandler: (
     handler: (input: OpenWithAssistInput) => void,
   ) => () => void;
+  registerInvalidateHandler: (handler: () => void) => () => void;
   bridgeError: AiAssistBridgeError;
   clearBridgeError: () => void;
 };
@@ -47,6 +57,7 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
   const handlerRef = useRef<((input: OpenWithAssistInput) => void) | null>(
     null,
   );
+  const invalidateHandlerRef = useRef<(() => void) | null>(null);
   const [bridgeError, setBridgeError] = useState<AiAssistBridgeError>(null);
 
   const clearBridgeError = useCallback(() => setBridgeError(null), []);
@@ -61,6 +72,19 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const registerInvalidateHandler = useCallback((handler: () => void) => {
+    invalidateHandlerRef.current = handler;
+    return () => {
+      if (invalidateHandlerRef.current === handler) {
+        invalidateHandlerRef.current = null;
+      }
+    };
+  }, []);
+
+  const invalidateAssistApply = useCallback(() => {
+    invalidateHandlerRef.current?.();
+  }, []);
+
   const openWithAssist = useCallback(async (input: OpenWithAssistInput) => {
     const status = await fetchAiStatus();
     if (!status.enabled || !handlerRef.current) {
@@ -74,11 +98,20 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       openWithAssist,
+      invalidateAssistApply,
       registerOpenHandler,
+      registerInvalidateHandler,
       bridgeError,
       clearBridgeError,
     }),
-    [openWithAssist, registerOpenHandler, bridgeError, clearBridgeError],
+    [
+      openWithAssist,
+      invalidateAssistApply,
+      registerOpenHandler,
+      registerInvalidateHandler,
+      bridgeError,
+      clearBridgeError,
+    ],
   );
 
   return (

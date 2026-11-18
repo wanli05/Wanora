@@ -112,7 +112,7 @@ function Harness({
   onApply,
   draftRef,
 }: {
-  onApply: (text: string) => void;
+  onApply: (text: string) => boolean;
   draftRef: { current: string };
 }) {
   const { openWithAssist } = useAiAssist();
@@ -147,6 +147,7 @@ function Harness({
             draftText: "就業先叙述草稿",
             feature: "career_employer_narrative_refine",
             fieldKey: "narrative_ja",
+            recordId: "11111111-1111-4111-8111-111111111111",
             draftSnapshot: "就業先叙述草稿",
             getCurrentDraft: () => "就業先叙述草稿",
             onApplyToDraft: onApply,
@@ -164,6 +165,7 @@ function Harness({
             draftText: "新規概要",
             feature: "career_project_refine",
             fieldKey: "overview_ja",
+            recordId: null,
             draftSnapshot: "新規概要",
             limitedContext: true,
             getCurrentDraft: () => "新規概要",
@@ -180,12 +182,13 @@ function Harness({
 
 describe("AI assist bridge + apply-to-draft", () => {
   const draftRef = { current: "未保存の自己PR" };
-  const onApply = vi.fn();
+  const onApply = vi.fn(() => true);
 
   beforeEach(() => {
     pathnameRef.current = "/ja/profile";
     draftRef.current = "未保存の自己PR";
     onApply.mockReset();
+    onApply.mockImplementation(() => true);
     api.fetchAiStatus.mockResolvedValue({ enabled: true, provider: "mock" });
     api.listConversations.mockResolvedValue({
       conversations: [],

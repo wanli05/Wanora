@@ -446,6 +446,7 @@
     "applyDraftOnly": "編集欄に反映しました（まだ保存されていません）",
     "applyOverwriteConfirm": "編集中の文が変わっています。AIの修正案で上書きしますか？",
     "applyExtractFailed": "修正本文を特定できないため、必要なら手動でコピーしてください",
+    "applyRejectedStale": "編集対象が変わったため、この修正案は反映できません",
     "aiUnavailableShort": "AIは現在利用できません",
     "selectConversation": "会話を選択",
     "untitled": "無題の会話",
