@@ -113,7 +113,12 @@ describe("interview feedbacks", () => {
 
     await deleteInterviewFeedback(db, userId, second.id);
     const afterDelete = await loadBoard(db, userId);
-    expect(afterDelete.applications[0]?.stageInterviews[0]?.feedbacks).toHaveLength(2);
+    const remaining = afterDelete.applications[0]?.stageInterviews[0]?.feedbacks ?? [];
+    // Created 4 rows (legacy + structured + qaItems); deleting `second` leaves 3.
+    expect(remaining).toHaveLength(3);
+    expect(remaining.map((item) => item.id).sort()).toEqual(
+      [first.id, structured.id, multiQa.id].sort(),
+    );
   });
 
   it("keeps feedbacks editable after rejecting a stage with a scheduled interview", async () => {
