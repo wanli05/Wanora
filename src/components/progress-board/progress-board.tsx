@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type MouseEvent,
@@ -215,7 +216,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     );
   }).length;
 
-  async function refreshFrom(payload: BoardPayload) {
+  async function refreshFrom(
+    payload: BoardPayload,
+    opts?: { attachLatestFeedback?: boolean },
+  ) {
     setBoard(payload);
     setEditingApp((current) => {
       if (!current) return current;
@@ -228,9 +232,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         (item) => item.id === current.interview.id,
       );
       if (!app || !interview) return null;
-      const editing = current.editing
+      let editing = current.editing
         ? (interview.feedbacks.find((item) => item.id === current.editing?.id) ?? null)
         : null;
+      // After first create, keep the panel bound to the new feedback row.
+      if (!editing && opts?.attachLatestFeedback && interview.feedbacks.length > 0) {
+        editing = interview.feedbacks[interview.feedbacks.length - 1] ?? null;
+      }
       return {
         appId: app.id,
         company: app.company,
@@ -367,21 +375,22 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     );
   }
 
-  async function onSaveFeedback(
-    event: FormEvent<HTMLFormElement>,
+  async function persistFeedback(
+    form: HTMLFormElement,
     qaItems: BoardFeedbackQaItem[],
-  ) {
-    event.preventDefault();
-    if (!feedbackFor) return;
-    const form = new FormData(event.currentTarget);
-    const body = String(form.get("body") || "").trim() || null;
-    const resultText = String(form.get("resultText") || "").trim() || null;
-    const reflection = String(form.get("reflection") || "").trim() || null;
+    opts: { close: boolean },
+  ): Promise<boolean> {
+    if (!feedbackFor) return false;
+    const data = new FormData(form);
+    const body = String(data.get("body") || "").trim() || null;
+    const resultText = String(data.get("resultText") || "").trim() || null;
+    const reflection = String(data.get("reflection") || "").trim() || null;
     const hasQa = qaItems.some((item) => item.question || item.answer);
     if (!body && !resultText && !reflection && !hasQa) {
       setConflictMsg(t("feedbackBodyRequired"));
-      return;
+      return false;
     }
+    const creating = !feedbackFor.editing?.id;
     try {
       const payload = await readJson(
         await fetch(`/api/board/applications/${feedbackFor.appId}/feedback`, {
@@ -392,24 +401,43 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             ...(feedbackFor.editing?.id
               ? { feedbackId: feedbackFor.editing.id }
               : {}),
-            source: String(form.get("source")),
+            source: String(data.get("source")),
             body,
             qaItems,
             resultText,
             reflection,
-            recordedOn: String(form.get("recordedOn") || tokyoTodayKey()),
+            recordedOn: String(data.get("recordedOn") || tokyoTodayKey()),
           }),
         }),
       );
-      await refreshFrom(payload);
-      setFeedbackFor(null);
+      await refreshFrom(payload, {
+        attachLatestFeedback: creating,
+      });
+      if (opts.close) setFeedbackFor(null);
       setConflictMsg(null);
+      return true;
     } catch {
       setConflictMsg(t("errorGeneric"));
+      return false;
     }
   }
 
-  async function onDeleteFeedback() {
+  async function onSaveFeedback(
+    event: FormEvent<HTMLFormElement>,
+    qaItems: BoardFeedbackQaItem[],
+  ) {
+    event.preventDefault();
+    await persistFeedback(event.currentTarget, qaItems, { close: true });
+  }
+
+  async function onPersistFeedbackQa(
+    form: HTMLFormElement,
+    qaItems: BoardFeedbackQaItem[],
+  ) {
+    return persistFeedback(form, qaItems, { close: false });
+  }
+
+  async function onDeleteFeedback(opts?: { keepDrawer?: boolean }) {
     if (!feedbackFor?.editing) return;
     try {
       const payload = await readJson(
@@ -420,7 +448,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         }),
       );
       await refreshFrom(payload);
-      setFeedbackFor(null);
+      if (opts?.keepDrawer) {
+        setFeedbackFor((current) =>
+          current ? { ...current, editing: null } : null,
+        );
+      } else {
+        setFeedbackFor(null);
+      }
       setConflictMsg(null);
     } catch {
       setConflictMsg(t("errorGeneric"));
@@ -1032,12 +1066,23 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
               </button>
             </div>
             <FeedbackForm
+              key={feedbackFor.editing?.id ?? `new-${feedbackFor.interview.id}`}
               t={t}
               interview={feedbackFor.interview}
               editing={feedbackFor.editing ?? null}
               conflictMsg={conflictMsg}
               onSubmit={onSaveFeedback}
-              onDelete={feedbackFor.editing ? onDeleteFeedback : undefined}
+              onPersistQa={onPersistFeedbackQa}
+              onDelete={
+                feedbackFor.editing
+                  ? () => void onDeleteFeedback()
+                  : undefined
+              }
+              onClearPersistedQa={
+                feedbackFor.editing
+                  ? () => void onDeleteFeedback({ keepDrawer: true })
+                  : undefined
+              }
             />
           </div>
         </>
@@ -1560,13 +1605,40 @@ function StageInterviewFeedbackGroups({
   );
 }
 
+function initQaState(editing?: BoardFeedback | null): {
+  rows: BoardFeedbackQaItem[];
+  locked: boolean[];
+} {
+  if (editing?.qaItems?.length) {
+    const rows = editing.qaItems.map((item) => ({
+      question: item.question ?? "",
+      answer: item.answer ?? "",
+    }));
+    return { rows, locked: rows.map(() => true) };
+  }
+  if (editing?.question || editing?.ownAnswer) {
+    return {
+      rows: [
+        {
+          question: editing.question ?? "",
+          answer: editing.ownAnswer ?? "",
+        },
+      ],
+      locked: [true],
+    };
+  }
+  return { rows: [{ question: "", answer: "" }], locked: [false] };
+}
+
 function FeedbackForm({
   t,
   interview,
   editing,
   conflictMsg,
   onSubmit,
+  onPersistQa,
   onDelete,
+  onClearPersistedQa,
 }: {
   t: TBoard;
   interview: BoardStageInterview;
@@ -1576,43 +1648,116 @@ function FeedbackForm({
     event: FormEvent<HTMLFormElement>,
     qaItems: BoardFeedbackQaItem[],
   ) => void;
+  onPersistQa: (
+    form: HTMLFormElement,
+    qaItems: BoardFeedbackQaItem[],
+  ) => Promise<boolean>;
   onDelete?: () => void;
+  /** Drop the feedback row when the last saved Q&A is removed and no other fields remain. */
+  onClearPersistedQa?: () => void;
 }) {
-  const [qaItems, setQaItems] = useState<BoardFeedbackQaItem[]>(() => {
-    if (editing?.qaItems?.length) return editing.qaItems;
-    if (editing?.question || editing?.ownAnswer) {
-      return [
-        {
-          question: editing.question,
-          answer: editing.ownAnswer,
-        },
-      ];
-    }
-    return [{ question: "", answer: "", tag: "" }];
-  });
-  /** Indices [0, lockedCount) are committed read-only blocks after 「質問を追加」. */
-  const [lockedCount, setLockedCount] = useState(0);
-  const [qaAddError, setQaAddError] = useState<string | null>(null);
+  const initial = initQaState(editing);
+  const [qaItems, setQaItems] = useState(initial.rows);
+  const [locked, setLocked] = useState(initial.locked);
+  const [qaError, setQaError] = useState<string | null>(null);
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
-  function addQaBlock() {
-    const last = qaItems[qaItems.length - 1];
-    const hasContent = Boolean(
-      last?.question?.trim() || last?.answer?.trim(),
-    );
-    if (!hasContent) {
-      setQaAddError(t("feedbackQaAddNeedContent"));
+  const hasDraft = locked.some((isLocked) => !isLocked);
+  const allLocked = locked.length > 0 && locked.every(Boolean);
+
+  function payloadFromRows(rows: BoardFeedbackQaItem[]): BoardFeedbackQaItem[] {
+    return rows
+      .map((row) => ({
+        question: row.question?.trim() ? row.question.trim() : null,
+        answer: row.answer?.trim() ? row.answer.trim() : null,
+      }))
+      .filter((row) => row.question || row.answer);
+  }
+
+  async function saveBlock(index: number) {
+    const row = qaItems[index];
+    if (!row?.question?.trim()) {
+      setQaError(t("feedbackQaSaveNeedQuestion"));
       return;
     }
-    setQaAddError(null);
-    setLockedCount(qaItems.length);
-    setQaItems((rows) => [...rows, { question: "", answer: "", tag: "" }]);
+    const form = formRef.current;
+    if (!form) return;
+    setQaError(null);
+    setSavingIndex(index);
+    const nextLocked = locked.map((value, i) => (i === index ? true : value));
+    const ok = await onPersistQa(form, payloadFromRows(qaItems));
+    setSavingIndex(null);
+    if (!ok) return;
+    setLocked(nextLocked);
+  }
+
+  async function deleteBlock(index: number) {
+    const form = formRef.current;
+    const wasLocked = locked[index];
+    const nextRows = qaItems.filter((_, i) => i !== index);
+    const nextLocked = locked.filter((_, i) => i !== index);
+    setQaError(null);
+    if (nextRows.length === 0) {
+      setQaItems([{ question: "", answer: "" }]);
+      setLocked([false]);
+      if (wasLocked && editing?.id && form) {
+        const data = new FormData(form);
+        const hasOther =
+          Boolean(String(data.get("body") || "").trim()) ||
+          Boolean(String(data.get("resultText") || "").trim()) ||
+          Boolean(String(data.get("reflection") || "").trim());
+        if (!hasOther && onClearPersistedQa) {
+          // Empty feedback is rejected by the API — drop the whole row instead.
+          onClearPersistedQa();
+          return;
+        }
+        setSavingIndex(index);
+        await onPersistQa(form, []);
+        setSavingIndex(null);
+      }
+      return;
+    }
+    setQaItems(nextRows);
+    setLocked(nextLocked);
+    if (wasLocked && form) {
+      setSavingIndex(index);
+      await onPersistQa(form, payloadFromRows(nextRows));
+      setSavingIndex(null);
+    }
+  }
+
+  function editBlock(index: number) {
+    setQaError(null);
+    // Drop trailing empty draft so only one unlocked row exists.
+    let rows = qaItems;
+    let flags = locked;
+    const last = rows.length - 1;
+    if (last !== index && !flags[last] && !rows[last]?.question?.trim() && !rows[last]?.answer?.trim()) {
+      rows = rows.slice(0, last);
+      flags = flags.slice(0, last);
+      setQaItems(rows);
+      setLocked(flags.map((value, i) => (i === index ? false : value)));
+      return;
+    }
+    setLocked((current) => current.map((value, i) => (i === index ? false : value)));
+  }
+
+  function addQaBlock() {
+    if (hasDraft) {
+      setQaError(t("feedbackQaAddNeedSave"));
+      return;
+    }
+    setQaError(null);
+    setQaItems((rows) => [...rows, { question: "", answer: "" }]);
+    setLocked((flags) => [...flags, false]);
   }
 
   return (
     <form
+      ref={formRef}
       className="flex flex-col gap-3"
-      onSubmit={(event) => onSubmit(event, qaItems)}
-      key={editing?.id ?? "new"}
+      onSubmit={(event) => onSubmit(event, payloadFromRows(qaItems))}
     >
       <table className="w-full border-collapse text-sm">
         <tbody>
@@ -1687,115 +1832,114 @@ function FeedbackForm({
       </h3>
       <div data-testid="feedback-qa-list">
         {qaItems.map((item, index) => {
-          const locked = index < lockedCount;
+          const isLocked = locked[index] === true;
           return (
-          <div
-            key={index}
-            className="pb-qa"
-            data-testid={`feedback-qa-${index}`}
-            data-locked={locked ? "true" : "false"}
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <strong className="text-sm text-[var(--pb-teal-deep)]">
-                {t("feedbackQaQuestionN", { n: String(index + 1).padStart(2, "0") })}
-                {locked ? (
-                  <span className="ml-2 text-[11px] font-medium text-[var(--pb-muted)]">
-                    {t("feedbackQaLocked")}
-                  </span>
-                ) : null}
-              </strong>
-              {qaItems.length > 1 ? (
+            <div
+              key={index}
+              className="pb-qa"
+              data-testid={`feedback-qa-${index}`}
+              data-locked={isLocked ? "true" : "false"}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <strong className="text-sm text-[var(--pb-teal-deep)]">
+                  {t("feedbackQaQuestionN", {
+                    n: String(index + 1).padStart(2, "0"),
+                  })}
+                  {isLocked ? (
+                    <span className="ml-2 text-[11px] font-medium text-[var(--pb-muted)]">
+                      {t("feedbackQaLocked")}
+                    </span>
+                  ) : null}
+                </strong>
+                <div className="flex items-center gap-2">
+                  {isLocked ? (
+                    <button
+                      type="button"
+                      data-testid={`feedback-qa-edit-${index}`}
+                      className="text-xs font-semibold text-[var(--pb-teal-deep)]"
+                      onClick={() => editBlock(index)}
+                    >
+                      {t("feedbackQaEdit")}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    data-testid={`feedback-qa-delete-${index}`}
+                    className="text-xs text-[var(--pb-red)]"
+                    onClick={() => void deleteBlock(index)}
+                  >
+                    {t("feedbackQaRemove")}
+                  </button>
+                </div>
+              </div>
+              <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
+                {t("feedbackQuestion")}
+                <textarea
+                  lang="ja"
+                  rows={2}
+                  value={item.question ?? ""}
+                  readOnly={isLocked}
+                  onChange={(event) =>
+                    setQaItems((rows) =>
+                      rows.map((row, i) =>
+                        i === index ? { ...row, question: event.target.value } : row,
+                      ),
+                    )
+                  }
+                  className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
+                    isLocked ? "bg-[var(--pb-teal-soft)]/60" : ""
+                  }`}
+                />
+              </label>
+              <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
+                {t("feedbackOwnAnswer")}
+                <textarea
+                  lang="ja"
+                  rows={2}
+                  value={item.answer ?? ""}
+                  readOnly={isLocked}
+                  onChange={(event) =>
+                    setQaItems((rows) =>
+                      rows.map((row, i) =>
+                        i === index ? { ...row, answer: event.target.value } : row,
+                      ),
+                    )
+                  }
+                  className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
+                    isLocked ? "bg-[var(--pb-teal-soft)]/60" : ""
+                  }`}
+                />
+              </label>
+              {!isLocked ? (
                 <button
                   type="button"
-                  className="text-xs text-[var(--pb-red)]"
-                  onClick={() => {
-                    setQaItems((rows) => rows.filter((_, i) => i !== index));
-                    setLockedCount((count) =>
-                      index < count ? Math.max(0, count - 1) : count,
-                    );
-                    setQaAddError(null);
-                  }}
+                  data-testid={`feedback-qa-save-${index}`}
+                  className="pb-btn pb-btn-sm w-full"
+                  disabled={savingIndex === index}
+                  onClick={() => void saveBlock(index)}
                 >
-                  {t("feedbackQaRemove")}
+                  {t("feedbackQaBlockSave")}
                 </button>
               ) : null}
             </div>
-            <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
-              {t("feedbackQaTag")}
-              <span className="font-normal text-[10px] leading-snug text-[var(--pb-muted)]">
-                {t("feedbackQaTagHint")}
-              </span>
-              <input
-                lang="ja"
-                value={item.tag ?? ""}
-                readOnly={locked}
-                onChange={(event) =>
-                  setQaItems((rows) =>
-                    rows.map((row, i) =>
-                      i === index ? { ...row, tag: event.target.value } : row,
-                    ),
-                  )
-                }
-                className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
-                  locked ? "bg-[var(--pb-teal-soft)]/50" : ""
-                }`}
-              />
-            </label>
-            <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
-              {t("feedbackQuestion")}
-              <textarea
-                lang="ja"
-                rows={2}
-                value={item.question ?? ""}
-                readOnly={locked}
-                onChange={(event) =>
-                  setQaItems((rows) =>
-                    rows.map((row, i) =>
-                      i === index ? { ...row, question: event.target.value } : row,
-                    ),
-                  )
-                }
-                className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
-                  locked ? "bg-[var(--pb-teal-soft)]/50" : ""
-                }`}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
-              {t("feedbackOwnAnswer")}
-              <textarea
-                lang="ja"
-                rows={2}
-                value={item.answer ?? ""}
-                readOnly={locked}
-                onChange={(event) =>
-                  setQaItems((rows) =>
-                    rows.map((row, i) =>
-                      i === index ? { ...row, answer: event.target.value } : row,
-                    ),
-                  )
-                }
-                className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
-                  locked ? "bg-[var(--pb-teal-soft)]/50" : ""
-                }`}
-              />
-            </label>
-          </div>
           );
         })}
       </div>
-      {qaAddError ? (
+      {qaError ? (
         <p role="alert" className="text-sm text-red-700" data-testid="feedback-qa-add-error">
-          {qaAddError}
+          {qaError}
         </p>
       ) : null}
-      <button
-        type="button"
-        data-testid="feedback-qa-add"
-        className="w-full rounded-full border border-dashed border-[#b9cfc7] bg-[var(--pb-teal-soft)] px-3 py-2 text-sm font-semibold text-[var(--pb-teal-deep)]"
-        onClick={addQaBlock}
-      >
-        {t("feedbackQaAdd")}
-      </button>
+      {allLocked ? (
+        <button
+          type="button"
+          data-testid="feedback-qa-add"
+          className="w-full rounded-full border border-dashed border-[#b9cfc7] bg-[var(--pb-teal-soft)] px-3 py-2 text-sm font-semibold text-[var(--pb-teal-deep)]"
+          onClick={addQaBlock}
+        >
+          {t("feedbackQaAdd")}
+        </button>
+      ) : null}
 
       <label className="flex flex-col gap-1 text-sm">
         {t("feedbackBody")}

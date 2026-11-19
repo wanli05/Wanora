@@ -68,7 +68,7 @@ describe("interview feedbacks", () => {
     const multiQa = await createInterviewFeedback(db, userId, interview.interview.id, {
       source: "self",
       qaItems: [
-        { question: "自己紹介してください", answer: "大学で…", tag: "導入" },
+        { question: "自己紹介してください", answer: "大学で…" },
         { question: "なぜ当社ですか？", answer: "プロダクトです" },
       ],
       recordedOn: "2026-11-04",
@@ -76,7 +76,7 @@ describe("interview feedbacks", () => {
     expect(multiQa.question).toBe("自己紹介してください");
     expect(multiQa.ownAnswer).toBe("大学で…");
     expect(multiQa.qaItems).toEqual([
-      { question: "自己紹介してください", answer: "大学で…", tag: "導入" },
+      { question: "自己紹介してください", answer: "大学で…" },
       { question: "なぜ当社ですか？", answer: "プロダクトです" },
     ]);
 

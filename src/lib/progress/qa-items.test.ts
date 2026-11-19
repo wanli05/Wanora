@@ -56,4 +56,12 @@ describe("qa-items", () => {
       ]),
     ).toEqual([{ question: "残る", answer: null }]);
   });
+
+  it("strips legacy tag from stored blocks", () => {
+    expect(
+      normalizeQaItems([
+        { question: "Q", answer: "A", tag: "旧タグ" },
+      ]),
+    ).toEqual([{ question: "Q", answer: "A" }]);
+  });
 });

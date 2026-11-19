@@ -59,7 +59,7 @@ describe("parseFeedbackUpsertBody", () => {
     }
   });
 
-  it("accepts qaItems-only payloads from the board UI", () => {
+  it("accepts qaItems-only payloads and strips legacy tag", () => {
     const parsed = parseFeedbackUpsertBody({
       interviewId: base.interviewId,
       source: "self",
@@ -73,8 +73,8 @@ describe("parseFeedbackUpsertBody", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.qaItems).toEqual([
-        { question: "志望動機は？", answer: "技術力です", tag: "動機" },
-        { question: "強みは？", answer: "粘り強さ", tag: null },
+        { question: "志望動機は？", answer: "技術力です" },
+        { question: "強みは？", answer: "粘り強さ" },
       ]);
       expect(parsed.data.question).toBeNull();
       expect(parsed.data.ownAnswer).toBeNull();

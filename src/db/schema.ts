@@ -726,11 +726,10 @@ export const busyBlocks = pgTable(
 const feedbackTextNonEmpty = (column: AnyPgColumn) =>
   sql`${column} is not null and length(btrim(${column})) > 0`;
 
-/** One Q&A block inside interview feedback (demo: addable rows). */
+/** One Q&A block inside interview feedback (addable rows). */
 export type FeedbackQaItem = {
   question: string | null;
   answer: string | null;
-  tag?: string | null;
 };
 
 export const interviewFeedbacks = pgTable(
