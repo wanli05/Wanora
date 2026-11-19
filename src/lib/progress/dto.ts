@@ -47,7 +47,6 @@ export type BoardInterview = {
 export type BoardFeedbackQaItem = {
   question: string | null;
   answer: string | null;
-  tag?: string | null;
 };
 
 export type BoardFeedback = {

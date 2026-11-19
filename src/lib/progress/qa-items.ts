@@ -3,15 +3,14 @@ import { normalizeOptionalText } from "./job-posting";
 
 export type { FeedbackQaItem };
 
-/** Normalize one Q&A block; drop fully empty rows. */
+/** Normalize one Q&A block; drop fully empty rows. Strips legacy `tag` if present. */
 export function normalizeQaItem(
   item: { question?: string | null; answer?: string | null; tag?: string | null },
 ): FeedbackQaItem | null {
   const question = normalizeOptionalText(item.question);
   const answer = normalizeOptionalText(item.answer);
-  const tag = normalizeOptionalText(item.tag);
   if (!question && !answer) return null;
-  return { question, answer, ...(tag ? { tag } : {}) };
+  return { question, answer };
 }
 
 export function normalizeQaItems(

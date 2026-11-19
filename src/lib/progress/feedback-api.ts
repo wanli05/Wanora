@@ -10,11 +10,14 @@ const optionalTrimmed = z
     return trimmed.length > 0 ? trimmed : null;
   });
 
-const qaItemSchema = z.object({
-  question: optionalTrimmed,
-  answer: optionalTrimmed,
-  tag: optionalTrimmed.optional(),
-});
+const qaItemSchema = z
+  .object({
+    question: optionalTrimmed,
+    answer: optionalTrimmed,
+    // Legacy clients may still send tag; drop it so stored JSON stays lean.
+    tag: z.unknown().optional(),
+  })
+  .transform(({ question, answer }) => ({ question, answer }));
 
 /**
  * Body for PUT /feedback.

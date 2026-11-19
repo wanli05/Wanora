@@ -402,7 +402,49 @@ describe("ProgressBoard", () => {
     expect(screen.queryByText("评分（1–5）")).not.toBeInTheDocument();
   });
 
-  it("locks filled Q&A blocks when adding the next question", async () => {
+  it("saves a Q&A block as read-only and only adds the next after 追加", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () =>
+        boardWith(
+          sampleApp({
+            currentStageKind: "interview_1",
+            hasFeedback: true,
+            stageInterviews: [
+              {
+                id: "iv-1",
+                stageId: "st-1",
+                stageKind: "interview_1",
+                start: "2026-11-01T05:00:00.000Z",
+                end: "2026-11-01T06:00:00.000Z",
+                mode: "google_meet",
+                meetingUrl: null,
+                locationText: null,
+                interviewers: null,
+                status: "scheduled",
+                canWriteFeedback: true,
+                feedbacks: [
+                  {
+                    id: "fb-new",
+                    interviewId: "iv-1",
+                    source: "self",
+                    body: null,
+                    question: "志望動機は？",
+                    ownAnswer: null,
+                    qaItems: [{ question: "志望動機は？", answer: null }],
+                    resultText: null,
+                    reflection: null,
+                    recordedOn: "2026-11-01",
+                    summary: "自分 · 志望動機は？",
+                  },
+                ],
+              },
+            ],
+          }),
+        ),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     renderWithIntl(
       <ProgressBoard
         initial={boardWith(
@@ -438,21 +480,32 @@ describe("ProgressBoard", () => {
       expect(screen.getByTestId("feedback-panel")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTestId("feedback-qa-add"));
-    expect(screen.getByTestId("feedback-qa-add-error")).toBeInTheDocument();
-    expect(screen.getAllByTestId(/feedback-qa-\d+/)).toHaveLength(1);
+    expect(screen.getByTestId("feedback-qa-0")).toHaveAttribute("data-locked", "false");
+    expect(screen.queryByTestId("feedback-qa-add")).not.toBeInTheDocument();
+    expect(screen.queryByText("标签（可选）")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("feedback-qa-save-0"));
+    expect(screen.getByTestId("feedback-qa-add-error")).toHaveTextContent(
+      "请先填写面试问题再保存。",
+    );
 
     const question = screen.getByTestId("feedback-qa-0").querySelector("textarea");
-    expect(question).toBeTruthy();
     fireEvent.change(question!, { target: { value: "志望動機は？" } });
-    fireEvent.click(screen.getByTestId("feedback-qa-add"));
+    fireEvent.click(screen.getByTestId("feedback-qa-save-0"));
 
-    expect(screen.queryByTestId("feedback-qa-add-error")).not.toBeInTheDocument();
-    expect(screen.getByTestId("feedback-qa-0")).toHaveAttribute("data-locked", "true");
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-qa-0")).toHaveAttribute("data-locked", "true");
+    });
+    expect(screen.getByTestId("feedback-qa-edit-0")).toBeInTheDocument();
+    expect(screen.getByTestId("feedback-qa-add")).toBeInTheDocument();
+    expect(screen.queryByTestId("feedback-qa-1")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("feedback-qa-add"));
     expect(screen.getByTestId("feedback-qa-1")).toHaveAttribute("data-locked", "false");
-    expect(screen.getByTestId("feedback-qa-0").querySelector("textarea")).toHaveAttribute(
-      "readOnly",
-    );
+    vi.unstubAllGlobals();
   });
 
   it("labels withdraw as 辞退", () => {
