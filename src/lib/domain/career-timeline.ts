@@ -4,6 +4,37 @@ import {
 } from "@/lib/domain/career";
 import { formatYearMonthJa } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
+import {
+  EDUCATION_EVENT_CODES,
+  WORK_HISTORY_EVENT_CODES,
+  type EducationEventCode,
+  type WorkHistoryEventCode,
+} from "@/lib/domain/resume-events";
+
+/** Timeline secondary copy is always Japanese business labels (matches messages/ja.json). */
+const EDUCATION_EVENT_SUMMARY_JA: Record<EducationEventCode, string> = {
+  enrolled: "入学",
+  graduated: "卒業",
+  withdrawn: "中退",
+  completed: "修了",
+};
+
+const WORK_EVENT_SUMMARY_JA: Record<WorkHistoryEventCode, string> = {
+  joined: "入社",
+  left: "退社",
+  transferred: "異動",
+};
+
+/** Map eventCode → JA label; never return raw English codes. */
+export function timelineEventSummaryJa(eventCode: string): string | undefined {
+  if ((EDUCATION_EVENT_CODES as readonly string[]).includes(eventCode)) {
+    return EDUCATION_EVENT_SUMMARY_JA[eventCode as EducationEventCode];
+  }
+  if ((WORK_HISTORY_EVENT_CODES as readonly string[]).includes(eventCode)) {
+    return WORK_EVENT_SUMMARY_JA[eventCode as WorkHistoryEventCode];
+  }
+  return undefined;
+}
 
 function ymLabel(d: Date): string {
   return formatYearMonthJa(d.getUTCFullYear(), d.getUTCMonth() + 1);
@@ -11,6 +42,36 @@ function ymLabel(d: Date): string {
 
 function entryMs(createdAt?: Date | null): number {
   return createdAt?.getTime() ?? 0;
+}
+
+/** Parse display labels like `2025年9月` into numeric year/month. */
+function parseAtYearMonth(at: string): { year: number; month: number } | null {
+  const match = /^(\d{4})年(\d{1,2})月$/.exec(at.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    return null;
+  }
+  return { year, month };
+}
+
+/** Newest year/month first; unparseable labels sort after parseable ones. */
+function compareAtDescending(a: string, b: string): number {
+  const pa = parseAtYearMonth(a);
+  const pb = parseAtYearMonth(b);
+  if (pa && pb) {
+    if (pa.year !== pb.year) return pb.year - pa.year;
+    return pb.month - pa.month;
+  }
+  if (pa) return -1;
+  if (pb) return 1;
+  return b.localeCompare(a, "ja");
 }
 
 export function buildCareerTimeline(input: {
@@ -62,7 +123,7 @@ export function buildCareerTimeline(input: {
       kind: "education",
       at: ymLabel(row.yearMonth),
       title: jaOf(row.school),
-      summary: row.eventCode,
+      summary: timelineEventSummaryJa(row.eventCode),
       module: "profile",
       entryOrder: entryMs(row.createdAt),
     });
@@ -77,7 +138,7 @@ export function buildCareerTimeline(input: {
         kind: "work",
         at: ymLabel(row.startYm),
         title: title ? `${company}　${title}` : company,
-        summary: "joined",
+        summary: timelineEventSummaryJa("joined"),
         module: "work",
         entryOrder: base,
       });
@@ -87,7 +148,7 @@ export function buildCareerTimeline(input: {
           kind: "work",
           at: ymLabel(row.endYm),
           title: company,
-          summary: "left",
+          summary: timelineEventSummaryJa("left"),
           module: "work",
           // Same-month join/leave: leave stays to the right of join.
           entryOrder: base + 1,
@@ -101,7 +162,7 @@ export function buildCareerTimeline(input: {
         kind: "work",
         at: ymLabel(row.yearMonth),
         title: jaOf(row.company),
-        summary: row.eventCode,
+        summary: timelineEventSummaryJa(row.eventCode),
         module: "work",
         entryOrder: entryMs(row.createdAt),
       });
@@ -130,7 +191,7 @@ export function buildCareerTimeline(input: {
   }
 
   return items.sort((a, b) => {
-    const byAt = b.at.localeCompare(a.at, "ja");
+    const byAt = compareAtDescending(a.at, b.at);
     if (byAt !== 0) return byAt;
     if (a.entryOrder !== b.entryOrder) return a.entryOrder - b.entryOrder;
     return a.id.localeCompare(b.id);
