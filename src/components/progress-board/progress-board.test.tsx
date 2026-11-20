@@ -499,6 +499,9 @@ describe("ProgressBoard", () => {
     await waitFor(() => {
       expect(screen.getByTestId("feedback-qa-0")).toHaveAttribute("data-locked", "true");
     });
+    expect(screen.getByTestId("feedback-qa-0")).toHaveClass("pb-qa--locked");
+    expect(screen.getByTestId("feedback-qa-q-0")).toHaveTextContent("志望動機は？");
+    expect(screen.getByTestId("feedback-qa-0").querySelector("textarea")).toBeNull();
     expect(screen.getByTestId("feedback-qa-edit-0")).toBeInTheDocument();
     expect(screen.getByTestId("feedback-qa-add")).toBeInTheDocument();
     expect(screen.queryByTestId("feedback-qa-1")).not.toBeInTheDocument();
@@ -506,6 +509,76 @@ describe("ProgressBoard", () => {
     fireEvent.click(screen.getByTestId("feedback-qa-add"));
     expect(screen.getByTestId("feedback-qa-1")).toHaveAttribute("data-locked", "false");
     vi.unstubAllGlobals();
+  });
+
+  it("shows compact locked Q&A and expands a long answer via ellipsis", async () => {
+    const longAnswer = Array.from(
+      { length: 8 },
+      (_, i) => `回答行${i + 1}：詳細な説明です。`,
+    ).join("\n");
+
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(
+          sampleApp({
+            currentStageKind: "interview_1",
+            hasFeedback: true,
+            stageInterviews: [
+              {
+                id: "iv-1",
+                stageId: "st-1",
+                stageKind: "interview_1",
+                start: "2026-11-01T05:00:00.000Z",
+                end: "2026-11-01T06:00:00.000Z",
+                mode: "google_meet",
+                meetingUrl: null,
+                locationText: null,
+                interviewers: null,
+                status: "scheduled",
+                canWriteFeedback: true,
+                feedbacks: [
+                  {
+                    id: "fb-1",
+                    interviewId: "iv-1",
+                    source: "self",
+                    body: null,
+                    question: "自己紹介と自己PR",
+                    ownAnswer: longAnswer,
+                    qaItems: [{ question: "自己紹介と自己PR", answer: longAnswer }],
+                    resultText: null,
+                    reflection: null,
+                    recordedOn: "2026-11-01",
+                    summary: "自分 · 自己紹介と自己PR",
+                  },
+                ],
+              },
+            ],
+          }),
+        )}
+      />,
+      "ja",
+    );
+    fireEvent.click(screen.getByTestId("edit-app-1-detail"));
+    await waitFor(() => {
+      expect(screen.getByText("自分 · 自己紹介と自己PR")).toBeInTheDocument();
+    });
+    const feedbackEdit = screen
+      .getByText("自分 · 自己紹介と自己PR")
+      .closest("li")
+      ?.querySelector("button");
+    expect(feedbackEdit).toBeTruthy();
+    fireEvent.click(feedbackEdit!);
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-qa-0")).toHaveAttribute("data-locked", "true");
+    });
+    expect(screen.getByTestId("feedback-qa-0")).toHaveClass("pb-qa--locked");
+    expect(screen.getByTestId("feedback-qa-q-0")).toHaveTextContent("自己紹介と自己PR");
+    expect(screen.getByText("回答")).toBeInTheDocument();
+    const answer = screen.getByTestId("feedback-qa-answer");
+    expect(answer).not.toHaveClass("is-open");
+    fireEvent.click(screen.getByTestId("feedback-qa-answer-expand"));
+    expect(answer).toHaveClass("is-open");
+    expect(screen.queryByTestId("feedback-qa-answer-expand")).not.toBeInTheDocument();
   });
 
   it("labels withdraw as 辞退", () => {

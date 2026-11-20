@@ -1199,6 +1199,85 @@ body {
   margin-bottom: 10px;
   background: #fff;
 }
+/* Locked Q&A: compact read module (no nested input chrome). */
+.pb-qa--locked {
+  padding: 10px 12px;
+}
+.pb-qa-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.pb-qa-head strong {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pb-teal-deep);
+}
+.pb-qa-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.pb-qa-q {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--pb-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pb-qa-a-label {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pb-muted);
+}
+.pb-qa-a {
+  position: relative;
+  margin: 0;
+}
+.pb-qa-a-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--pb-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pb-qa-a:not(.is-open) .pb-qa-a-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.pb-qa-ellipsis {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0 0 0 1.75em;
+  border: 0;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    #fff 35%,
+    #fff 100%
+  );
+  color: var(--pb-teal-deep);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.pb-qa-ellipsis:hover {
+  color: var(--pb-teal);
+}
 .pb-btn {
   border: 0;
   border-radius: 10px;
