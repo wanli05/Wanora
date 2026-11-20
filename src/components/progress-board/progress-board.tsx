@@ -1630,6 +1630,46 @@ function initQaState(editing?: BoardFeedback | null): {
   return { rows: [{ question: "", answer: "" }], locked: [false] };
 }
 
+/** Rough check for 3-line clamp without measuring layout (jsdom-safe). */
+function answerLikelyClamped(text: string): boolean {
+  const lines = text.split(/\n/);
+  if (lines.length > 3) return true;
+  return text.length > 96;
+}
+
+/** Read-only answer: 3-line clamp; click the trailing ellipsis to expand. */
+function LockedQaAnswer({
+  text,
+  expandLabel,
+  ellipsisLabel,
+}: {
+  text: string;
+  expandLabel: string;
+  ellipsisLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const showEllipsis = !open && answerLikelyClamped(text);
+
+  return (
+    <div className={`pb-qa-a${open ? " is-open" : ""}`} data-testid="feedback-qa-answer">
+      <p className="pb-qa-a-body" lang="ja">
+        {text}
+      </p>
+      {showEllipsis ? (
+        <button
+          type="button"
+          className="pb-qa-ellipsis"
+          data-testid="feedback-qa-answer-expand"
+          aria-label={expandLabel}
+          onClick={() => setOpen(true)}
+        >
+          {ellipsisLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function FeedbackForm({
   t,
   interview,
@@ -1833,26 +1873,21 @@ function FeedbackForm({
       <div data-testid="feedback-qa-list">
         {qaItems.map((item, index) => {
           const isLocked = locked[index] === true;
-          return (
-            <div
-              key={index}
-              className="pb-qa"
-              data-testid={`feedback-qa-${index}`}
-              data-locked={isLocked ? "true" : "false"}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <strong className="text-sm text-[var(--pb-teal-deep)]">
-                  {t("feedbackQaQuestionN", {
-                    n: String(index + 1).padStart(2, "0"),
-                  })}
-                  {isLocked ? (
-                    <span className="ml-2 text-[11px] font-medium text-[var(--pb-muted)]">
-                      {t("feedbackQaLocked")}
-                    </span>
-                  ) : null}
-                </strong>
-                <div className="flex items-center gap-2">
-                  {isLocked ? (
+          const title = t("feedbackQaQuestionN", {
+            n: String(index + 1).padStart(2, "0"),
+          });
+          const answerText = (item.answer ?? "").trim();
+          if (isLocked) {
+            return (
+              <div
+                key={index}
+                className="pb-qa pb-qa--locked"
+                data-testid={`feedback-qa-${index}`}
+                data-locked="true"
+              >
+                <div className="pb-qa-head">
+                  <strong>{title}</strong>
+                  <div className="pb-qa-actions">
                     <button
                       type="button"
                       data-testid={`feedback-qa-edit-${index}`}
@@ -1861,7 +1896,42 @@ function FeedbackForm({
                     >
                       {t("feedbackQaEdit")}
                     </button>
-                  ) : null}
+                    <button
+                      type="button"
+                      data-testid={`feedback-qa-delete-${index}`}
+                      className="text-xs text-[var(--pb-red)]"
+                      onClick={() => void deleteBlock(index)}
+                    >
+                      {t("feedbackQaRemove")}
+                    </button>
+                  </div>
+                </div>
+                <p className="pb-qa-q" lang="ja" data-testid={`feedback-qa-q-${index}`}>
+                  {item.question?.trim() || t("dash")}
+                </p>
+                {answerText ? (
+                  <>
+                    <div className="pb-qa-a-label">{t("feedbackQaAnswerHeading")}</div>
+                    <LockedQaAnswer
+                      text={answerText}
+                      expandLabel={t("feedbackQaExpandAnswer")}
+                      ellipsisLabel={t("feedbackQaEllipsis")}
+                    />
+                  </>
+                ) : null}
+              </div>
+            );
+          }
+          return (
+            <div
+              key={index}
+              className="pb-qa"
+              data-testid={`feedback-qa-${index}`}
+              data-locked="false"
+            >
+              <div className="pb-qa-head">
+                <strong>{title}</strong>
+                <div className="pb-qa-actions">
                   <button
                     type="button"
                     data-testid={`feedback-qa-delete-${index}`}
@@ -1878,7 +1948,6 @@ function FeedbackForm({
                   lang="ja"
                   rows={2}
                   value={item.question ?? ""}
-                  readOnly={isLocked}
                   onChange={(event) =>
                     setQaItems((rows) =>
                       rows.map((row, i) =>
@@ -1886,9 +1955,7 @@ function FeedbackForm({
                       ),
                     )
                   }
-                  className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
-                    isLocked ? "bg-[var(--pb-teal-soft)]/60" : ""
-                  }`}
+                  className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
                 />
               </label>
               <label className="mb-2 flex flex-col gap-1 text-xs font-semibold text-[var(--pb-muted)]">
@@ -1897,7 +1964,6 @@ function FeedbackForm({
                   lang="ja"
                   rows={2}
                   value={item.answer ?? ""}
-                  readOnly={isLocked}
                   onChange={(event) =>
                     setQaItems((rows) =>
                       rows.map((row, i) =>
@@ -1905,22 +1971,18 @@ function FeedbackForm({
                       ),
                     )
                   }
-                  className={`rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)] ${
-                    isLocked ? "bg-[var(--pb-teal-soft)]/60" : ""
-                  }`}
+                  className="rounded border border-[var(--pb-line)] px-2 py-1.5 text-sm font-normal text-[var(--pb-ink)]"
                 />
               </label>
-              {!isLocked ? (
-                <button
-                  type="button"
-                  data-testid={`feedback-qa-save-${index}`}
-                  className="pb-btn pb-btn-sm w-full"
-                  disabled={savingIndex === index}
-                  onClick={() => void saveBlock(index)}
-                >
-                  {t("feedbackQaBlockSave")}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                data-testid={`feedback-qa-save-${index}`}
+                className="pb-btn pb-btn-sm w-full"
+                disabled={savingIndex === index}
+                onClick={() => void saveBlock(index)}
+              >
+                {t("feedbackQaBlockSave")}
+              </button>
             </div>
           );
         })}
