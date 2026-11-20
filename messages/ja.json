@@ -72,6 +72,7 @@
     "feedbackQaEdit": "編集",
     "feedbackQaAnswerHeading": "回答",
     "feedbackQaExpandAnswer": "続きを表示",
+    "feedbackQaCollapseAnswer": "閉じる",
     "feedbackQaEllipsis": "…",
     "feedbackQaSaveNeedQuestion": "質問を入力してから保存してください。",
     "feedbackQaAddNeedSave": "先に現在の質問を保存してから追加してください。",

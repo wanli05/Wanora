@@ -1637,14 +1637,16 @@ function answerLikelyClamped(text: string): boolean {
   return text.length > 96;
 }
 
-/** Read-only answer: 3-line clamp; click the trailing ellipsis to expand. */
+/** Read-only answer: 3-line clamp; ellipsis expands, collapse restores clamp. */
 function LockedQaAnswer({
   text,
   expandLabel,
+  collapseLabel,
   ellipsisLabel,
 }: {
   text: string;
   expandLabel: string;
+  collapseLabel: string;
   ellipsisLabel: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -1664,6 +1666,16 @@ function LockedQaAnswer({
           onClick={() => setOpen(true)}
         >
           {ellipsisLabel}
+        </button>
+      ) : null}
+      {open ? (
+        <button
+          type="button"
+          className="pb-qa-collapse"
+          data-testid="feedback-qa-answer-collapse"
+          onClick={() => setOpen(false)}
+        >
+          {collapseLabel}
         </button>
       ) : null}
     </div>
@@ -1915,6 +1927,7 @@ function FeedbackForm({
                     <LockedQaAnswer
                       text={answerText}
                       expandLabel={t("feedbackQaExpandAnswer")}
+                      collapseLabel={t("feedbackQaCollapseAnswer")}
                       ellipsisLabel={t("feedbackQaEllipsis")}
                     />
                   </>

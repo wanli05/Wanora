@@ -1278,6 +1278,28 @@ body {
 .pb-qa-ellipsis:hover {
   color: var(--pb-teal);
 }
+.pb-qa-a.is-open {
+  padding-bottom: 22px;
+}
+.pb-qa-collapse {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pb-teal-deep);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.pb-qa-collapse:hover {
+  color: var(--pb-teal);
+  text-decoration: underline;
+}
 .pb-btn {
   border: 0;
   border-radius: 10px;
