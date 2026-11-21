@@ -72,6 +72,7 @@
     "feedbackQaEdit": "Edit",
     "feedbackQaAnswerHeading": "Answer",
     "feedbackQaExpandAnswer": "Show more",
+    "feedbackQaCollapseAnswer": "Collapse",
     "feedbackQaEllipsis": "…",
     "feedbackQaSaveNeedQuestion": "Enter the interview question before saving.",
     "feedbackQaAddNeedSave": "Save the current question before adding another.",

@@ -579,6 +579,9 @@ describe("ProgressBoard", () => {
     fireEvent.click(screen.getByTestId("feedback-qa-answer-expand"));
     expect(answer).toHaveClass("is-open");
     expect(screen.queryByTestId("feedback-qa-answer-expand")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("feedback-qa-answer-collapse"));
+    expect(answer).not.toHaveClass("is-open");
+    expect(screen.getByTestId("feedback-qa-answer-expand")).toBeInTheDocument();
   });
 
   it("labels withdraw as 辞退", () => {

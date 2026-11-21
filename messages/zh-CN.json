@@ -72,6 +72,7 @@
     "feedbackQaEdit": "编辑",
     "feedbackQaAnswerHeading": "回答",
     "feedbackQaExpandAnswer": "展开全部",
+    "feedbackQaCollapseAnswer": "收起",
     "feedbackQaEllipsis": "…",
     "feedbackQaSaveNeedQuestion": "请先填写面试问题再保存。",
     "feedbackQaAddNeedSave": "请先保存当前问题，再添加下一问。",
