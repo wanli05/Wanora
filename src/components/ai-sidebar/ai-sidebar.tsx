@@ -369,14 +369,25 @@ export function AiSidebar() {
     setMessages((m) => [...m, optimistic]);
     setDraft("");
 
-    const res = await enqueueJob({
-      conversationId,
-      clientRequestId,
-      content,
-      pageContext,
-      targetContext: sendTarget,
-      feature: sendFeature,
-    });
+    let res: Awaited<ReturnType<typeof enqueueJob>>;
+    try {
+      res = await enqueueJob({
+        conversationId,
+        clientRequestId,
+        content,
+        pageContext,
+        targetContext: sendTarget,
+        feature: sendFeature,
+      });
+    } catch {
+      // Network abort / fetch throw — not an HTTP { error } body (QA-25).
+      setMessages((m) => m.filter((x) => x.id !== optimistic.id));
+      setDraft(content);
+      setError(t("errSend"));
+      sendingRef.current = false;
+      setBusy(false);
+      return;
+    }
 
     if ("error" in res && res.error) {
       setMessages((m) => m.filter((x) => x.id !== optimistic.id));
