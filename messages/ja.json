@@ -503,5 +503,23 @@
     "pageBoard": "応募進捗",
     "pageCareer": "My Career",
     "pageOther": "このページ"
+  },
+  "InterviewPrep": {
+    "title": "面接準備",
+    "backToBoard": "応募進捗に戻る",
+    "roleUnset": "職種未設定",
+    "roundLabel": "面接ラウンド",
+    "scheduleUnscheduled": "面接未定",
+    "scheduleKnown": "{when} · {mode}",
+    "scheduleHint": "面接日時がなくても準備できます。日程は応募進捗ボードで登録してください。",
+    "noInterviewStages": "面接段階がまだありません。応募進捗で段階を確認してください。",
+    "questionsComing": "想定質問は次の更新で追加されます。",
+    "demoNotice": "表示内容はデモ用です。求人や履歴に基づく個別分析ではありません。",
+    "notFoundTitle": "応募が見つかりません",
+    "notFoundBody": "この応募は存在しないか、アクセスできません。",
+    "signedOutTitle": "ログインが必要です",
+    "signedOutBody": "面接準備を見るにはログインしてください。",
+    "goSignIn": "ログインへ",
+    "loading": "読み込み中…"
   }
 }

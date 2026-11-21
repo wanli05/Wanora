@@ -14,7 +14,11 @@ export function pageContextFromPath(pathname: string): AiPageContext {
   if (stripped.startsWith("/my-career") || stripped.startsWith("/career")) {
     return { path, area: "my_career" };
   }
-  if (stripped.startsWith("/board") || stripped.startsWith("/progress")) {
+  if (
+    stripped.startsWith("/board") ||
+    stripped.startsWith("/progress") ||
+    stripped.startsWith("/applications")
+  ) {
     return { path, area: "board" };
   }
   return { path, area: "other" };
