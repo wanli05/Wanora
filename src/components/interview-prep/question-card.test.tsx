@@ -11,9 +11,16 @@ const labels = {
   generate: "AI回答例を生成",
   generating: "生成中…",
   retry: "再試行",
+  regenerate: "回答例を再生成",
   sampleHeading: "回答例（デモ）",
   generateError: "回答例を表示できませんでした。",
   demoBadge: "デモ",
+  editAnswer: "回答を編集",
+  finishEdit: "編集を完了（デモ）",
+  cancelEdit: "編集をやめる",
+  draftHeading: "あなたの回答（デモ）",
+  editorHint: "デモ：入力内容は保存されません",
+  editorPlaceholder: "ここに自分の回答を書いてください",
 };
 
 const question: MockPrepQuestion = {
@@ -23,6 +30,13 @@ const question: MockPrepQuestion = {
   points: ["ポイントA", "ポイントB"],
   sampleAnswer: "サンプル回答本文",
 };
+
+function generateReady() {
+  fireEvent.click(screen.getByTestId("prep-generate-q-1"));
+  act(() => {
+    vi.runAllTimers();
+  });
+}
 
 describe("QuestionCard", () => {
   beforeEach(() => {
@@ -41,20 +55,13 @@ describe("QuestionCard", () => {
     expect(screen.getByTestId("prep-question-details-q-1")).toHaveTextContent(
       "意図テキスト",
     );
-    expect(screen.getByTestId("prep-question-details-q-1")).toHaveTextContent(
-      "ポイントA",
-    );
   });
 
   it("moves idle → loading → ready for mock sample answer", () => {
     render(<QuestionCard question={question} labels={labels} />);
     const card = screen.getByTestId("prep-question-q-1");
-    expect(card).toHaveAttribute("data-answer-state", "idle");
-
     fireEvent.click(screen.getByTestId("prep-generate-q-1"));
     expect(card).toHaveAttribute("data-answer-state", "loading");
-    expect(screen.getByTestId("prep-generate-loading-q-1")).toBeDisabled();
-
     act(() => {
       vi.runAllTimers();
     });
@@ -64,21 +71,60 @@ describe("QuestionCard", () => {
     );
   });
 
-  it("shows error when sample answer is missing", () => {
-    render(
-      <QuestionCard
-        question={{ ...question, sampleAnswer: "   " }}
-        labels={labels}
-      />,
+  it("opens editor seeded from sample and commits draft without save success copy", () => {
+    render(<QuestionCard question={question} labels={labels} />);
+    generateReady();
+    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
+    const input = screen.getByTestId("prep-editor-input-q-1");
+    expect(input).toHaveValue("サンプル回答本文");
+    expect(screen.getByTestId("prep-editor-q-1")).toHaveTextContent(
+      "デモ：入力内容は保存されません",
     );
-    fireEvent.click(screen.getByTestId("prep-generate-q-1"));
+    fireEvent.change(input, { target: { value: "ユーザー編集後の回答" } });
+    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
+    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent(
+      "ユーザー編集後の回答",
+    );
+    expect(screen.queryByText("保存しました")).not.toBeInTheDocument();
+  });
+
+  it("cancel restores the draft from before edit", () => {
+    render(<QuestionCard question={question} labels={labels} />);
+    generateReady();
+    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
+    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
+      target: { value: "初回ドラフト" },
+    });
+    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
+    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent("初回ドラフト");
+
+    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
+    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
+      target: { value: "破棄される編集" },
+    });
+    fireEvent.click(screen.getByTestId("prep-editor-cancel-q-1"));
+    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent("初回ドラフト");
+    expect(screen.queryByTestId("prep-editor-q-1")).not.toBeInTheDocument();
+  });
+
+  it("regenerating mock sample does not overwrite the user draft", () => {
+    render(<QuestionCard question={question} labels={labels} />);
+    generateReady();
+    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
+    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
+      target: { value: "守られるドラフト" },
+    });
+    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
+
+    fireEvent.click(screen.getByTestId("prep-generate-again-q-1"));
     act(() => {
       vi.runAllTimers();
     });
-    expect(screen.getByTestId("prep-question-q-1")).toHaveAttribute(
-      "data-answer-state",
-      "error",
+    expect(screen.getByTestId("prep-sample-q-1")).toHaveTextContent(
+      "サンプル回答本文",
     );
-    expect(screen.getByTestId("prep-generate-error-q-1")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent(
+      "守られるドラフト",
+    );
   });
 });

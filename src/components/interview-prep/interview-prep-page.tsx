@@ -44,9 +44,16 @@ export function InterviewPrepPage({ application }: Props) {
     generate: t("generateSample"),
     generating: t("generatingSample"),
     retry: t("retrySample"),
+    regenerate: t("regenerateSample"),
     sampleHeading: t("sampleHeading"),
     generateError: t("generateError"),
     demoBadge: t("demoBadge"),
+    editAnswer: t("editAnswer"),
+    finishEdit: t("finishEdit"),
+    cancelEdit: t("cancelEdit"),
+    draftHeading: t("draftHeading"),
+    editorHint: t("editorHint"),
+    editorPlaceholder: t("editorPlaceholder"),
   };
 
   return (

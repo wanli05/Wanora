@@ -40,6 +40,19 @@ test("board 面接準備 opens prep page with mock questions when 面接未定",
   await expect(first).toHaveAttribute("data-answer-state", "ready");
   await expect(page.getByTestId("prep-sample-common-motivation")).toBeVisible();
 
+  await page.getByTestId("prep-edit-common-motivation").click();
+  await expect(page.getByTestId("prep-editor-common-motivation")).toContainText(
+    "デモ：入力内容は保存されません",
+  );
+  await page.getByTestId("prep-editor-input-common-motivation").fill(
+    "E2Eで編集した回答",
+  );
+  await page.getByTestId("prep-editor-finish-common-motivation").click();
+  await expect(page.getByTestId("prep-draft-common-motivation")).toContainText(
+    "E2Eで編集した回答",
+  );
+  await expect(page.getByText("保存しました")).toHaveCount(0);
+
   await page.getByTestId("prep-generate-common-self-pr").click();
   await expect(page.getByTestId("prep-question-common-self-pr")).toHaveAttribute(
     "data-answer-state",
