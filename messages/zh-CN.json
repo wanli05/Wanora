@@ -503,5 +503,23 @@
     "pageBoard": "応募進捗",
     "pageCareer": "My Career",
     "pageOther": "このページ"
+  },
+  "InterviewPrep": {
+    "title": "面试准备",
+    "backToBoard": "返回投递进度",
+    "roleUnset": "職種未設定",
+    "roundLabel": "面试轮次",
+    "scheduleUnscheduled": "面接未定",
+    "scheduleKnown": "{when} · {mode}",
+    "scheduleHint": "即使尚未确定面试时间也可以准备。请在投递进度板登记日程。",
+    "noInterviewStages": "还没有面试阶段。请在投递进度中确认阶段。",
+    "questionsComing": "想定问题将在后续更新中加入。",
+    "demoNotice": "当前为演示内容，并非基于求人或履历的个性化分析。",
+    "notFoundTitle": "找不到该投递",
+    "notFoundBody": "投递不存在，或你没有访问权限。",
+    "signedOutTitle": "需要登录",
+    "signedOutBody": "查看面试准备前请先登录。",
+    "goSignIn": "去登录",
+    "loading": "加载中…"
   }
 }

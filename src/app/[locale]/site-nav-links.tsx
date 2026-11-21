@@ -13,7 +13,8 @@ export function SiteNavLinks({
   ariaLabel: string;
 }) {
   const pathname = usePathname() || "/";
-  const onProgress = pathname === "/";
+  const onProgress =
+    pathname === "/" || pathname.startsWith("/applications/");
   const onCareer =
     pathname === "/profile" || pathname.startsWith("/profile/");
 

@@ -9,6 +9,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BOARD_COLUMN_KINDS, INTERVIEW_STAGE_KINDS } from "@/lib/progress/enums";
 import type {
@@ -89,6 +90,7 @@ function interviewEndFromStartInput(startLocal: string) {
 export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const t = useTranslations("Board");
   const tp = useTranslations("Platforms");
+  const router = useRouter();
   const [board, setBoard] = useState(initial);
   const [view, setView] = useState<View>("kanban");
   const [filter, setFilter] = useState<Filter>("in_progress");
@@ -108,7 +110,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [calMonth, setCalMonth] = useState(nowParts.month);
   const [menuAppId, setMenuAppId] = useState<string | null>(null);
   const [passConfirm, setPassConfirm] = useState<BoardApplication | null>(null);
-  const [prepApp, setPrepApp] = useState<BoardApplication | null>(null);
   const [taskFocus, setTaskFocus] = useState<TaskFocus | null>(null);
   const [editSection, setEditSection] = useState<EditSection>("basic");
 
@@ -146,7 +147,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         closePagePanels();
         setMenuAppId(null);
         setPassConfirm(null);
-        setPrepApp(null);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -823,7 +823,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                         }}
                         onPrep={() => {
                           setMenuAppId(null);
-                          setPrepApp(app);
+                          router.push(
+                            `/applications/${app.id}/interview-prep`,
+                          );
                         }}
                         onPass={() => {
                           setMenuAppId(null);
@@ -1134,44 +1136,6 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         </>
       ) : null}
 
-      {prepApp ? (
-        <>
-          <button
-            type="button"
-            className="pb-dialog-backdrop"
-            aria-label={t("cancel")}
-            onClick={() => setPrepApp(null)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            data-testid="interview-prep-dialog"
-            className="pb-dialog"
-          >
-            <h3 className="m-0 text-base font-semibold text-[var(--pb-teal-deep)]">
-              {t("interviewPrepTitle")}
-            </h3>
-            <p className="mt-2 text-sm text-[var(--pb-ink-soft)]">
-              {t("interviewPrepBody")}
-            </p>
-            <div className="mt-3 rounded-xl bg-gradient-to-br from-[var(--pb-teal)] to-[var(--pb-teal-deep)] p-3 text-sm leading-relaxed text-[#eef7f4]">
-              <div className="mb-1 text-[11px] font-bold opacity-75" lang="ja">
-                {prepApp.company}
-              </div>
-              {t("interviewPrepPreview")}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                className="pb-btn pb-btn-ghost pb-btn-sm"
-                onClick={() => setPrepApp(null)}
-              >
-                {t("cancel")}
-              </button>
-            </div>
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }

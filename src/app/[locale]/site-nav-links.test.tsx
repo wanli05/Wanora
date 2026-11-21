@@ -47,4 +47,19 @@ describe("SiteNavLinks", () => {
       "false",
     );
   });
+
+  it("marks progress active on interview-prep routes", () => {
+    usePathname.mockReturnValue("/applications/app-1/interview-prep");
+    render(
+      <SiteNavLinks
+        progressLabel="進捗ボード"
+        myCareerLabel="My Career"
+        ariaLabel="メインナビゲーション"
+      />,
+    );
+    expect(screen.getByRole("link", { name: "進捗ボード" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+  });
 });

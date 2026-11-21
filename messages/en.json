@@ -503,5 +503,23 @@
     "pageBoard": "応募進捗",
     "pageCareer": "My Career",
     "pageOther": "このページ"
+  },
+  "InterviewPrep": {
+    "title": "Interview prep",
+    "backToBoard": "Back to applications",
+    "roleUnset": "職種未設定",
+    "roundLabel": "Interview round",
+    "scheduleUnscheduled": "面接未定",
+    "scheduleKnown": "{when} · {mode}",
+    "scheduleHint": "You can prepare even without a scheduled interview. Register times on the board.",
+    "noInterviewStages": "No interview stages yet. Check stages on the board.",
+    "questionsComing": "Practice questions will be added in a later update.",
+    "demoNotice": "Demo content only — not a personalized analysis of this job or your profile.",
+    "notFoundTitle": "Application not found",
+    "notFoundBody": "This application does not exist or you cannot access it.",
+    "signedOutTitle": "Sign in required",
+    "signedOutBody": "Sign in to view interview prep.",
+    "goSignIn": "Sign in",
+    "loading": "Loading…"
   }
 }
