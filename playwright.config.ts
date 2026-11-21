@@ -25,7 +25,10 @@ const aiE2eEnv: Record<string, string> = {
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: ["**/ai-sidebar-disabled.spec.ts"],
+  // Phase 1C-QA suite requires Testcontainers isolation via
+  // scripts/phase1c-qa-e2e-runner.mts + playwright.phase1c-qa.config.ts.
+  // Never run it against the shared CI DATABASE_URL (.../wanora).
+  testIgnore: ["**/ai-sidebar-disabled.spec.ts", "**/phase1c/**"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
