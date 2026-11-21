@@ -97,6 +97,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [platform, setPlatform] = useState("all");
   const [recruiter, setRecruiter] = useState("all");
   const [addingApp, setAddingApp] = useState(false);
+  const [addingAppBusy, setAddingAppBusy] = useState(false);
+  const addAppInFlight = useRef(false);
   const [editingApp, setEditingApp] = useState<BoardApplication | null>(null);
   const [addingRecruiter, setAddingRecruiter] = useState(false);
   const [interviewFor, setInterviewFor] = useState<string | null>(null);
@@ -250,10 +252,15 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
 
   async function onAddApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // POST create is not idempotent — block double-submit while the first request is in flight.
+    if (addAppInFlight.current) return;
     const form = new FormData(event.currentTarget);
     const company = String(form.get("company")).trim();
     if (!company) return;
     const recruiterName = String(form.get("recruiterName") || "").trim() || null;
+    addAppInFlight.current = true;
+    setAddingAppBusy(true);
+    setConflictMsg(null);
     try {
       const payload = await readJson(
         await fetch("/api/board/applications", {
@@ -275,6 +282,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       setAddingApp(false);
     } catch {
       setConflictMsg(t("errorGeneric"));
+    } finally {
+      addAppInFlight.current = false;
+      setAddingAppBusy(false);
     }
   }
 
@@ -876,13 +886,25 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       </div>
 
       {addingApp ? (
-        <Modal title={t("addApplication")} closeLabel={t("cancel")} onClose={() => setAddingApp(false)}>
+        <Modal
+          title={t("addApplication")}
+          closeLabel={t("cancel")}
+          onClose={() => {
+            if (addingAppBusy) return;
+            setAddingApp(false);
+          }}
+        >
           <AddApplicationForm
             t={t}
             platforms={board.platforms}
             platformLabel={platformLabel}
-            onSubmit={onAddApplication}
-            onCancel={() => setAddingApp(false)}
+            submitting={addingAppBusy}
+            conflictMsg={conflictMsg}
+            onSubmit={(event) => void onAddApplication(event)}
+            onCancel={() => {
+              if (addingAppBusy) return;
+              setAddingApp(false);
+            }}
           />
         </Modal>
       ) : null}
@@ -1146,6 +1168,7 @@ function AddApplicationForm({
   platformLabel,
   initial,
   conflictMsg,
+  submitting = false,
   editSection = "basic",
   onEditSection,
   onSubmit,
@@ -1157,6 +1180,7 @@ function AddApplicationForm({
   platformLabel: (code: string | null, name: string | null) => string;
   initial?: BoardApplication;
   conflictMsg?: string | null;
+  submitting?: boolean;
   editSection?: EditSection;
   onEditSection?: (section: EditSection) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1455,12 +1479,20 @@ function AddApplicationForm({
         </p>
       ) : null}
       <div className="flex justify-end gap-2">
-        <button type="button" className="rounded px-3 py-1.5 text-sm" onClick={onCancel}>
+        <button
+          type="button"
+          className="rounded px-3 py-1.5 text-sm"
+          disabled={submitting}
+          onClick={onCancel}
+        >
           {t("cancel")}
         </button>
         <button
           type="submit"
-          className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+          data-testid={initial ? "save-application-edits" : "save-application"}
+          disabled={submitting}
+          aria-busy={submitting}
+          className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
         >
           {initial ? t("saveEdits") : t("saveApplication")}
         </button>

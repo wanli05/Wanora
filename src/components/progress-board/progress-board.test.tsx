@@ -619,6 +619,62 @@ describe("ProgressBoard", () => {
     expect(screen.queryByRole("button", { name: "スキップ" })).not.toBeInTheDocument();
   });
 
+  it("ignores a second submit while create is in flight", async () => {
+    let releaseFetch!: (value: { ok: boolean; json: () => Promise<BoardPayload> }) => void;
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<{ ok: boolean; json: () => Promise<BoardPayload> }>((resolve) => {
+          releaseFetch = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = boardWith(
+      sampleApp({
+        id: "app-new",
+        company: "日立製作所",
+        currentStageKind: "document_screening",
+      }),
+    );
+
+    renderWithIntl(
+      <ProgressBoard
+        initial={{
+          platforms: samplePlatforms,
+          recruiters: [],
+          applications: [],
+          occupancy: [],
+        }}
+      />,
+      "zh-CN",
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "添加投递" })[0]!);
+    await waitFor(() => {
+      expect(screen.getByRole("dialog", { name: "添加投递" })).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText("公司"), {
+      target: { value: "日立製作所" },
+    });
+    const save = screen.getByTestId("save-application");
+    fireEvent.click(save);
+    fireEvent.click(save);
+    fireEvent.submit(save.closest("form")!);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(save).toBeDisabled();
+
+    releaseFetch({
+      ok: true,
+      json: async () => created,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "添加投递" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("日立製作所")).toBeInTheDocument();
+    expect(screen.getAllByText("日立製作所")).toHaveLength(1);
+    vi.unstubAllGlobals();
+  });
+
   it("opens the application for editing after create", async () => {
     renderWithIntl(
       <ProgressBoard
