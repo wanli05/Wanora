@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { apiSignUp, newSignedInPage } from "./ai-helpers";
 
-test("board 面接準備 opens the read-only prep page without a scheduled interview", async ({
+test("board 面接準備 opens prep page with mock questions when 面接未定", async ({
   browser,
   request,
 }) => {
@@ -20,9 +20,32 @@ test("board 面接準備 opens the read-only prep page without a scheduled inter
   await expect(page).toHaveURL(/\/applications\/[^/]+\/interview-prep$/);
   await expect(page.getByTestId("interview-prep-page")).toBeVisible();
   await expect(page.getByTestId("prep-company")).toHaveText("準備テスト株式会社");
-  await expect(page.getByTestId("prep-role")).toHaveText("バックエンドエンジニア");
   await expect(page.getByTestId("prep-schedule-status")).toContainText("面接未定");
-  await expect(page.getByTestId("prep-questions-placeholder")).toBeVisible();
+  await expect(page.getByTestId("prep-demo-notice")).toBeVisible();
+  await expect(page.getByTestId("prep-questions")).toBeVisible();
+
+  const jobCalls: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("/api/ai/jobs")) jobCalls.push(req.url());
+  });
+
+  const first = page.getByTestId("prep-question-common-motivation");
+  await expect(first).toBeVisible();
+  await first.getByRole("button", { name: "詳細を開く" }).click();
+  await expect(
+    page.getByTestId("prep-question-details-common-motivation"),
+  ).toContainText("質問の意図");
+
+  await page.getByTestId("prep-generate-common-motivation").click();
+  await expect(first).toHaveAttribute("data-answer-state", "ready");
+  await expect(page.getByTestId("prep-sample-common-motivation")).toBeVisible();
+
+  await page.getByTestId("prep-generate-common-self-pr").click();
+  await expect(page.getByTestId("prep-question-common-self-pr")).toHaveAttribute(
+    "data-answer-state",
+    "ready",
+  );
+  expect(jobCalls).toEqual([]);
 
   await page.getByTestId("prep-back").click();
   await expect(page).toHaveURL(/\/$/);

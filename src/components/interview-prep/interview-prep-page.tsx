@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { formatTokyoShort } from "@/lib/progress/tokyo";
 import { interviewModeLabel } from "@/lib/progress/next-prep";
+import { mockQuestionsForStage } from "@/lib/interview-prep/mock-pack";
 import { summarizeRoundSchedule } from "@/lib/interview-prep/rounds";
 import type { InterviewPrepApplication } from "@/lib/interview-prep/types";
+import { QuestionCard } from "./question-card";
 import { RoundSelector } from "./round-selector";
 
 type Props = {
@@ -28,6 +30,24 @@ export function InterviewPrepPage({ application }: Props) {
   const scheduleInterview =
     selected?.interviews.find((item) => item.id === schedule.interviewId) ??
     null;
+
+  const questions = useMemo(
+    () => mockQuestionsForStage(selected?.stageKind ?? null),
+    [selected?.stageKind],
+  );
+
+  const questionLabels = {
+    intent: t("intentLabel"),
+    points: t("pointsLabel"),
+    expand: t("expandDetails"),
+    collapse: t("collapseDetails"),
+    generate: t("generateSample"),
+    generating: t("generatingSample"),
+    retry: t("retrySample"),
+    sampleHeading: t("sampleHeading"),
+    generateError: t("generateError"),
+    demoBadge: t("demoBadge"),
+  };
 
   return (
     <main
@@ -103,16 +123,32 @@ export function InterviewPrepPage({ application }: Props) {
           </div>
         </section>
 
-        <section
-          className="rounded-xl border border-dashed border-[var(--pb-line)] bg-[var(--pb-teal-soft)]/40 px-4 py-5"
-          data-testid="prep-questions-placeholder"
+        <p
+          className="mb-3 m-0 text-xs text-[var(--pb-muted)]"
+          data-testid="prep-demo-notice"
         >
-          <p className="m-0 text-sm font-medium text-[var(--pb-teal-deep)]">
-            {t("questionsComing")}
-          </p>
-          <p className="mt-2 m-0 text-xs text-[var(--pb-muted)]">
-            {t("demoNotice")}
-          </p>
+          {t("demoNotice")}
+        </p>
+
+        <section
+          className="rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-4 py-2"
+          data-testid="prep-questions"
+          data-stage-kind={selected?.stageKind ?? "fallback"}
+        >
+          <h2 className="m-0 border-b border-[var(--pb-line)] py-3 text-sm font-semibold text-[var(--pb-teal-deep)]">
+            {t("questionsHeading")}
+          </h2>
+          {questions.length === 0 ? (
+            <p className="py-4 text-sm text-[var(--pb-muted)]">{t("questionsEmpty")}</p>
+          ) : (
+            questions.map((question) => (
+              <QuestionCard
+                key={`${selected?.stageId ?? "none"}:${question.id}`}
+                question={question}
+                labels={questionLabels}
+              />
+            ))
+          )}
         </section>
       </div>
     </main>

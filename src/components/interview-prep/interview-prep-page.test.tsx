@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import type { InterviewPrepApplication } from "@/lib/interview-prep/types";
 import {
@@ -18,7 +18,19 @@ const messages = {
     scheduleHint: "面接日時がなくても準備できます。看板で日程を登録してください。",
     noInterviewStages: "面接段階がまだありません。",
     questionsComing: "想定質問は次の更新で追加されます。",
-    demoNotice: "表示内容はデモ用です。JD・履歴に基づく個別分析ではありません。",
+    questionsHeading: "想定質問（デモ）",
+    questionsEmpty: "このラウンドの想定質問はまだありません。",
+    demoNotice: "表示内容はデモ用の固定例です。求人や履歴に基づく個別分析ではありません。",
+    demoBadge: "デモ",
+    intentLabel: "質問の意図",
+    pointsLabel: "回答のポイント",
+    expandDetails: "詳細を開く",
+    collapseDetails: "詳細を閉じる",
+    generateSample: "AI回答例を生成",
+    generatingSample: "生成中…",
+    retrySample: "再試行",
+    sampleHeading: "回答例（デモ）",
+    generateError: "回答例を表示できませんでした。",
     notFoundTitle: "応募が見つかりません",
     notFoundBody: "この応募は存在しないか、アクセスできません。",
     signedOutTitle: "ログインが必要です",
@@ -76,28 +88,70 @@ const sample: InterviewPrepApplication = {
 };
 
 describe("InterviewPrepPage", () => {
-  it("shows company, role, 面接未定, and round selector without inventing interviews", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows company, 面接未定, demo notice, and mock questions", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
 
     expect(screen.getByTestId("interview-prep-page")).toBeInTheDocument();
     expect(screen.getByTestId("prep-company")).toHaveTextContent(
       "株式会社サンプル",
     );
-    expect(screen.getByTestId("prep-role")).toHaveTextContent(
-      "プロダクトエンジニア",
-    );
     expect(screen.getByTestId("prep-schedule-status")).toHaveTextContent(
       "面接未定",
     );
-    expect(screen.getByTestId("prep-questions-placeholder")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "応募進捗に戻る" })).toHaveAttribute(
-      "href",
-      "/",
-    );
+    expect(screen.getByTestId("prep-demo-notice")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-questions")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-question-common-motivation")).toBeInTheDocument();
+    expect(screen.queryByTestId("prep-questions-placeholder")).not.toBeInTheDocument();
+  });
 
-    const select = screen.getByTestId("prep-round-select");
-    fireEvent.change(select, { target: { value: "st-final" } });
-    expect(select).toHaveValue("st-final");
+  it("expands details and generates only the selected question sample", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+
+    fireEvent.click(screen.getByTestId("prep-question-toggle-common-motivation"));
+    expect(
+      screen.getByTestId("prep-question-details-common-motivation"),
+    ).toHaveTextContent("質問の意図");
+
+    fireEvent.click(screen.getByTestId("prep-generate-common-motivation"));
+    expect(
+      screen.getByTestId("prep-question-common-motivation"),
+    ).toHaveAttribute("data-answer-state", "loading");
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(
+      screen.getByTestId("prep-sample-common-motivation"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("prep-sample-common-self-pr"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("switches mock pack when changing rounds", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    expect(screen.getByTestId("prep-questions")).toHaveAttribute(
+      "data-stage-kind",
+      "interview_1",
+    );
+    expect(screen.queryByTestId("prep-question-final-offer")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("prep-round-select"), {
+      target: { value: "st-final" },
+    });
+    expect(screen.getByTestId("prep-questions")).toHaveAttribute(
+      "data-stage-kind",
+      "interview_final",
+    );
+    expect(screen.getByTestId("prep-question-final-offer")).toBeInTheDocument();
   });
 
   it("renders not-found shell", () => {
