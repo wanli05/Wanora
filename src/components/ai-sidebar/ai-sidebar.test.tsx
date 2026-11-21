@@ -259,6 +259,26 @@ describe("AiSidebar", () => {
     expect(api.enqueueJob).not.toHaveBeenCalled();
   });
 
+  it("recovers draft and send button when enqueueJob throws (QA-25)", async () => {
+    api.enqueueJob.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderSidebar();
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+
+    const draft = "オフライン送信テスト";
+    fireEvent.change(screen.getByTestId("ai-composer-input"), {
+      target: { value: draft },
+    });
+    fireEvent.click(screen.getByTestId("ai-composer-send"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-sidebar-error")).toHaveTextContent("send fail"),
+    );
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(draft);
+    expect(screen.queryByTestId("ai-msg-user")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-composer-send")).not.toBeDisabled();
+  });
+
   it("lets the user optionally adjust focus near the composer", async () => {
     renderSidebar();
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
