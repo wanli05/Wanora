@@ -20,6 +20,11 @@ const serverEnvSchema = z
     DATABASE_URL: z.url(),
     AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 chars"),
     AUTH_URL: z.url().default("http://localhost:3000"),
+    /**
+     * Comma-separated extra browser origins trusted by Better Auth
+     * (e.g. cloud VM LAN IP `http://172.30.0.2:3000` for Try Live).
+     */
+    AUTH_EXTRA_TRUSTED_ORIGINS: z.string().optional(),
     AUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     AUTH_GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     S3_ENDPOINT: z.url().optional(),

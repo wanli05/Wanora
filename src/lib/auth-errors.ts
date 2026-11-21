@@ -42,3 +42,21 @@ export function trustedOriginsForAuthUrl(authUrl: string): string[] {
   }
   return [...origins];
 }
+
+/** Comma-separated absolute origins, e.g. `http://172.30.0.2:3000`. */
+export function parseExtraTrustedOrigins(
+  raw: string | undefined | null,
+): string[] {
+  if (!raw?.trim()) return [];
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    const s = part.trim();
+    if (!s) continue;
+    try {
+      out.push(new URL(s).origin);
+    } catch {
+      // skip invalid entries
+    }
+  }
+  return out;
+}

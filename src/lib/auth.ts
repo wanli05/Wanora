@@ -4,7 +4,10 @@ import { nextCookies } from "better-auth/next-js";
 import { getDb, type Db } from "@/db";
 import * as schema from "@/db/schema";
 import { MIN_PASSWORD_LENGTH } from "./auth-constants";
-import { trustedOriginsForAuthUrl } from "./auth-errors";
+import {
+  parseExtraTrustedOrigins,
+  trustedOriginsForAuthUrl,
+} from "./auth-errors";
 import { getServerEnv, type ServerEnv } from "./env";
 import { DEFAULT_LOCALE, localeSchema } from "./locale";
 
@@ -25,7 +28,10 @@ export function createAuth(db: Db, env: ServerEnv) {
     appName: "Wanora",
     secret: env.AUTH_SECRET,
     baseURL: env.AUTH_URL,
-    trustedOrigins: trustedOriginsForAuthUrl(env.AUTH_URL),
+    trustedOrigins: [
+      ...trustedOriginsForAuthUrl(env.AUTH_URL),
+      ...parseExtraTrustedOrigins(env.AUTH_EXTRA_TRUSTED_ORIGINS),
+    ],
     database: drizzleAdapter(db, { provider: "pg", schema, usePlural: true }),
     emailAndPassword: {
       enabled: true,
