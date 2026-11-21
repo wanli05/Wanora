@@ -13,6 +13,15 @@ describe("pageContextFromPath", () => {
     });
   });
 
+  it("maps interview-prep application routes to board", () => {
+    expect(
+      pageContextFromPath("/applications/app-1/interview-prep"),
+    ).toMatchObject({ area: "board" });
+    expect(
+      pageContextFromPath("/ja/applications/app-1/interview-prep"),
+    ).toMatchObject({ area: "board" });
+  });
+
   it("keeps full path including locale prefix", () => {
     const ctx = pageContextFromPath("/ja/profile");
     expect(ctx.path).toBe("/ja/profile");

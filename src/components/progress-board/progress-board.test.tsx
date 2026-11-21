@@ -1,8 +1,14 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithIntl } from "@/test-utils/intl";
 import type { BoardApplication, BoardPayload } from "@/lib/progress/dto";
 import { ProgressBoard } from "./progress-board";
+
+const push = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
 
 const empty: BoardPayload = {
   platforms: [],
@@ -68,11 +74,27 @@ function boardWith(app: BoardApplication): BoardPayload {
 }
 
 describe("ProgressBoard", () => {
+  beforeEach(() => {
+    push.mockReset();
+  });
+
   it("shows the empty state for a logged-in user with no applications", () => {
     renderWithIntl(<ProgressBoard initial={empty} />, "zh-CN");
     expect(screen.getByTestId("board-empty")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "投递进度" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "添加投递" }).length).toBeGreaterThan(0);
+  });
+
+  it("navigates to the interview-prep page from the card CTA", () => {
+    renderWithIntl(
+      <ProgressBoard
+        initial={boardWith(sampleApp({ currentStageKind: "document_screening" }))}
+      />,
+      "ja",
+    );
+    fireEvent.click(screen.getByTestId("prep-app-1"));
+    expect(push).toHaveBeenCalledWith("/applications/app-1/interview-prep");
+    expect(screen.queryByTestId("interview-prep-dialog")).not.toBeInTheDocument();
   });
 
   it("hides pass/reject/offer/withdraw on the info session column", () => {
