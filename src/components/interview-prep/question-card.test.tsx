@@ -1,26 +1,36 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockPrepQuestion } from "@/lib/interview-prep/mock-pack";
 import { QuestionCard } from "./question-card";
+
+const openPanel = vi.fn();
+
+vi.mock("@/components/ai-sidebar/ai-assist-context", () => ({
+  useAiAssistOptional: () => ({
+    openPanel,
+    openWithAssist: vi.fn(),
+    invalidateAssistApply: vi.fn(),
+    registerOpenHandler: () => () => {},
+    registerPanelOpener: () => () => {},
+    registerInvalidateHandler: () => () => {},
+    bridgeError: null,
+    clearBridgeError: vi.fn(),
+  }),
+}));
 
 const labels = {
   intent: "質問の意図",
   points: "回答のポイント",
   expand: "詳細を開く",
   collapse: "詳細を閉じる",
-  generate: "AI回答例を生成",
-  generating: "生成中…",
-  retry: "再試行",
-  regenerate: "回答例を再生成",
-  sampleHeading: "回答例（デモ）",
-  generateError: "回答例を表示できませんでした。",
   demoBadge: "デモ",
-  editAnswer: "回答を編集",
-  finishEdit: "編集を完了（デモ）",
-  cancelEdit: "編集をやめる",
-  draftHeading: "あなたの回答（デモ）",
+  answerHeading: "自分の回答",
+  openAiAssist: "AIで回答を作成・修正",
+  aiAssistHint: "サイドバーを開きます",
+  reflectComingSoon: "反映は今後",
   editorHint: "デモ：入力内容は保存されません",
   editorPlaceholder: "ここに自分の回答を書いてください",
+  aiUnavailable: "AI を開けませんでした",
 };
 
 const question: MockPrepQuestion = {
@@ -31,19 +41,10 @@ const question: MockPrepQuestion = {
   sampleAnswer: "サンプル回答本文",
 };
 
-function generateReady() {
-  fireEvent.click(screen.getByTestId("prep-generate-q-1"));
-  act(() => {
-    vi.runAllTimers();
-  });
-}
-
 describe("QuestionCard", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
+    openPanel.mockReset();
+    openPanel.mockResolvedValue(true);
   });
 
   it("keeps details collapsed until expanded", () => {
@@ -57,74 +58,58 @@ describe("QuestionCard", () => {
     );
   });
 
-  it("moves idle → loading → ready for mock sample answer", () => {
+  it("shows answer editor without mock generate controls", () => {
     render(<QuestionCard question={question} labels={labels} />);
-    const card = screen.getByTestId("prep-question-q-1");
-    fireEvent.click(screen.getByTestId("prep-generate-q-1"));
-    expect(card).toHaveAttribute("data-answer-state", "loading");
-    act(() => {
-      vi.runAllTimers();
-    });
-    expect(card).toHaveAttribute("data-answer-state", "ready");
-    expect(screen.getByTestId("prep-sample-q-1")).toHaveTextContent(
-      "サンプル回答本文",
+    fireEvent.click(screen.getByTestId("prep-question-toggle-q-1"));
+    expect(screen.getByTestId("prep-answer-section-q-1")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-editor-input-q-1")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-ai-assist-q-1")).toHaveTextContent(
+      "AIで回答を作成・修正",
     );
+    expect(screen.queryByTestId("prep-generate-q-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("prep-sample-q-1")).not.toBeInTheDocument();
+    expect(screen.getByText("デモ：入力内容は保存されません")).toBeInTheDocument();
   });
 
-  it("opens editor seeded from sample and commits draft without save success copy", () => {
+  it("lets the user edit the answer field without save-success copy", () => {
     render(<QuestionCard question={question} labels={labels} />);
-    generateReady();
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    const input = screen.getByTestId("prep-editor-input-q-1");
-    expect(input).toHaveValue("サンプル回答本文");
-    expect(screen.getByTestId("prep-editor-q-1")).toHaveTextContent(
-      "デモ：入力内容は保存されません",
-    );
-    fireEvent.change(input, { target: { value: "ユーザー編集後の回答" } });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent(
+    fireEvent.click(screen.getByTestId("prep-question-toggle-q-1"));
+    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
+      target: { value: "ユーザー編集後の回答" },
+    });
+    expect(screen.getByTestId("prep-editor-input-q-1")).toHaveValue(
       "ユーザー編集後の回答",
     );
     expect(screen.queryByText("保存しました")).not.toBeInTheDocument();
   });
 
-  it("cancel restores the draft from before edit", () => {
-    render(<QuestionCard question={question} labels={labels} />);
-    generateReady();
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
-      target: { value: "初回ドラフト" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent("初回ドラフト");
-
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
-      target: { value: "破棄される編集" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-cancel-q-1"));
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent("初回ドラフト");
-    expect(screen.queryByTestId("prep-editor-q-1")).not.toBeInTheDocument();
+  it("opens the shared AI panel and reports focus", async () => {
+    const onAiFocus = vi.fn();
+    render(
+      <QuestionCard
+        question={question}
+        labels={labels}
+        onAiFocus={onAiFocus}
+        aiFocused
+      />,
+    );
+    fireEvent.click(screen.getByTestId("prep-question-toggle-q-1"));
+    fireEvent.click(screen.getByTestId("prep-ai-assist-q-1"));
+    await waitFor(() => expect(openPanel).toHaveBeenCalledTimes(1));
+    expect(onAiFocus).toHaveBeenCalledWith("q-1");
+    expect(screen.getByTestId("prep-question-q-1")).toHaveAttribute(
+      "data-ai-focused",
+      "true",
+    );
   });
 
-  it("regenerating mock sample does not overwrite the user draft", () => {
+  it("shows unavailable copy when openPanel fails", async () => {
+    openPanel.mockResolvedValue(false);
     render(<QuestionCard question={question} labels={labels} />);
-    generateReady();
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
-      target: { value: "守られるドラフト" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
-
-    fireEvent.click(screen.getByTestId("prep-generate-again-q-1"));
-    act(() => {
-      vi.runAllTimers();
-    });
-    expect(screen.getByTestId("prep-sample-q-1")).toHaveTextContent(
-      "サンプル回答本文",
-    );
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent(
-      "守られるドラフト",
+    fireEvent.click(screen.getByTestId("prep-question-toggle-q-1"));
+    fireEvent.click(screen.getByTestId("prep-ai-assist-q-1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("prep-ai-unavailable-q-1")).toBeInTheDocument(),
     );
   });
 });

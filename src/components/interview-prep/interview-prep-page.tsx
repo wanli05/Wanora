@@ -20,6 +20,9 @@ export function InterviewPrepPage({ application }: Props) {
   const [roundId, setRoundId] = useState<string | null>(
     application.initialRoundId,
   );
+  const [aiFocusedQuestionId, setAiFocusedQuestionId] = useState<string | null>(
+    null,
+  );
 
   const selected = useMemo(
     () => application.rounds.find((round) => round.stageId === roundId) ?? null,
@@ -41,27 +44,27 @@ export function InterviewPrepPage({ application }: Props) {
     points: t("pointsLabel"),
     expand: t("expandDetails"),
     collapse: t("collapseDetails"),
-    generate: t("generateSample"),
-    generating: t("generatingSample"),
-    retry: t("retrySample"),
-    regenerate: t("regenerateSample"),
-    sampleHeading: t("sampleHeading"),
-    generateError: t("generateError"),
     demoBadge: t("demoBadge"),
-    editAnswer: t("editAnswer"),
-    finishEdit: t("finishEdit"),
-    cancelEdit: t("cancelEdit"),
-    draftHeading: t("draftHeading"),
+    answerHeading: t("answerHeading"),
+    openAiAssist: t("openAiAssist"),
+    aiAssistHint: t("aiAssistHint"),
+    reflectComingSoon: t("reflectComingSoon"),
     editorHint: t("editorHint"),
     editorPlaceholder: t("editorPlaceholder"),
+    aiUnavailable: t("aiUnavailable"),
   };
+
+  function onRoundChange(next: string | null) {
+    setRoundId(next);
+    setAiFocusedQuestionId(null);
+  }
 
   return (
     <main
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6"
+      className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 lg:max-w-6xl"
       data-testid="interview-prep-page"
     >
-      <div className="pb-shell overflow-hidden rounded-2xl border border-[#cfdad3] p-4 sm:p-6">
+      <div className="pb-shell overflow-hidden rounded-2xl border border-[#cfdad3] p-4 sm:p-6 lg:p-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <Link
             href="/"
@@ -77,7 +80,7 @@ export function InterviewPrepPage({ application }: Props) {
             {t("title")}
           </p>
           <h1
-            className="mt-1 text-2xl font-semibold text-[var(--pb-teal-deep)]"
+            className="mt-1 text-2xl font-semibold text-[var(--pb-teal-deep)] sm:text-3xl"
             lang="ja"
             data-testid="prep-company"
           >
@@ -96,7 +99,7 @@ export function InterviewPrepPage({ application }: Props) {
           <RoundSelector
             rounds={application.rounds}
             value={roundId}
-            onChange={setRoundId}
+            onChange={onRoundChange}
             label={t("roundLabel")}
             unscheduledHint={t("scheduleUnscheduled")}
             emptyLabel={t("noInterviewStages")}
@@ -131,16 +134,23 @@ export function InterviewPrepPage({ application }: Props) {
         </section>
 
         <p
-          className="mb-3 m-0 text-xs text-[var(--pb-muted)]"
+          className="mb-2 m-0 text-xs text-[var(--pb-muted)]"
           data-testid="prep-demo-notice"
         >
           {t("demoNotice")}
         </p>
+        <p
+          className="mb-3 m-0 text-xs text-[var(--pb-amber)]"
+          data-testid="prep-round-switch-hint"
+        >
+          {t("roundSwitchHint")}
+        </p>
 
         <section
-          className="rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-4 py-2"
+          className="rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-4 py-2 sm:px-5"
           data-testid="prep-questions"
           data-stage-kind={selected?.stageKind ?? "fallback"}
+          data-ai-focused-question={aiFocusedQuestionId ?? ""}
         >
           <h2 className="m-0 border-b border-[var(--pb-line)] py-3 text-sm font-semibold text-[var(--pb-teal-deep)]">
             {t("questionsHeading")}
@@ -153,6 +163,8 @@ export function InterviewPrepPage({ application }: Props) {
                 key={`${selected?.stageId ?? "none"}:${question.id}`}
                 question={question}
                 labels={questionLabels}
+                aiFocused={aiFocusedQuestionId === question.id}
+                onAiFocus={setAiFocusedQuestionId}
               />
             ))
           )}
@@ -170,7 +182,7 @@ export function InterviewPrepUnavailable({ kind }: ShellProps) {
   const t = useTranslations("InterviewPrep");
   return (
     <main
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6"
+      className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 lg:max-w-6xl"
       data-testid={
         kind === "not_found" ? "interview-prep-not-found" : "interview-prep-signed-out"
       }

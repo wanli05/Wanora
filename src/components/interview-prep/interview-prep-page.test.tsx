@@ -1,11 +1,24 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import type { InterviewPrepApplication } from "@/lib/interview-prep/types";
 import {
   InterviewPrepPage,
   InterviewPrepUnavailable,
 } from "./interview-prep-page";
+
+vi.mock("@/components/ai-sidebar/ai-assist-context", () => ({
+  useAiAssistOptional: () => ({
+    openPanel: vi.fn().mockResolvedValue(true),
+    openWithAssist: vi.fn(),
+    invalidateAssistApply: vi.fn(),
+    registerOpenHandler: () => () => {},
+    registerPanelOpener: () => () => {},
+    registerInvalidateHandler: () => () => {},
+    bridgeError: null,
+    clearBridgeError: vi.fn(),
+  }),
+}));
 
 const messages = {
   InterviewPrep: {
@@ -20,24 +33,20 @@ const messages = {
     questionsComing: "想定質問は次の更新で追加されます。",
     questionsHeading: "想定質問（デモ）",
     questionsEmpty: "このラウンドの想定質問はまだありません。",
-    demoNotice: "表示内容はデモ用の固定例です。求人や履歴に基づく個別分析ではありません。",
+    demoNotice: "表示内容はデモ用の固定例です。",
     demoBadge: "デモ",
     intentLabel: "質問の意図",
     pointsLabel: "回答のポイント",
     expandDetails: "詳細を開く",
     collapseDetails: "詳細を閉じる",
-    generateSample: "AI回答例を生成",
-    generatingSample: "生成中…",
-    retrySample: "再試行",
-    regenerateSample: "回答例を再生成",
-    sampleHeading: "回答例（デモ）",
-    generateError: "回答例を表示できませんでした。",
-    editAnswer: "回答を編集",
-    finishEdit: "編集を完了（デモ）",
-    cancelEdit: "編集をやめる",
-    draftHeading: "あなたの回答（デモ）",
+    answerHeading: "自分の回答",
+    openAiAssist: "AIで回答を作成・修正",
+    aiAssistHint: "サイドバーを開きます",
+    reflectComingSoon: "反映は今後",
+    roundSwitchHint: "ラウンド切替で編集は失われます",
     editorHint: "デモ：入力内容は保存されません",
     editorPlaceholder: "ここに自分の回答を書いてください",
+    aiUnavailable: "AI を開けませんでした",
     notFoundTitle: "応募が見つかりません",
     notFoundBody: "この応募は存在しないか、アクセスできません。",
     signedOutTitle: "ログインが必要です",
@@ -95,17 +104,12 @@ const sample: InterviewPrepApplication = {
 };
 
 describe("InterviewPrepPage", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("shows company, 面接未定, demo notice, and mock questions", () => {
+  it("shows company, 面接未定, demo notice, and wider layout shell", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
 
-    expect(screen.getByTestId("interview-prep-page")).toBeInTheDocument();
+    const page = screen.getByTestId("interview-prep-page");
+    expect(page).toBeInTheDocument();
+    expect(page.className).toContain("max-w-5xl");
     expect(screen.getByTestId("prep-company")).toHaveTextContent(
       "株式会社サンプル",
     );
@@ -113,80 +117,59 @@ describe("InterviewPrepPage", () => {
       "面接未定",
     );
     expect(screen.getByTestId("prep-demo-notice")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-round-switch-hint")).toBeInTheDocument();
     expect(screen.getByTestId("prep-questions")).toBeInTheDocument();
     expect(screen.getByTestId("prep-question-common-motivation")).toBeInTheDocument();
-    expect(screen.queryByTestId("prep-questions-placeholder")).not.toBeInTheDocument();
   });
 
-  it("expands details and generates only the selected question sample", () => {
+  it("expands details and does not expose mock generate entry", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
 
     fireEvent.click(screen.getByTestId("prep-question-toggle-common-motivation"));
     expect(
       screen.getByTestId("prep-question-details-common-motivation"),
     ).toHaveTextContent("質問の意図");
-
-    fireEvent.click(screen.getByTestId("prep-generate-common-motivation"));
     expect(
-      screen.getByTestId("prep-question-common-motivation"),
-    ).toHaveAttribute("data-answer-state", "loading");
-
-    act(() => {
-      vi.runAllTimers();
-    });
-
-    expect(
-      screen.getByTestId("prep-sample-common-motivation"),
+      screen.getByTestId("prep-ai-assist-common-motivation"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByTestId("prep-sample-common-self-pr"),
+      screen.queryByTestId("prep-generate-common-motivation"),
     ).not.toBeInTheDocument();
   });
 
-  it("switches mock pack when changing rounds", () => {
-    renderPrep(<InterviewPrepPage application={sample} />);
-    expect(screen.getByTestId("prep-questions")).toHaveAttribute(
-      "data-stage-kind",
-      "interview_1",
-    );
-    expect(screen.queryByTestId("prep-question-final-offer")).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByTestId("prep-round-select"), {
-      target: { value: "st-final" },
-    });
-    expect(screen.getByTestId("prep-questions")).toHaveAttribute(
-      "data-stage-kind",
-      "interview_final",
-    );
-    expect(screen.getByTestId("prep-question-final-offer")).toBeInTheDocument();
-  });
-
-  it("keeps drafts isolated per question and clears them when remounting on round change", () => {
+  it("keeps answer edits isolated per question and clears on round remount", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
 
-    fireEvent.click(screen.getByTestId("prep-generate-common-motivation"));
-    act(() => {
-      vi.runAllTimers();
-    });
-    fireEvent.click(screen.getByTestId("prep-edit-common-motivation"));
+    fireEvent.click(screen.getByTestId("prep-question-toggle-common-motivation"));
     fireEvent.change(screen.getByTestId("prep-editor-input-common-motivation"), {
       target: { value: "動機ドラフト" },
     });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-common-motivation"));
-    expect(screen.getByTestId("prep-draft-common-motivation")).toHaveTextContent(
-      "動機ドラフト",
-    );
+    expect(
+      screen.getByTestId("prep-editor-input-common-motivation"),
+    ).toHaveValue("動機ドラフト");
 
-    fireEvent.click(screen.getByTestId("prep-generate-common-self-pr"));
-    act(() => {
-      vi.runAllTimers();
-    });
-    expect(screen.queryByTestId("prep-draft-common-self-pr")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("prep-question-toggle-common-self-pr"));
+    expect(
+      screen.getByTestId("prep-editor-input-common-self-pr"),
+    ).toHaveValue("");
 
     fireEvent.change(screen.getByTestId("prep-round-select"), {
       target: { value: "st-final" },
     });
-    expect(screen.queryByTestId("prep-draft-common-motivation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("prep-editor-input-common-motivation"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("prep-question-final-offer")).toBeInTheDocument();
+  });
+
+  it("tracks which question last requested AI focus", async () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    fireEvent.click(screen.getByTestId("prep-question-toggle-common-motivation"));
+    fireEvent.click(screen.getByTestId("prep-ai-assist-common-motivation"));
+    expect(screen.getByTestId("prep-questions")).toHaveAttribute(
+      "data-ai-focused-question",
+      "common-motivation",
+    );
   });
 
   it("renders not-found shell", () => {
