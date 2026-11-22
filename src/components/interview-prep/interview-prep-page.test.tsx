@@ -29,8 +29,15 @@ const messages = {
     generateSample: "AI回答例を生成",
     generatingSample: "生成中…",
     retrySample: "再試行",
+    regenerateSample: "回答例を再生成",
     sampleHeading: "回答例（デモ）",
     generateError: "回答例を表示できませんでした。",
+    editAnswer: "回答を編集",
+    finishEdit: "編集を完了（デモ）",
+    cancelEdit: "編集をやめる",
+    draftHeading: "あなたの回答（デモ）",
+    editorHint: "デモ：入力内容は保存されません",
+    editorPlaceholder: "ここに自分の回答を書いてください",
     notFoundTitle: "応募が見つかりません",
     notFoundBody: "この応募は存在しないか、アクセスできません。",
     signedOutTitle: "ログインが必要です",
@@ -152,6 +159,34 @@ describe("InterviewPrepPage", () => {
       "interview_final",
     );
     expect(screen.getByTestId("prep-question-final-offer")).toBeInTheDocument();
+  });
+
+  it("keeps drafts isolated per question and clears them when remounting on round change", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+
+    fireEvent.click(screen.getByTestId("prep-generate-common-motivation"));
+    act(() => {
+      vi.runAllTimers();
+    });
+    fireEvent.click(screen.getByTestId("prep-edit-common-motivation"));
+    fireEvent.change(screen.getByTestId("prep-editor-input-common-motivation"), {
+      target: { value: "動機ドラフト" },
+    });
+    fireEvent.click(screen.getByTestId("prep-editor-finish-common-motivation"));
+    expect(screen.getByTestId("prep-draft-common-motivation")).toHaveTextContent(
+      "動機ドラフト",
+    );
+
+    fireEvent.click(screen.getByTestId("prep-generate-common-self-pr"));
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(screen.queryByTestId("prep-draft-common-self-pr")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("prep-round-select"), {
+      target: { value: "st-final" },
+    });
+    expect(screen.queryByTestId("prep-draft-common-motivation")).not.toBeInTheDocument();
   });
 
   it("renders not-found shell", () => {
