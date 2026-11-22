@@ -101,10 +101,13 @@ test.describe("QA-23～32 safety", () => {
     await expect(page.getByTestId("ai-job-status")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByTestId("ai-job-cancel")).toBeVisible();
+    // Cancel while polls are still held — releasing first races the worker
+    // finishing the job and detaching `ai-job-cancel` (120s flake).
+    const cancel = page.getByTestId("ai-job-cancel");
+    await expect(cancel).toBeVisible();
+    await cancel.click();
     holding = false;
     releasePoll?.();
-    await page.getByTestId("ai-job-cancel").click();
 
     await page.unroute("**/api/ai/jobs/**");
     await closeSidebarIfOpen(page);

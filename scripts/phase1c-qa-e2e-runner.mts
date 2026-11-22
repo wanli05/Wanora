@@ -13,8 +13,8 @@
  *   pnpm exec tsx scripts/phase1c-qa-e2e-runner.mts -- e2e/phase1c/diagnose-save.spec.ts
  *   pnpm test:e2e:phase1c-qa
  */
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,17 +66,30 @@ async function waitForUrl(url: string, timeoutMs: number): Promise<void> {
 }
 
 function assertPortFree(port: number): Promise<void> {
+  // Bind IPv6 `::` when available so we catch Next's default dual-stack listen
+  // (`:::port`). Falling back to 127.0.0.1 covers hosts without IPv6.
   return new Promise((resolve, reject) => {
     const server = createServer();
-    server.once("error", (err) => {
+    const fail = (err: NodeJS.ErrnoException) => {
       reject(
         new Error(
-          `Port ${port} is not free (${(err as NodeJS.ErrnoException).code}). ` +
+          `Port ${port} is not free (${err.code}). ` +
             `Stop the other process or set PHASE1C_QA_*_PORT.`,
         ),
       );
+    };
+    server.once("error", (err) => {
+      if ((err as NodeJS.ErrnoException).code === "EAFNOSUPPORT") {
+        const v4 = createServer();
+        v4.once("error", (e) => fail(e as NodeJS.ErrnoException));
+        v4.listen(port, "127.0.0.1", () => {
+          v4.close(() => resolve());
+        });
+        return;
+      }
+      fail(err as NodeJS.ErrnoException);
     });
-    server.listen(port, "127.0.0.1", () => {
+    server.listen(port, "::", () => {
       server.close(() => resolve());
     });
   });
@@ -108,17 +121,67 @@ function childEnv(databaseUrl: string): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * Resolve how to invoke pnpm under `spawn` without shell when possible.
+ * On Windows, Node 20+ cannot `spawn("pnpm")` / bare `.cmd` with `shell:false`
+ * (ENOENT / EINVAL). Prefer `node corepack/dist/pnpm.js`; fall back to
+ * `pnpm.cmd` + `shell:true` (args here are fixed runner flags, not user input).
+ */
+function resolvePnpmSpawn(args: string[]): {
+  command: string;
+  args: string[];
+  shell: boolean;
+} {
+  if (process.platform !== "win32") {
+    return { command: "pnpm", args, shell: false };
+  }
+
+  const corepackCandidates = [
+    path.join(
+      "C:\\Program Files\\nodejs",
+      "node_modules",
+      "corepack",
+      "dist",
+      "pnpm.js",
+    ),
+    path.join(
+      path.dirname(process.execPath),
+      "node_modules",
+      "corepack",
+      "dist",
+      "pnpm.js",
+    ),
+  ];
+  const systemNode = "C:\\Program Files\\nodejs\\node.exe";
+  for (const pnpmJs of corepackCandidates) {
+    if (!existsSync(pnpmJs)) continue;
+    const nodeBin = existsSync(systemNode) ? systemNode : process.execPath;
+    return { command: nodeBin, args: [pnpmJs, ...args], shell: false };
+  }
+
+  return { command: "pnpm.cmd", args, shell: true };
+}
+
+function spawnPnpm(
+  pnpmArgs: string[],
+  options: SpawnOptions,
+): ChildProcess {
+  const resolved = resolvePnpmSpawn(pnpmArgs);
+  return spawn(resolved.command, resolved.args, {
+    ...options,
+    shell: resolved.shell,
+  });
+}
+
 function spawnLogged(
-  command: string,
-  args: string[],
+  pnpmArgs: string[],
   env: NodeJS.ProcessEnv,
   label: string,
 ): ChildProcess {
-  const child = spawn(command, args, {
+  const child = spawnPnpm(pnpmArgs, {
     cwd: ROOT,
     env,
     stdio: ["ignore", "pipe", "pipe"],
-    shell: false,
   });
   const prefix = `[${label}] `;
   child.stdout?.on("data", (buf: Buffer) => {
@@ -161,11 +224,10 @@ function runPlaywright(
       ...extraArgs,
     ];
     log("starting playwright", { args: extraArgs });
-    const child = spawn("pnpm", args, {
+    const child = spawnPnpm(args, {
       cwd: ROOT,
       env,
       stdio: "inherit",
-      shell: false,
     });
     child.on("exit", (code) => resolve(code ?? 1));
   });
@@ -248,7 +310,7 @@ try {
     const env = childEnv(databaseUrl);
 
     log("building Next app");
-    const build = spawnLogged("pnpm", ["build"], env, "build");
+    const build = spawnLogged(["build"], env, "build");
     const buildCode: number = await new Promise((resolve) => {
       build.on("exit", (code) => resolve(code ?? 1));
     });
@@ -258,7 +320,6 @@ try {
 
     log(`starting next on :${APP_PORT}`);
     nextProc = spawnLogged(
-      "pnpm",
       ["exec", "next", "start", "--port", String(APP_PORT)],
       env,
       "next",
@@ -268,7 +329,6 @@ try {
     // Intentionally NOT `pnpm ai:worker` — that uses --env-file=.env.local
     // and would reintroduce shared DATABASE_URL / OpenAI key.
     workerProc = spawnLogged(
-      "pnpm",
       ["exec", "tsx", "scripts/ai-worker.mts"],
       env,
       "worker",
