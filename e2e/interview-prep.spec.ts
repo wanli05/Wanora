@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { apiSignUp, newSignedInPage } from "./ai-helpers";
+import { apiSignUp, closeAiSidebar, newSignedInPage } from "./ai-helpers";
 
 test("board 面接準備 opens redesigned prep page when 面接未定", async ({
   browser,
@@ -63,6 +63,7 @@ test("board 面接準備 opens redesigned prep page when 面接未定", async ({
   );
   expect(jobCalls).toEqual([]);
 
+  await closeAiSidebar(page);
   await page.getByTestId("prep-back").click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "応募進捗" })).toBeVisible();
