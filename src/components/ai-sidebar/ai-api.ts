@@ -23,10 +23,15 @@ export async function fetchAiStatus(): Promise<{
 export async function listConversations(opts?: {
   limit?: number;
   includeArchived?: boolean;
+  assistSlotKey?: string;
+  /** Only conversations with assist_slot_key IS NULL (general chat). */
+  unslotted?: boolean;
 }) {
   const q = new URLSearchParams();
   if (opts?.limit) q.set("limit", String(opts.limit));
   if (opts?.includeArchived) q.set("includeArchived", "true");
+  if (opts?.assistSlotKey) q.set("assistSlotKey", opts.assistSlotKey);
+  if (opts?.unslotted) q.set("unslotted", "true");
   const res = await fetch(`/api/ai/conversations?${q}`, {
     credentials: "same-origin",
   });
@@ -43,6 +48,7 @@ export async function listConversations(opts?: {
 export async function createConversation(body?: {
   title?: string | null;
   pinnedTarget?: AiTargetContext | null;
+  assistSlotKey?: string | null;
 }) {
   const res = await fetch("/api/ai/conversations", {
     method: "POST",
@@ -52,6 +58,40 @@ export async function createConversation(body?: {
   });
   if (!res.ok) return { error: await parseJson<AiApiError>(res) };
   return parseJson<{ conversation: AiConversationDto }>(res);
+}
+
+export async function ensureAssistConversation(body: {
+  assistSlotKey: string;
+  pinnedTarget: AiTargetContext | null;
+  title?: string | null;
+}) {
+  const res = await fetch("/api/ai/conversations/ensure-assist", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return { error: await parseJson<AiApiError>(res), status: res.status };
+  return parseJson<{ conversation: AiConversationDto; created: boolean }>(res);
+}
+
+export async function rebindAssistConversation(body: {
+  fromAssistSlotKey: string;
+  toAssistSlotKey: string;
+  pinnedTarget: AiTargetContext | null;
+}) {
+  const res = await fetch("/api/ai/conversations/rebind-assist", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return { error: await parseJson<AiApiError>(res), status: res.status };
+  return parseJson<{
+    conversations: AiConversationDto[];
+    reboundCount: number;
+    alreadyBound: boolean;
+  }>(res);
 }
 
 export async function patchConversation(

@@ -6,13 +6,12 @@ import { useTranslations } from "next-intl";
 import type { AiTargetContext } from "@/lib/ai/context/types";
 import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
-import {
-  useAiAssist,
-  type OpenWithAssistInput,
-} from "@/components/ai-sidebar/ai-assist-context";
+import { useAiAssist } from "@/components/ai-sidebar/ai-assist-context";
 import { extractRefinedText } from "@/components/ai-sidebar/extract-refined-text";
 import {
+  assistSlotKeyForRefineField,
   buildRefinePrompt,
+  defaultAssistTitle,
   type RefineFeature,
   type RefineFieldKey,
 } from "@/components/ai-sidebar/refine-prompts";
@@ -21,6 +20,7 @@ import {
   createConversation,
   deleteConversation,
   enqueueJob,
+  ensureAssistConversation,
   listConversations,
   listMessages,
   patchConversation,
@@ -45,6 +45,7 @@ type AssistSession = {
   feature: RefineFeature;
   target: AiTargetContext | null;
   recordId: string | null;
+  assistSlotKey: string;
   draftSnapshot: string;
   getCurrentDraft: () => string;
   /** Returns false when binding is stale / unmounted. */
@@ -82,6 +83,9 @@ export function AiSidebar() {
     null,
   );
   const [applyNotice, setApplyNotice] = useState<string | null>(null);
+  const [assistOpening, setAssistOpening] = useState(false);
+  /** When assist is open, list defaults to the current slot unless user opts in. */
+  const [showAllConversations, setShowAllConversations] = useState(false);
   const sendingRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -89,6 +93,21 @@ export function AiSidebar() {
   const assistTargetLockRef = useRef<AiTargetContext | null | undefined>(
     undefined,
   );
+  /** Tracks latest openWithAssist generation for stale-async discard. */
+  const openGenerationRef = useRef(0);
+  const assistSlotKeyRef = useRef<string | null>(null);
+  /**
+   * Invalidates in-flight Q7 general restore when the user creates a thread or
+   * opens Assist — otherwise a late selectConversation clears send errors (QA-25).
+   */
+  const generalRestoreGenRef = useRef(0);
+  const conversationsRef = useRef(conversations);
+  const selectConversationRef = useRef<
+    (id: string, list?: AiConversationDto[]) => Promise<void>
+  >(async () => {});
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   function formatTarget(tgt: AiTargetContext | null): string {
     if (!tgt) return t("targetNone");
@@ -123,18 +142,38 @@ export function AiSidebar() {
     }
   }, []);
 
-  const refreshConversations = useCallback(async () => {
-    const res = await listConversations({ limit: 50, includeArchived: true });
-    if ("unauthorized" in res && res.unauthorized) {
-      setUnauthorized(true);
+  const refreshConversations = useCallback(
+    async (opts?: { assistSlotKey?: string | null; showAll?: boolean }) => {
+      const slot = opts?.assistSlotKey ?? assistSlotKeyRef.current;
+      const showAll = opts?.showAll ?? showAllConversations;
+      const res =
+        slot && !showAll
+          ? await listConversations({
+              limit: 50,
+              includeArchived: true,
+              assistSlotKey: slot,
+            })
+          : await listConversations({ limit: 50, includeArchived: true });
+      if ("unauthorized" in res && res.unauthorized) {
+        setUnauthorized(true);
+        return [];
+      }
+      if ("conversations" in res && res.conversations) {
+        setConversations(res.conversations);
+        setUnauthorized(false);
+        return res.conversations;
+      }
       return [];
-    }
-    if ("conversations" in res && res.conversations) {
-      setConversations(res.conversations);
-      setUnauthorized(false);
-      return res.conversations;
-    }
-    return [];
+    },
+    [showAllConversations],
+  );
+
+  const clearAssistSendContext = useCallback(() => {
+    assistTargetLockRef.current = undefined;
+    assistSlotKeyRef.current = null;
+    setAssistSession(null);
+    setApplyNotice(null);
+    setTargetContext(null);
   }, []);
 
   const selectConversation = useCallback(
@@ -143,16 +182,32 @@ export function AiSidebar() {
       writeActiveConversationId(id);
       setError(null);
       setAdjustOpen(false);
-      // Switching threads must not let an old assistant reply apply to a new field.
-      setAssistSession((prev) =>
-        prev ? { ...prev, applyMessageId: null, clientRequestId: undefined } : null,
-      );
-      if (list) {
-        const conv = list.find((c) => c.id === id);
+      const conv = (list ?? conversationsRef.current).find((c) => c.id === id);
+      const lockedSlot = assistSlotKeyRef.current;
+      const convSlot = conv?.assistSlotKey ?? null;
+      // Only clear when we *know* the selected row is another slot / legacy.
+      // Missing list rows (race / empty refresh) must not drop AssistSession.
+      const leavingAssistSlot =
+        lockedSlot != null &&
+        conv != null &&
+        (convSlot == null || convSlot !== lockedSlot);
+
+      if (leavingAssistSlot) {
+        // Switching to another slot or legacy: drop Apply + wrong Target/send ctx.
+        clearAssistSendContext();
+        setTargetContext(
+          (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
+        );
+      } else {
+        // Switching threads must not let an old assistant reply apply to a new field.
+        setAssistSession((prev) =>
+          prev
+            ? { ...prev, applyMessageId: null, clientRequestId: undefined }
+            : null,
+        );
         if (assistTargetLockRef.current !== undefined) {
           setTargetContext(assistTargetLockRef.current);
         } else {
-          // Preserve existing pinned Target in UI when present; do not invent one.
           setTargetContext(
             (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
           );
@@ -160,40 +215,70 @@ export function AiSidebar() {
       }
       await refreshMessages(id);
     },
-    [refreshMessages, setAdjustOpen],
+    [refreshMessages, clearAssistSendContext, setAdjustOpen],
   );
+  useEffect(() => {
+    selectConversationRef.current = selectConversation;
+  }, [selectConversation]);
 
   useEffect(() => {
     if (!open) return;
+    // Assist open path selects its own conversation; skip general restore race.
+    if (assistTargetLockRef.current !== undefined) return;
+    const gen = ++generalRestoreGenRef.current;
     let cancelled = false;
     (async () => {
-      const list = await refreshConversations();
-      if (cancelled) return;
+      // Q7: general open only restores unslotted (legacy/general) conversations.
+      const res = await listConversations({
+        limit: 50,
+        includeArchived: true,
+        unslotted: true,
+      });
+      if (cancelled || gen !== generalRestoreGenRef.current) return;
+      if (assistTargetLockRef.current !== undefined) return;
+      if ("unauthorized" in res && res.unauthorized) {
+        setUnauthorized(true);
+        return;
+      }
+      const list =
+        "conversations" in res && res.conversations ? res.conversations : [];
+      setConversations(list);
       const saved = readActiveConversationId();
+      const savedOk =
+        saved &&
+        list.find(
+          (c) =>
+            c.id === saved &&
+            c.status !== "deleted" &&
+            c.assistSlotKey == null,
+        )?.id;
       const pick =
-        (saved &&
-          list.find((c) => c.id === saved && c.status !== "deleted")?.id) ||
-        list.find((c) => c.status === "active")?.id ||
-        null;
+        savedOk || list.find((c) => c.status === "active")?.id || null;
+      if (cancelled || gen !== generalRestoreGenRef.current) return;
+      if (assistTargetLockRef.current !== undefined) return;
       if (pick) {
-        await selectConversation(pick, list);
-      } else if (assistTargetLockRef.current !== undefined) {
-        setTargetContext(assistTargetLockRef.current);
+        await selectConversationRef.current(pick, list);
       } else {
         setTargetContext(null);
+        setActiveId(null);
       }
+      if (cancelled || gen !== generalRestoreGenRef.current) return;
       const pendingJob = readPendingJob();
       if (pendingJob) {
-        setPending(pendingJob);
-        if (pendingJob.conversationId !== pick) {
-          await selectConversation(pendingJob.conversationId, list);
+        // Resume pending only if it belongs to an unslotted / already-listed row.
+        const pendingConv = list.find((c) => c.id === pendingJob.conversationId);
+        if (pendingConv && pendingConv.assistSlotKey == null) {
+          setPending(pendingJob);
+          if (pendingJob.conversationId !== pick) {
+            await selectConversationRef.current(pendingJob.conversationId, list);
+          }
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, refreshConversations, selectConversation]);
+  }, [open]);
 
   const onJobUpdate = useCallback((job: AiJobDto) => {
     setJobSnap(job);
@@ -262,13 +347,29 @@ export function AiSidebar() {
   }, [pathname, revokeAssistApply]);
 
   useEffect(() => {
-    return registerOpenHandler((input: OpenWithAssistInput) => {
+    return registerOpenHandler(async (input, meta) => {
+      openGenerationRef.current = meta.openGeneration;
+      const slotKey = assistSlotKeyForRefineField(
+        input.fieldKey,
+        input.recordId ?? null,
+        input.clientDraftKey ?? null,
+      );
+      if (!slotKey) {
+        setError(t("errCreateConversation"));
+        return;
+      }
+
       const requestId = crypto.randomUUID();
+      // Drop any in-flight Q7 restore so it cannot clear Assist / send errors.
+      generalRestoreGenRef.current += 1;
       assistTargetLockRef.current = input.target;
+      assistSlotKeyRef.current = slotKey;
+      setShowAllConversations(false);
       setOpen(true);
       setError(null);
       setApplyNotice(null);
       setAdjustOpen(false);
+      setAssistOpening(true);
       // Always rebind Target for this assist request — never keep a stale pin.
       setTargetContext(input.target);
       setDraft(
@@ -285,6 +386,7 @@ export function AiSidebar() {
         feature: input.feature,
         target: input.target,
         recordId: input.recordId ?? null,
+        assistSlotKey: slotKey,
         draftSnapshot: input.draftSnapshot,
         getCurrentDraft: input.getCurrentDraft,
         onApplyToDraft: input.onApplyToDraft,
@@ -292,9 +394,37 @@ export function AiSidebar() {
         applyMessageId: null,
         applyRevoked: false,
       });
-      queueMicrotask(() => composerRef.current?.focus());
+
+      try {
+        const ensured = await ensureAssistConversation({
+          assistSlotKey: slotKey,
+          pinnedTarget: input.target,
+          title: defaultAssistTitle(input.fieldKey),
+        });
+        if (meta.openGeneration !== openGenerationRef.current) {
+          // Stale open — a newer field click won.
+          return;
+        }
+        if ("error" in ensured) {
+          setError(t("errCreateConversation"));
+          return;
+        }
+        const list = await refreshConversations({
+          assistSlotKey: slotKey,
+          showAll: false,
+        });
+        if (meta.openGeneration !== openGenerationRef.current) return;
+        await selectConversation(ensured.conversation.id, list);
+        if (meta.openGeneration !== openGenerationRef.current) return;
+        // Composer stays as latest draft prompt; do not clear/overwrite messages.
+        queueMicrotask(() => composerRef.current?.focus());
+      } finally {
+        if (meta.openGeneration === openGenerationRef.current) {
+          setAssistOpening(false);
+        }
+      }
     });
-  }, [registerOpenHandler]);
+  }, [registerOpenHandler, refreshConversations, selectConversation, t]);
 
   const onJobTimeout = useCallback(() => {
     setPending(null);
@@ -313,9 +443,11 @@ export function AiSidebar() {
 
   async function ensureConversation(): Promise<string | null> {
     if (activeId) return activeId;
+    const slot = assistSession?.assistSlotKey ?? null;
     const created = await createConversation({
-      title: null,
-      pinnedTarget: targetContext,
+      title: slot ? defaultAssistTitle(assistSession!.fieldKey) : null,
+      pinnedTarget: assistSession?.target ?? targetContext,
+      assistSlotKey: slot,
     });
     if ("error" in created) {
       setError(t("errCreateConversation"));
@@ -446,16 +578,48 @@ export function AiSidebar() {
   }
 
   async function onNewConversation() {
-    assistTargetLockRef.current = undefined;
-    setTargetContext(null);
-    setAssistSession(null);
-    setApplyNotice(null);
-    setAdjustOpen(false);
+    const slot = assistSession?.assistSlotKey ?? null;
+    const pinned = assistSession?.target ?? null;
+    const fieldKey = assistSession?.fieldKey;
+    // Invalidate Q7 restore so a late pick cannot wipe this thread / send error.
+    generalRestoreGenRef.current += 1;
+    // Keep AssistSession when creating a new thread in the same refine slot.
+    if (!slot) {
+      clearAssistSendContext();
+      setAdjustOpen(false);
+    } else {
+      setAssistSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              applyMessageId: null,
+              clientRequestId: undefined,
+              applyRevoked: false,
+            }
+          : null,
+      );
+      setApplyNotice(null);
+      setAdjustOpen(false);
+      if (assistSession) {
+        setDraft(
+          buildRefinePrompt({
+            feature: assistSession.feature,
+            draftText: assistSession.getCurrentDraft(),
+            limitedContext: assistSession.limitedContext,
+          }),
+        );
+      }
+    }
     const created = await createConversation({
-      pinnedTarget: null,
+      title: fieldKey ? defaultAssistTitle(fieldKey) : null,
+      pinnedTarget: pinned,
+      assistSlotKey: slot,
     });
     if ("conversation" in created) {
-      const list = await refreshConversations();
+      const list = await refreshConversations({
+        assistSlotKey: slot,
+        showAll: showAllConversations,
+      });
       await selectConversation(created.conversation.id, list);
       setMessages([]);
       setJobSnap(null);
@@ -487,11 +651,9 @@ export function AiSidebar() {
   }
 
   function applySuggestion(chip: ReturnType<typeof suggestionsForPage>[number]) {
-    assistTargetLockRef.current = undefined;
+    clearAssistSendContext();
     setDraft(t(chip.promptKey));
     setTargetContext(chip.target);
-    setAssistSession(null);
-    setApplyNotice(null);
     setAdjustOpen(false);
   }
 
@@ -527,6 +689,26 @@ export function AiSidebar() {
     messages.length === 0 && !busy && !pending && !assistSession;
   const chips = suggestionsForPage(pageContext);
 
+  function closePanel() {
+    // Allow next general toggle-open to use unslotted restore (Q7).
+    assistTargetLockRef.current = undefined;
+    setOpen(false);
+  }
+
+  function openViaToggle() {
+    if (open) {
+      closePanel();
+      return;
+    }
+    // General entry must not resume a My Career refine slot (Q7).
+    assistTargetLockRef.current = undefined;
+    assistSlotKeyRef.current = null;
+    setAssistSession(null);
+    setApplyNotice(null);
+    setShowAllConversations(false);
+    setOpen(true);
+  }
+
   if (unauthorized) return null;
 
   return (
@@ -537,7 +719,7 @@ export function AiSidebar() {
         data-testid="ai-sidebar-toggle"
         aria-expanded={open}
         aria-controls="ai-sidebar-panel"
-        onClick={() => setOpen((v) => !v)}
+        onClick={openViaToggle}
       >
         {t("toggle")}
       </button>
@@ -546,7 +728,7 @@ export function AiSidebar() {
         <div
           className="ai-sidebar-backdrop"
           data-testid="ai-sidebar-backdrop"
-          onClick={() => setOpen(false)}
+          onClick={closePanel}
           aria-hidden
         />
       ) : null}
@@ -556,6 +738,9 @@ export function AiSidebar() {
         className="ai-sidebar-panel"
         data-testid="ai-sidebar-panel"
         data-open={open ? "true" : "false"}
+        data-active-conversation-id={activeId ?? ""}
+        data-assist-slot-key={assistSession?.assistSlotKey ?? ""}
+        data-assist-opening={assistOpening ? "true" : "false"}
         aria-hidden={!open}
         aria-labelledby={titleId}
       >
@@ -576,11 +761,19 @@ export function AiSidebar() {
             type="button"
             className="ai-sidebar-close"
             data-testid="ai-sidebar-close"
-            onClick={() => setOpen(false)}
+            onClick={closePanel}
           >
             {t("close")}
           </button>
         </header>
+        {assistOpening ? (
+          <p
+            className="ai-sidebar-note"
+            data-testid="ai-assist-opening"
+          >
+            {t("assistOpening")}
+          </p>
+        ) : null}
 
         <div className="ai-sidebar-conv-bar">
           <select
@@ -603,6 +796,25 @@ export function AiSidebar() {
                 </option>
               ))}
           </select>
+          {assistSession ? (
+            <button
+              type="button"
+              data-testid="ai-show-all-conversations"
+              aria-pressed={showAllConversations}
+              onClick={() => {
+                const next = !showAllConversations;
+                setShowAllConversations(next);
+                void refreshConversations({
+                  assistSlotKey: assistSession.assistSlotKey,
+                  showAll: next,
+                });
+              }}
+            >
+              {showAllConversations
+                ? t("filterSlotOnly")
+                : t("showAllConversations")}
+            </button>
+          ) : null}
           <button
             type="button"
             data-testid="ai-new-conversation"

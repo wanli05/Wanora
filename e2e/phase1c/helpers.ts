@@ -143,6 +143,27 @@ export async function applyRefineToDraft(page: Page): Promise<void> {
   });
 }
 
+/** Open refine entry and wait for Apply on the latest bubble. */
+export async function refineOnce(
+  page: Page,
+  refineTestId: string,
+): Promise<void> {
+  await page.getByTestId(refineTestId).click();
+  await sendRefineAndWaitApply(page);
+}
+
+/** Native DOM click — AI sidebar can swallow Playwright pointer hits on nearby chrome. */
+export async function domClick(
+  locator: Locator,
+): Promise<void> {
+  await locator.evaluate((el) => {
+    if (!(el instanceof HTMLElement)) {
+      throw new Error("domClick target is not an HTMLElement");
+    }
+    el.click();
+  });
+}
+
 /** Click exact Save and wait for the Next.js Server Action POST. */
 export async function clickExactSaveAndWaitAction(
   scope: Page | Locator,

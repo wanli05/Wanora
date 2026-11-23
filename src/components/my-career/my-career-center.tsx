@@ -16,7 +16,14 @@ import {
   canApplyToProfileDraft,
   canApplyToRecordDraft,
 } from "@/components/ai-sidebar/assist-apply-guard";
+import { rebindAssistConversation } from "@/components/ai-sidebar/ai-api";
 import { useLiveRef } from "@/components/ai-sidebar/use-live-ref";
+import {
+  assistSlotKeyForCareerEmployer,
+  assistSlotKeyForCareerEmployerDraft,
+  assistSlotKeyForCareerProject,
+  assistSlotKeyForCareerProjectDraft,
+} from "@/lib/ai/conversation/assist-slot";
 import {
   ProfilePageForm,
   type ProfilePageFormLabels,
@@ -818,12 +825,16 @@ function WorkModule({
   const [state, action, pending] = useActionState(saveCareerEmployerAction, {});
   const [editing, setEditing] = useState<CareerEmployerDto | null>(null);
   const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  /** Per unsaved-editor instance; used for AI assist slot isolation. */
+  const [clientDraftKey, setClientDraftKey] = useState<string | null>(null);
+  const clientDraftKeyRef = useLiveRef(clientDraftKey);
   const tAi = useTranslations("AiSidebar");
   const assist = useAiAssistOptional();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const mountedRef = useRef(true);
   const editingRef = useLiveRef(editing);
+  const lastRebindTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -834,10 +845,41 @@ function WorkModule({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup
   }, []);
 
+  useEffect(() => {
+    if (!state.ok || !state.id) return;
+    const draftKey = clientDraftKeyRef.current;
+    if (!draftKey) {
+      // Already a saved row — keep editing id in sync after update.
+      setEditing((prev) => (prev ? { ...prev, id: state.id! } : prev));
+      return;
+    }
+    const token = `${draftKey}->${state.id}`;
+    if (lastRebindTokenRef.current === token) return;
+    lastRebindTokenRef.current = token;
+    const recordId = state.id;
+    void (async () => {
+      const res = await rebindAssistConversation({
+        fromAssistSlotKey: assistSlotKeyForCareerEmployerDraft(draftKey),
+        toAssistSlotKey: assistSlotKeyForCareerEmployer(recordId),
+        pinnedTarget: { type: "career_employer", id: recordId },
+      });
+      if (!mountedRef.current) return;
+      if ("error" in res) {
+        // Do not fake success; career Save already committed.
+        setDraftDirtyHint(tAi("errSend"));
+        return;
+      }
+      setClientDraftKey(null);
+      setEditing((prev) => (prev ? { ...prev, id: recordId } : prev));
+      router.refresh();
+    })();
+  }, [state, clientDraftKeyRef, router, tAi]);
+
   function openEmployerEditor(row: CareerEmployerDto) {
     if (editingRef.current?.id !== row.id) {
       assist?.invalidateAssistApply();
     }
+    setClientDraftKey(null);
     setEditing(row);
     setDraftDirtyHint(null);
   }
@@ -854,6 +896,7 @@ function WorkModule({
           className="mc-btn"
           onClick={() => {
             assist?.invalidateAssistApply();
+            setClientDraftKey(crypto.randomUUID());
             setEditing({
               id: "",
               companyNameJa: "",
@@ -983,6 +1026,7 @@ function WorkModule({
                 fieldKey="narrative_ja"
                 draftText={editing.narrativeJa}
                 recordId={editing.id || null}
+                clientDraftKey={editing.id ? null : clientDraftKey}
                 testId="ai-refine-narrative_ja"
                 getCurrentDraft={() => editingRef.current?.narrativeJa ?? ""}
                 onApplyToDraft={(text) => {
@@ -1044,6 +1088,7 @@ function WorkModule({
               className="mc-btn mc-btn-ghost"
               onClick={() => {
                 assist?.invalidateAssistApply();
+                setClientDraftKey(null);
                 setEditing(null);
                 setDraftDirtyHint(null);
               }}
@@ -1068,12 +1113,15 @@ function ProjectsModule({
   const [state, action, pending] = useActionState(saveCareerProjectAction, {});
   const [editing, setEditing] = useState<CareerProjectDto | null>(null);
   const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
+  const [clientDraftKey, setClientDraftKey] = useState<string | null>(null);
+  const clientDraftKeyRef = useLiveRef(clientDraftKey);
   const tAi = useTranslations("AiSidebar");
   const assist = useAiAssistOptional();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const mountedRef = useRef(true);
   const editingRef = useLiveRef(editing);
+  const lastRebindTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1083,6 +1131,34 @@ function ProjectsModule({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup
   }, []);
+
+  useEffect(() => {
+    if (!state.ok || !state.id) return;
+    const draftKey = clientDraftKeyRef.current;
+    if (!draftKey) {
+      setEditing((prev) => (prev ? { ...prev, id: state.id! } : prev));
+      return;
+    }
+    const token = `${draftKey}->${state.id}`;
+    if (lastRebindTokenRef.current === token) return;
+    lastRebindTokenRef.current = token;
+    const recordId = state.id;
+    void (async () => {
+      const res = await rebindAssistConversation({
+        fromAssistSlotKey: assistSlotKeyForCareerProjectDraft(draftKey),
+        toAssistSlotKey: assistSlotKeyForCareerProject(recordId),
+        pinnedTarget: { type: "career_project", id: recordId },
+      });
+      if (!mountedRef.current) return;
+      if ("error" in res) {
+        setDraftDirtyHint(tAi("errSend"));
+        return;
+      }
+      setClientDraftKey(null);
+      setEditing((prev) => (prev ? { ...prev, id: recordId } : prev));
+      router.refresh();
+    })();
+  }, [state, clientDraftKeyRef, router, tAi]);
 
   const empty = (): CareerProjectDto => ({
     id: "",
@@ -1108,6 +1184,7 @@ function ProjectsModule({
     if (editingRef.current?.id !== row.id) {
       assist?.invalidateAssistApply();
     }
+    setClientDraftKey(null);
     setEditing(row);
     setDraftDirtyHint(null);
   }
@@ -1124,6 +1201,7 @@ function ProjectsModule({
           className="mc-btn"
           onClick={() => {
             assist?.invalidateAssistApply();
+            setClientDraftKey(crypto.randomUUID());
             setEditing(empty());
             setDraftDirtyHint(null);
           }}
@@ -1260,6 +1338,7 @@ function ProjectsModule({
                 fieldKey="overview_ja"
                 draftText={editing.overviewJa}
                 recordId={editing.id || null}
+                clientDraftKey={editing.id ? null : clientDraftKey}
                 testId="ai-refine-overview_ja"
                 getCurrentDraft={() => editingRef.current?.overviewJa ?? ""}
                 onApplyToDraft={(text) => {
@@ -1360,6 +1439,7 @@ function ProjectsModule({
               className="mc-btn mc-btn-ghost"
               onClick={() => {
                 assist?.invalidateAssistApply();
+                setClientDraftKey(null);
                 setEditing(null);
                 setDraftDirtyHint(null);
               }}

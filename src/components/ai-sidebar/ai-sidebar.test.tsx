@@ -30,6 +30,9 @@ vi.mock("next-intl", () => ({
         untitled: "無題の会話",
         archivedPrefix: "［アーカイブ］",
         new: "新規",
+        showAllConversations: "すべての会話",
+        filterSlotOnly: "この対象のみ",
+        assistOpening: "準備中",
         archive: "保管",
         delete: "削除",
         emptyMessages: "まずは入力",
@@ -73,6 +76,8 @@ vi.mock("next-intl", () => ({
 const api = vi.hoisted(() => ({
   listConversations: vi.fn(),
   createConversation: vi.fn(),
+  ensureAssistConversation: vi.fn(),
+  rebindAssistConversation: vi.fn(),
   listMessages: vi.fn(),
   enqueueJob: vi.fn(),
   getJob: vi.fn(),
@@ -119,10 +124,24 @@ describe("AiSidebar", () => {
         title: null,
         status: "active",
         pinnedTarget: null,
+        assistSlotKey: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         deletedAt: null,
       },
+    });
+    api.ensureAssistConversation.mockResolvedValue({
+      conversation: {
+        id: "conv-assist",
+        title: null,
+        status: "active",
+        pinnedTarget: null,
+        assistSlotKey: "refine:profile:self_pr",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+      },
+      created: true,
     });
     api.listMessages.mockResolvedValue({
       messages: [],
@@ -299,6 +318,7 @@ describe("AiSidebar", () => {
           title: "既存",
           status: "active",
           pinnedTarget: { type: "profile", section: "overview" },
+          assistSlotKey: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           deletedAt: null,
