@@ -41,11 +41,18 @@ export type AiAssistBridgeError = "ai_unavailable" | null;
 
 type AiAssistContextValue = {
   openWithAssist: (input: OpenWithAssistInput) => Promise<void>;
+  /**
+   * Open the shared AI sidebar panel only.
+   * Does not change TargetContext, assist Apply binding, or composer draft.
+   * Resolves true when the panel opener ran; false when AI is unavailable.
+   */
+  openPanel: () => Promise<boolean>;
   /** Clear Apply write-back rights; chat history may remain. */
   invalidateAssistApply: () => void;
   registerOpenHandler: (
     handler: (input: OpenWithAssistInput) => void,
   ) => () => void;
+  registerPanelOpener: (handler: () => void) => () => void;
   registerInvalidateHandler: (handler: () => void) => () => void;
   bridgeError: AiAssistBridgeError;
   clearBridgeError: () => void;
@@ -57,6 +64,7 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
   const handlerRef = useRef<((input: OpenWithAssistInput) => void) | null>(
     null,
   );
+  const panelOpenerRef = useRef<(() => void) | null>(null);
   const invalidateHandlerRef = useRef<(() => void) | null>(null);
   const [bridgeError, setBridgeError] = useState<AiAssistBridgeError>(null);
 
@@ -71,6 +79,13 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const registerPanelOpener = useCallback((handler: () => void) => {
+    panelOpenerRef.current = handler;
+    return () => {
+      if (panelOpenerRef.current === handler) panelOpenerRef.current = null;
+    };
+  }, []);
 
   const registerInvalidateHandler = useCallback((handler: () => void) => {
     invalidateHandlerRef.current = handler;
@@ -95,19 +110,34 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
     handlerRef.current(input);
   }, []);
 
+  const openPanel = useCallback(async () => {
+    const status = await fetchAiStatus();
+    if (!status.enabled || !panelOpenerRef.current) {
+      setBridgeError("ai_unavailable");
+      return false;
+    }
+    setBridgeError(null);
+    panelOpenerRef.current();
+    return true;
+  }, []);
+
   const value = useMemo(
     () => ({
       openWithAssist,
+      openPanel,
       invalidateAssistApply,
       registerOpenHandler,
+      registerPanelOpener,
       registerInvalidateHandler,
       bridgeError,
       clearBridgeError,
     }),
     [
       openWithAssist,
+      openPanel,
       invalidateAssistApply,
       registerOpenHandler,
+      registerPanelOpener,
       registerInvalidateHandler,
       bridgeError,
       clearBridgeError,

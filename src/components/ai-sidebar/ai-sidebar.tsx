@@ -62,7 +62,11 @@ export function AiSidebar() {
   const titleId = useId();
   const adjusterId = useId();
   const pageContext = pageContextFromPath(pathname);
-  const { registerOpenHandler, registerInvalidateHandler } = useAiAssist();
+  const {
+    registerOpenHandler,
+    registerPanelOpener,
+    registerInvalidateHandler,
+  } = useAiAssist();
   const [open, setOpen] = useState(false);
   /** Optional field focus; default null so chat can start without picking a Target. */
   const [targetContext, setTargetContext] = useState<AiTargetContext | null>(
@@ -260,6 +264,14 @@ export function AiSidebar() {
       revokeAssistApply();
     }
   }, [pathname, revokeAssistApply]);
+
+  useEffect(() => {
+    return registerPanelOpener(() => {
+      setOpen(true);
+      setError(null);
+      queueMicrotask(() => composerRef.current?.focus());
+    });
+  }, [registerPanelOpener]);
 
   useEffect(() => {
     return registerOpenHandler((input: OpenWithAssistInput) => {

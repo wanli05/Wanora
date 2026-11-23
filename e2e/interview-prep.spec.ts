@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { apiSignUp, newSignedInPage } from "./ai-helpers";
+import { apiSignUp, closeAiSidebar, newSignedInPage } from "./ai-helpers";
 
-test("board 面接準備 opens prep page with mock questions when 面接未定", async ({
+test("board 面接準備 opens redesigned prep page when 面接未定", async ({
   browser,
   request,
 }) => {
@@ -36,30 +36,34 @@ test("board 面接準備 opens prep page with mock questions when 面接未定",
     page.getByTestId("prep-question-details-common-motivation"),
   ).toContainText("質問の意図");
 
-  await page.getByTestId("prep-generate-common-motivation").click();
-  await expect(first).toHaveAttribute("data-answer-state", "ready");
-  await expect(page.getByTestId("prep-sample-common-motivation")).toBeVisible();
+  await expect(
+    page.getByTestId("prep-generate-common-motivation"),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("prep-sample-common-motivation")).toHaveCount(0);
 
-  await page.getByTestId("prep-edit-common-motivation").click();
-  await expect(page.getByTestId("prep-editor-common-motivation")).toContainText(
-    "デモ：入力内容は保存されません",
-  );
-  await page.getByTestId("prep-editor-input-common-motivation").fill(
-    "E2Eで編集した回答",
-  );
-  await page.getByTestId("prep-editor-finish-common-motivation").click();
-  await expect(page.getByTestId("prep-draft-common-motivation")).toContainText(
-    "E2Eで編集した回答",
-  );
+  await page
+    .getByTestId("prep-editor-input-common-motivation")
+    .fill("E2Eで編集した回答");
+  await expect(
+    page.getByTestId("prep-editor-input-common-motivation"),
+  ).toHaveValue("E2Eで編集した回答");
   await expect(page.getByText("保存しました")).toHaveCount(0);
+  await expect(
+    page.getByTestId("prep-answer-section-common-motivation"),
+  ).toContainText("デモ：入力内容は保存されません");
 
-  await page.getByTestId("prep-generate-common-self-pr").click();
-  await expect(page.getByTestId("prep-question-common-self-pr")).toHaveAttribute(
-    "data-answer-state",
-    "ready",
+  await page.getByTestId("prep-ai-assist-common-motivation").click();
+  await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+    "data-open",
+    "true",
+  );
+  await expect(page.getByTestId("prep-questions")).toHaveAttribute(
+    "data-ai-focused-question",
+    "common-motivation",
   );
   expect(jobCalls).toEqual([]);
 
+  await closeAiSidebar(page);
   await page.getByTestId("prep-back").click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "応募進捗" })).toBeVisible();
