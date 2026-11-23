@@ -1,4 +1,15 @@
-import { and, count, desc, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  sql,
+} from "drizzle-orm";
 import type { Db } from "@/db";
 import {
   aiConversations,
@@ -13,6 +24,11 @@ export type ListAiConversationsOptions = {
   includeArchived?: boolean;
   /** Explicit status filter (non-deleted only). Overrides includeArchived when set. */
   status?: "active" | "archived";
+  /**
+   * When set, only conversations with this assist_slot_key.
+   * When `"null"`, only legacy / general chat (`assist_slot_key IS NULL`).
+   */
+  assistSlotKey?: string | null;
   limit?: number;
   offset?: number;
 };
@@ -24,6 +40,12 @@ function visibleStatuses(
   return options?.includeArchived ? ["active", "archived"] : ["active"];
 }
 
+function assistSlotPredicate(assistSlotKey: string | null | undefined) {
+  if (assistSlotKey === undefined) return undefined;
+  if (assistSlotKey === null) return isNull(aiConversations.assistSlotKey);
+  return eq(aiConversations.assistSlotKey, assistSlotKey);
+}
+
 export async function listAiConversations(
   db: Db,
   userId: string,
@@ -32,6 +54,7 @@ export async function listAiConversations(
   const statuses = visibleStatuses(options);
   const limit = options?.limit;
   const offset = options?.offset ?? 0;
+  const slotPred = assistSlotPredicate(options?.assistSlotKey);
 
   const query = db
     .select()
@@ -40,6 +63,7 @@ export async function listAiConversations(
       and(
         eq(aiConversations.userId, userId),
         inArray(aiConversations.status, statuses),
+        slotPred,
       ),
     )
     .orderBy(desc(aiConversations.updatedAt));
@@ -56,6 +80,7 @@ export async function countAiConversations(
   options?: Omit<ListAiConversationsOptions, "limit" | "offset">,
 ) {
   const statuses = visibleStatuses(options);
+  const slotPred = assistSlotPredicate(options?.assistSlotKey);
   const [row] = await db
     .select({ n: count() })
     .from(aiConversations)
@@ -63,9 +88,99 @@ export async function countAiConversations(
       and(
         eq(aiConversations.userId, userId),
         inArray(aiConversations.status, statuses),
+        slotPred,
       ),
     );
   return Number(row?.n ?? 0);
+}
+
+/** Latest active conversation for a refine slot (null if none). */
+export async function findLatestActiveAiConversationByAssistSlot(
+  db: Db,
+  userId: string,
+  assistSlotKey: string,
+) {
+  const [row] = await db
+    .select()
+    .from(aiConversations)
+    .where(
+      and(
+        eq(aiConversations.userId, userId),
+        eq(aiConversations.assistSlotKey, assistSlotKey),
+        eq(aiConversations.status, "active"),
+      ),
+    )
+    .orderBy(desc(aiConversations.updatedAt), desc(aiConversations.id))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Bump updated_at so ensure-open becomes the "latest" without sending. */
+export async function touchAiConversationUpdatedAt(
+  db: Db,
+  userId: string,
+  id: string,
+  now = new Date(),
+) {
+  const [row] = await db
+    .update(aiConversations)
+    .set({ updatedAt: now })
+    .where(
+      and(
+        eq(aiConversations.id, id),
+        eq(aiConversations.userId, userId),
+        ne(aiConversations.status, "deleted"),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Rebind all active conversations from a draft slot to a record slot.
+ * Returns updated rows (empty when already rebound / nothing to do).
+ */
+export async function rebindAiConversationsAssistSlot(
+  db: Db,
+  userId: string,
+  input: {
+    fromAssistSlotKey: string;
+    toAssistSlotKey: string;
+    pinnedTarget: unknown;
+  },
+) {
+  return db
+    .update(aiConversations)
+    .set({
+      assistSlotKey: input.toAssistSlotKey,
+      pinnedTarget: input.pinnedTarget,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(aiConversations.userId, userId),
+        eq(aiConversations.assistSlotKey, input.fromAssistSlotKey),
+        eq(aiConversations.status, "active"),
+      ),
+    )
+    .returning();
+}
+
+/** Serialize concurrent ensure/rebind for the same user+slot. */
+export async function withAssistSlotLock<T>(
+  db: Db,
+  userId: string,
+  assistSlotKey: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const lockToken = `${userId}:${assistSlotKey}`;
+  await db.execute(
+    sql`select pg_advisory_xact_lock(
+      hashtext('wanora:ai:assist-slot'),
+      hashtext(${lockToken})
+    )`,
+  );
+  return fn();
 }
 
 export async function getAiConversation(
@@ -108,7 +223,11 @@ export async function getActiveAiConversation(
 export async function createAiConversation(
   db: Db,
   userId: string,
-  input?: { title?: string | null; pinnedTarget?: unknown },
+  input?: {
+    title?: string | null;
+    pinnedTarget?: unknown;
+    assistSlotKey?: string | null;
+  },
 ) {
   const [row] = await db
     .insert(aiConversations)
@@ -116,6 +235,7 @@ export async function createAiConversation(
       userId,
       title: input?.title ?? null,
       pinnedTarget: input?.pinnedTarget ?? null,
+      assistSlotKey: input?.assistSlotKey ?? null,
       status: "active",
     })
     .returning();
@@ -130,6 +250,7 @@ export async function updateAiConversation(
     title?: string | null;
     status?: Exclude<AiConversationStatus, "deleted">;
     pinnedTarget?: unknown;
+    assistSlotKey?: string | null;
   },
 ) {
   const [row] = await db
@@ -141,6 +262,9 @@ export async function updateAiConversation(
         : {}),
       ...(patch.pinnedTarget !== undefined
         ? { pinnedTarget: patch.pinnedTarget }
+        : {}),
+      ...(patch.assistSlotKey !== undefined
+        ? { assistSlotKey: patch.assistSlotKey }
         : {}),
     })
     .where(

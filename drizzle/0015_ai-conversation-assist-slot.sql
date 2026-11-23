@@ -1,0 +1,2 @@
+ALTER TABLE "ai_conversations" ADD COLUMN "assist_slot_key" text;--> statement-breakpoint
+CREATE INDEX "ai_conversations_user_slot_updated_idx" ON "ai_conversations" USING btree ("user_id","assist_slot_key","updated_at") WHERE "ai_conversations"."status" = 'active' and "ai_conversations"."assist_slot_key" is not null;

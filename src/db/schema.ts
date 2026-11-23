@@ -829,6 +829,12 @@ export const aiConversations = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     /** Optional locked TargetContext snapshot: { type, id, ... }. */
     pinnedTarget: jsonb("pinned_target"),
+    /**
+     * My Career refine slot key (e.g. refine:profile:self_pr).
+     * Null = legacy / general chat (not auto-selected by refine ensure).
+     * Multiple active rows per (user, slot) are allowed (「新規」).
+     */
+    assistSlotKey: text("assist_slot_key"),
     ...timestamps,
   },
   (t) => [
@@ -845,6 +851,9 @@ export const aiConversations = pgTable(
     index("ai_conversations_user_updated_idx").on(t.userId, t.updatedAt),
     index("ai_conversations_user_status_idx").on(t.userId, t.status),
     index("ai_conversations_purge_idx").on(t.status, t.deletedAt),
+    index("ai_conversations_user_slot_updated_idx")
+      .on(t.userId, t.assistSlotKey, t.updatedAt)
+      .where(sql`${t.status} = 'active' and ${t.assistSlotKey} is not null`),
   ],
 );
 

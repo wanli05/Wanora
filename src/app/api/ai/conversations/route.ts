@@ -7,6 +7,8 @@ import {
   serializeConversation,
   unauthorized,
   aiError,
+  normalizeAssistSlotKey,
+  validateAssistSlotBinding,
 } from "@/lib/ai/conversation";
 import {
   countAiConversations,
@@ -25,19 +27,28 @@ export async function GET(request: Request) {
     return aiError("invalid_query", 400, "invalid query", parsed.error.flatten());
   }
 
-  const { limit, offset, includeArchived, status } = parsed.data;
+  const { limit, offset, includeArchived, status, assistSlotKey, unslotted } =
+    parsed.data;
   const db = getDb();
+  const slotFilter =
+    unslotted === true
+      ? { assistSlotKey: null as string | null }
+      : assistSlotKey
+        ? { assistSlotKey }
+        : {};
   const listOpts = {
     includeArchived: includeArchived || undefined,
     status,
     limit,
     offset,
+    ...slotFilter,
   };
   const [rows, total] = await Promise.all([
     listAiConversations(db, user.id, listOpts),
     countAiConversations(db, user.id, {
       includeArchived: includeArchived || undefined,
       status,
+      ...slotFilter,
     }),
   ]);
 
@@ -58,9 +69,29 @@ export async function POST(request: Request) {
     return aiError("invalid_body", 400, "invalid body", parsed.error.flatten());
   }
 
+  const assistSlotKey =
+    parsed.data.assistSlotKey != null
+      ? normalizeAssistSlotKey(parsed.data.assistSlotKey)
+      : null;
+  if (assistSlotKey) {
+    const binding = validateAssistSlotBinding(
+      assistSlotKey,
+      parsed.data.pinnedTarget ?? null,
+    );
+    if (!binding.ok) {
+      return aiError(
+        "invalid_assist_binding",
+        400,
+        "assist slot / pinnedTarget mismatch",
+        { code: binding.code },
+      );
+    }
+  }
+
   const row = await createAiConversation(getDb(), user.id, {
     title: parsed.data.title ?? null,
     pinnedTarget: parsed.data.pinnedTarget,
+    assistSlotKey,
   });
 
   return Response.json(

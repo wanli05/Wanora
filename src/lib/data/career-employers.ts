@@ -25,6 +25,19 @@ export async function listCareerEmployers(db: Db, userId: string) {
     .orderBy(asc(careerEmployers.sortOrder), asc(careerEmployers.startYm));
 }
 
+export async function getCareerEmployer(
+  db: Db,
+  userId: string,
+  id: string,
+) {
+  const [row] = await db
+    .select()
+    .from(careerEmployers)
+    .where(and(eq(careerEmployers.id, id), eq(careerEmployers.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function createCareerEmployer(
   db: Db,
   userId: string,

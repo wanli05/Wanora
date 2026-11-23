@@ -33,6 +33,15 @@ export async function listCareerProjects(db: Db, userId: string) {
     .orderBy(asc(careerProjects.sortOrder), asc(careerProjects.startYm));
 }
 
+export async function getCareerProject(db: Db, userId: string, id: string) {
+  const [row] = await db
+    .select()
+    .from(careerProjects)
+    .where(and(eq(careerProjects.id, id), eq(careerProjects.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function listConfirmedCareerProjects(db: Db, userId: string) {
   const rows = await listCareerProjects(db, userId);
   return rows.filter((row) => row.status === "confirmed");
