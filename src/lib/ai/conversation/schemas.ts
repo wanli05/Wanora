@@ -1,10 +1,13 @@
 import { z } from "zod";
+import { assistSlotKeySchema } from "@/lib/ai/conversation/assist-slot";
 
 export const AI_TITLE_MAX = 200;
 export const AI_CONVERSATIONS_DEFAULT_LIMIT = 20;
 export const AI_CONVERSATIONS_MAX_LIMIT = 100;
 export const AI_MESSAGES_DEFAULT_LIMIT = 50;
 export const AI_MESSAGES_MAX_LIMIT = 200;
+
+export { assistSlotKeySchema };
 
 const profileSectionSchema = z.enum([
   "self_pr",
@@ -59,6 +62,8 @@ export const createConversationBodySchema = z
   .object({
     title: z.string().trim().min(1).max(AI_TITLE_MAX).nullable().optional(),
     pinnedTarget: pinnedTargetSchema.optional(),
+    /** Optional refine slot; omit/null = general / legacy chat. */
+    assistSlotKey: assistSlotKeySchema.nullable().optional(),
   })
   .strict();
 
@@ -67,6 +72,7 @@ export const patchConversationBodySchema = z
     title: z.string().trim().min(1).max(AI_TITLE_MAX).nullable().optional(),
     status: z.enum(["active", "archived"]).optional(),
     pinnedTarget: pinnedTargetSchema.optional(),
+    // assistSlotKey intentionally omitted — use ensure/rebind endpoints.
   })
   .strict()
   .refine(
@@ -76,6 +82,22 @@ export const patchConversationBodySchema = z
       body.pinnedTarget !== undefined,
     { message: "empty_patch" },
   );
+
+export const ensureAssistConversationBodySchema = z
+  .object({
+    assistSlotKey: assistSlotKeySchema,
+    pinnedTarget: pinnedTargetSchema,
+    title: z.string().trim().min(1).max(AI_TITLE_MAX).nullable().optional(),
+  })
+  .strict();
+
+export const rebindAssistConversationBodySchema = z
+  .object({
+    fromAssistSlotKey: assistSlotKeySchema,
+    toAssistSlotKey: assistSlotKeySchema,
+    pinnedTarget: pinnedTargetSchema,
+  })
+  .strict();
 
 function paginationSchema(defaultLimit: number, maxLimit: number) {
   return z
@@ -101,8 +123,17 @@ export const listConversationsQuerySchema = paginationSchema(
       .optional()
       .transform((v) => v === "true"),
     status: z.enum(["active", "archived"]).optional(),
+    assistSlotKey: assistSlotKeySchema.optional(),
+    /** When true, only rows with assist_slot_key IS NULL (general chat). */
+    unslotted: z
+      .enum(["true", "false"])
+      .optional()
+      .transform((v) => v === "true"),
   })
-  .strict();
+  .strict()
+  .refine((q) => !(q.assistSlotKey && q.unslotted), {
+    message: "assist_slot_and_unslotted_conflict",
+  });
 
 export const listMessagesQuerySchema = paginationSchema(
   AI_MESSAGES_DEFAULT_LIMIT,

@@ -6,6 +6,8 @@ export type AiConversationDto = {
   title: string | null;
   status: "active" | "archived" | "deleted";
   pinnedTarget: unknown;
+  /** Null for legacy / general chat. */
+  assistSlotKey: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -30,6 +32,7 @@ export function serializeConversation(
     title: row.title,
     status: row.status as AiConversationDto["status"],
     pinnedTarget: row.pinnedTarget ?? null,
+    assistSlotKey: row.assistSlotKey ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,

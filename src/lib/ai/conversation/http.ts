@@ -6,6 +6,7 @@ export type AiApiErrorCode =
   | "invalid_body"
   | "invalid_query"
   | "invalid_params"
+  | "invalid_assist_binding"
   | "rate_limited"
   | "budget_exceeded"
   | "ai_unavailable"
