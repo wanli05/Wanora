@@ -23,6 +23,11 @@ export type OpenWithAssistInput = {
   fieldKey: RefineFieldKey;
   /** Bound record id when applicable; null for unsaved new rows; omit for profile fields. */
   recordId?: string | null;
+  /**
+   * Per-editor-instance draft key for unsaved employer/project rows.
+   * Required when recordId is empty for narrative_ja / overview_ja.
+   */
+  clientDraftKey?: string | null;
   promptSeed?: string;
   /** True when Target could not be pinned (e.g. unsaved new row). */
   limitedContext?: boolean;
@@ -39,13 +44,16 @@ export type OpenWithAssistInput = {
 
 export type AiAssistBridgeError = "ai_unavailable" | null;
 
+export type OpenWithAssistHandler = (
+  input: OpenWithAssistInput,
+  meta: { openGeneration: number },
+) => void | Promise<void>;
+
 type AiAssistContextValue = {
   openWithAssist: (input: OpenWithAssistInput) => Promise<void>;
   /** Clear Apply write-back rights; chat history may remain. */
   invalidateAssistApply: () => void;
-  registerOpenHandler: (
-    handler: (input: OpenWithAssistInput) => void,
-  ) => () => void;
+  registerOpenHandler: (handler: OpenWithAssistHandler) => () => void;
   registerInvalidateHandler: (handler: () => void) => () => void;
   bridgeError: AiAssistBridgeError;
   clearBridgeError: () => void;
@@ -54,23 +62,19 @@ type AiAssistContextValue = {
 const AiAssistContext = createContext<AiAssistContextValue | null>(null);
 
 export function AiAssistProvider({ children }: { children: ReactNode }) {
-  const handlerRef = useRef<((input: OpenWithAssistInput) => void) | null>(
-    null,
-  );
+  const handlerRef = useRef<OpenWithAssistHandler | null>(null);
   const invalidateHandlerRef = useRef<(() => void) | null>(null);
+  const openGenerationRef = useRef(0);
   const [bridgeError, setBridgeError] = useState<AiAssistBridgeError>(null);
 
   const clearBridgeError = useCallback(() => setBridgeError(null), []);
 
-  const registerOpenHandler = useCallback(
-    (handler: (input: OpenWithAssistInput) => void) => {
-      handlerRef.current = handler;
-      return () => {
-        if (handlerRef.current === handler) handlerRef.current = null;
-      };
-    },
-    [],
-  );
+  const registerOpenHandler = useCallback((handler: OpenWithAssistHandler) => {
+    handlerRef.current = handler;
+    return () => {
+      if (handlerRef.current === handler) handlerRef.current = null;
+    };
+  }, []);
 
   const registerInvalidateHandler = useCallback((handler: () => void) => {
     invalidateHandlerRef.current = handler;
@@ -92,7 +96,9 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
       return;
     }
     setBridgeError(null);
-    handlerRef.current(input);
+    // latest-wins: each click bumps generation; stale async ensure must not apply.
+    const openGeneration = ++openGenerationRef.current;
+    await handlerRef.current(input, { openGeneration });
   }, []);
 
   const value = useMemo(
@@ -127,7 +133,6 @@ export function useAiAssist(): AiAssistContextValue {
   return ctx;
 }
 
-/** Optional hook for pages that may render outside the provider in tests. */
 export function useAiAssistOptional(): AiAssistContextValue | null {
   return useContext(AiAssistContext);
 }

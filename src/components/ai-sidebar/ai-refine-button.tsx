@@ -13,6 +13,11 @@ type Props = {
   draftText: string;
   /** Saved row id when available; omit / empty for unsaved new rows. */
   recordId?: string | null;
+  /**
+   * Per-editor-instance key for unsaved employer/project rows.
+   * Required when recordId is empty for narrative_ja / overview_ja.
+   */
+  clientDraftKey?: string | null;
   /** Live draft reader — must not close over stale render consts. */
   getCurrentDraft: () => string;
   /** Returns false when binding is stale / unmounted. */
@@ -29,6 +34,7 @@ export function AiRefineButton({
   fieldKey,
   draftText,
   recordId,
+  clientDraftKey,
   getCurrentDraft,
   onApplyToDraft,
   label = "AIで添削",
@@ -57,6 +63,7 @@ export function AiRefineButton({
           feature: refineFeatureForField(fieldKey),
           fieldKey,
           recordId: id,
+          clientDraftKey: clientDraftKey ?? null,
           draftSnapshot: draftText,
           limitedContext,
           getCurrentDraft,

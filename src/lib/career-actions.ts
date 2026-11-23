@@ -40,6 +40,8 @@ import { getSessionUser } from "@/lib/session";
 
 export type CareerSaveState = {
   ok?: boolean;
+  /** Saved row id (create or update) — used for AI assist slot rebind. */
+  id?: string;
   error?: "unauthenticated" | "invalid" | "saveFailed";
 };
 
@@ -156,10 +158,14 @@ export async function saveCareerEmployerAction(
     };
     const id = formData.get("id")?.toString() || "";
     const db = getDb();
-    if (id) await updateCareerEmployer(db, userId, id, input);
-    else await createCareerEmployer(db, userId, input);
+    if (id) {
+      await updateCareerEmployer(db, userId, id, input);
+      revalidateCareer();
+      return { ok: true, id };
+    }
+    const created = await createCareerEmployer(db, userId, input);
     revalidateCareer();
-    return { ok: true };
+    return { ok: true, id: created.id };
   } catch {
     return { error: "saveFailed" };
   }
@@ -204,10 +210,14 @@ export async function saveCareerProjectAction(
     };
     const id = formData.get("id")?.toString() || "";
     const db = getDb();
-    if (id) await updateCareerProject(db, userId, id, input);
-    else await createCareerProject(db, userId, input);
+    if (id) {
+      await updateCareerProject(db, userId, id, input);
+      revalidateCareer();
+      return { ok: true, id };
+    }
+    const created = await createCareerProject(db, userId, input);
     revalidateCareer();
-    return { ok: true };
+    return { ok: true, id: created.id };
   } catch {
     return { error: "saveFailed" };
   }

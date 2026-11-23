@@ -59,6 +59,9 @@ vi.mock("next-intl", () => ({
       untitled: "無題の会話",
       archivedPrefix: "［アーカイブ］",
       new: "新規",
+      showAllConversations: "すべての会話",
+      filterSlotOnly: "この対象のみ",
+      assistOpening: "準備中",
       archive: "保管",
       delete: "削除",
       emptyMessages: "まずは入力",
@@ -104,6 +107,8 @@ const api = vi.hoisted(() => ({
   fetchAiStatus: vi.fn(async () => ({ enabled: true, provider: "mock" })),
   listConversations: vi.fn(),
   createConversation: vi.fn(),
+  ensureAssistConversation: vi.fn(),
+  rebindAssistConversation: vi.fn(),
   listMessages: vi.fn(),
   enqueueJob: vi.fn(),
   getJob: vi.fn(),
@@ -325,25 +330,60 @@ describe("AI assist apply safety (production-isomorphic)", () => {
   beforeEach(() => {
     pathnameRef.current = "/ja/profile";
     api.fetchAiStatus.mockResolvedValue({ enabled: true, provider: "mock" });
-    api.listConversations.mockResolvedValue({
-      conversations: [],
-      pagination: { limit: 50, offset: 0, total: 0 },
-    });
+    const convBySlot = new Map<string, Record<string, unknown>>();
+    api.listConversations.mockImplementation(
+      async (opts?: { assistSlotKey?: string; unslotted?: boolean }) => {
+        if (opts?.unslotted) {
+          return {
+            conversations: [],
+            pagination: { limit: 50, offset: 0, total: 0 },
+          };
+        }
+        if (opts?.assistSlotKey) {
+          const row = convBySlot.get(opts.assistSlotKey);
+          return {
+            conversations: row ? [row] : [],
+            pagination: { limit: 50, offset: 0, total: row ? 1 : 0 },
+          };
+        }
+        return {
+          conversations: [...convBySlot.values()],
+          pagination: { limit: 50, offset: 0, total: convBySlot.size },
+        };
+      },
+    );
     api.createConversation.mockResolvedValue({
       conversation: {
         id: "conv-1",
         title: null,
         status: "active",
         pinnedTarget: null,
+        assistSlotKey: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         deletedAt: null,
       },
     });
-    api.enqueueJob.mockImplementation(async (body: { clientRequestId: string }) => ({
+    api.ensureAssistConversation.mockImplementation(
+      async (body: { assistSlotKey: string; pinnedTarget: unknown }) => {
+        const row = {
+          id: `conv-${body.assistSlotKey}`,
+          title: null,
+          status: "active",
+          pinnedTarget: body.pinnedTarget,
+          assistSlotKey: body.assistSlotKey,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          deletedAt: null,
+        };
+        convBySlot.set(body.assistSlotKey, row);
+        return { conversation: row, created: true };
+      },
+    );
+    api.enqueueJob.mockImplementation(async (body: { clientRequestId: string; conversationId?: string }) => ({
       job: {
         id: "job-1",
-        conversationId: "conv-1",
+        conversationId: body.conversationId ?? "conv-1",
         status: "succeeded",
         feature: "self_pr_refine",
       },

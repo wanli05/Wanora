@@ -1,4 +1,11 @@
 import type { AiTargetContext } from "@/lib/ai/context/types";
+import {
+  assistSlotKeyForCareerEmployer,
+  assistSlotKeyForCareerEmployerDraft,
+  assistSlotKeyForCareerProject,
+  assistSlotKeyForCareerProjectDraft,
+  assistSlotKeyForProfile,
+} from "@/lib/ai/conversation/assist-slot";
 
 /** Client-only refine task ids (also sent as job `feature`). */
 export type RefineFeature =
@@ -105,6 +112,56 @@ export function targetForRefineField(
     case "overview_ja":
       if (!recordId) return null;
       return { type: "career_project", id: recordId };
+    default: {
+      const _exhaustive: never = fieldKey;
+      return _exhaustive;
+    }
+  }
+}
+
+/**
+ * Stable assist slot for a refine field.
+ * Unsaved employer/project require `clientDraftKey` (per editor instance).
+ */
+export function assistSlotKeyForRefineField(
+  fieldKey: RefineFieldKey,
+  recordId: string | null | undefined,
+  clientDraftKey?: string | null,
+): string | null {
+  switch (fieldKey) {
+    case "selfPr_ja":
+      return assistSlotKeyForProfile("self_pr");
+    case "jobSummary_ja":
+      return assistSlotKeyForProfile("job_summary");
+    case "narrative_ja":
+      if (recordId) return assistSlotKeyForCareerEmployer(recordId);
+      if (clientDraftKey) {
+        return assistSlotKeyForCareerEmployerDraft(clientDraftKey);
+      }
+      return null;
+    case "overview_ja":
+      if (recordId) return assistSlotKeyForCareerProject(recordId);
+      if (clientDraftKey) {
+        return assistSlotKeyForCareerProjectDraft(clientDraftKey);
+      }
+      return null;
+    default: {
+      const _exhaustive: never = fieldKey;
+      return _exhaustive;
+    }
+  }
+}
+
+export function defaultAssistTitle(fieldKey: RefineFieldKey): string {
+  switch (fieldKey) {
+    case "selfPr_ja":
+      return "自己PR 添削";
+    case "jobSummary_ja":
+      return "職務要約 添削";
+    case "narrative_ja":
+      return "職歴 添削";
+    case "overview_ja":
+      return "プロジェクト 添削";
     default: {
       const _exhaustive: never = fieldKey;
       return _exhaustive;

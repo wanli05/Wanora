@@ -3,37 +3,22 @@
  * Step 3B: lastRefineAssistant(); fresh page per case where isolation matters;
  * do not share a polluted serial page across A→B switch failures.
  */
-import { expect, test, type Dialog, type Page } from "@playwright/test";
+import { expect, test, type Dialog } from "@playwright/test";
 import {
   applyRefineToDraft,
   closeSidebarIfOpen,
   createEmployerAndReopen,
   createProjectAndReopen,
+  domClick,
   lastRefineAssistant,
   MOCK_REFINE_PREFIX,
   newPhase1cSignedInPage,
   openProfileCareerEditor,
   readEmployerNarrative,
   readProjectOverview,
+  refineOnce,
   sendRefineAndWaitApply,
 } from "./helpers";
-
-async function refineOnce(page: Page, refineTestId: string) {
-  await page.getByTestId(refineTestId).click();
-  await sendRefineAndWaitApply(page);
-}
-
-/** Native DOM click — AI sidebar can swallow Playwright pointer hits on nearby chrome. */
-async function domClick(
-  locator: ReturnType<Page["getByRole"]> | ReturnType<Page["locator"]>,
-): Promise<void> {
-  await locator.evaluate((el) => {
-    if (!(el instanceof HTMLElement)) {
-      throw new Error("domClick target is not an HTMLElement");
-    }
-    el.click();
-  });
-}
 
 test.describe("QA-13～22 lifecycle", () => {
   test("QA-13: mid-job draft edit triggers confirm (dismiss keeps draft)", async ({
@@ -293,7 +278,7 @@ test.describe("QA-13～22 lifecycle", () => {
     await context.close();
   });
 
-  test("QA-22: rapid target switch revokes prior Apply", async ({
+  test("QA-22: rapid field switch uses independent conversations", async ({
     browser,
   }) => {
     const { page, context } = await newPhase1cSignedInPage(browser, {
@@ -305,12 +290,49 @@ test.describe("QA-13～22 lifecycle", () => {
 
     await refineOnce(page, "ai-refine-selfPr_ja");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
+    const selfPrConv = await page
+      .getByTestId("ai-sidebar-panel")
+      .getAttribute("data-active-conversation-id");
+    expect(selfPrConv).toBeTruthy();
+    expect(
+      await page.getByTestId("ai-sidebar-panel").getAttribute("data-assist-slot-key"),
+    ).toBe("refine:profile:self_pr");
 
     await domClick(panel.getByTestId("ai-refine-jobSummary_ja"));
+    // Wait for slot flip first — opening=false alone can race the prior ready state.
+    await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+      "data-assist-slot-key",
+      "refine:profile:job_summary",
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+      "data-assist-opening",
+      "false",
+      { timeout: 30_000 },
+    );
     await sendRefineAndWaitApply(page);
-    // Only the latest refine session should arm Apply (last bubble).
+    const jobSummaryConv = await page
+      .getByTestId("ai-sidebar-panel")
+      .getAttribute("data-active-conversation-id");
+    expect(jobSummaryConv).toBeTruthy();
+    expect(jobSummaryConv).not.toBe(selfPrConv);
+    expect(
+      await page.getByTestId("ai-sidebar-panel").getAttribute("data-assist-slot-key"),
+    ).toBe("refine:profile:job_summary");
+    // Current slot arms Apply on its own thread only.
     await expect(page.getByTestId("ai-apply-to-draft")).toHaveCount(1);
     await expect(lastRefineAssistant(page)).toBeVisible();
+
+    // Switch back — prior self_pr conversation / messages restore.
+    await domClick(panel.getByTestId("ai-refine-selfPr_ja"));
+    await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+      "data-active-conversation-id",
+      selfPrConv!,
+      { timeout: 30_000 },
+    );
+    await expect(
+      page.getByTestId("ai-msg-assistant").filter({ hasText: "【修正案】" }),
+    ).toBeVisible();
 
     await closeSidebarIfOpen(page);
     await context.close();

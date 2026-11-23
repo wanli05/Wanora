@@ -46,6 +46,9 @@ vi.mock("next-intl", () => ({
       untitled: "無題の会話",
       archivedPrefix: "［アーカイブ］",
       new: "新規",
+      showAllConversations: "すべての会話",
+      filterSlotOnly: "この対象のみ",
+      assistOpening: "準備中",
       archive: "保管",
       delete: "削除",
       emptyMessages: "まずは入力",
@@ -91,6 +94,8 @@ const api = vi.hoisted(() => ({
   fetchAiStatus: vi.fn(async () => ({ enabled: true, provider: "mock" })),
   listConversations: vi.fn(),
   createConversation: vi.fn(),
+  ensureAssistConversation: vi.fn(),
+  rebindAssistConversation: vi.fn(),
   listMessages: vi.fn(),
   enqueueJob: vi.fn(),
   getJob: vi.fn(),
@@ -166,6 +171,7 @@ function Harness({
             feature: "career_project_refine",
             fieldKey: "overview_ja",
             recordId: null,
+            clientDraftKey: "22222222-2222-4222-8222-222222222222",
             draftSnapshot: "新規概要",
             limitedContext: true,
             getCurrentDraft: () => "新規概要",
@@ -190,29 +196,84 @@ describe("AI assist bridge + apply-to-draft", () => {
     onApply.mockReset();
     onApply.mockImplementation(() => true);
     api.fetchAiStatus.mockResolvedValue({ enabled: true, provider: "mock" });
-    api.listConversations.mockResolvedValue({
-      conversations: [],
-      pagination: { limit: 50, offset: 0, total: 0 },
-    });
+    const convBySlot = new Map<
+      string,
+      {
+        id: string;
+        title: null;
+        status: "active";
+        pinnedTarget: unknown;
+        assistSlotKey: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: null;
+      }
+    >();
+    api.listConversations.mockImplementation(
+      async (opts?: { assistSlotKey?: string; unslotted?: boolean }) => {
+        if (opts?.unslotted) {
+          return {
+            conversations: [],
+            pagination: { limit: 50, offset: 0, total: 0 },
+          };
+        }
+        if (opts?.assistSlotKey) {
+          const row = convBySlot.get(opts.assistSlotKey);
+          return {
+            conversations: row ? [row] : [],
+            pagination: { limit: 50, offset: 0, total: row ? 1 : 0 },
+          };
+        }
+        return {
+          conversations: [...convBySlot.values()],
+          pagination: { limit: 50, offset: 0, total: convBySlot.size },
+        };
+      },
+    );
     api.createConversation.mockResolvedValue({
       conversation: {
         id: "conv-1",
         title: null,
         status: "active",
         pinnedTarget: null,
+        assistSlotKey: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         deletedAt: null,
       },
     });
+    api.ensureAssistConversation.mockImplementation(
+      async (body: { assistSlotKey: string; pinnedTarget: unknown }) => {
+        const id =
+          body.assistSlotKey.includes("job_summary")
+            ? "conv-job"
+            : body.assistSlotKey.includes("career_employer")
+              ? "conv-emp"
+              : body.assistSlotKey.includes("career_project")
+                ? "conv-proj"
+                : "conv-1";
+        const row = {
+          id,
+          title: null as null,
+          status: "active" as const,
+          pinnedTarget: body.pinnedTarget,
+          assistSlotKey: body.assistSlotKey,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          deletedAt: null as null,
+        };
+        convBySlot.set(body.assistSlotKey, row);
+        return { conversation: row, created: true };
+      },
+    );
     api.listMessages.mockResolvedValue({
       messages: [],
       pagination: { limit: 100, offset: 0, total: 0 },
     });
-    api.enqueueJob.mockImplementation(async (body: { clientRequestId: string }) => ({
+    api.enqueueJob.mockImplementation(async (body: { clientRequestId: string; conversationId?: string }) => ({
       job: {
         id: "job-1",
-        conversationId: "conv-1",
+        conversationId: body.conversationId ?? "conv-1",
         status: "succeeded",
         feature: "self_pr_refine",
       },
@@ -220,17 +281,18 @@ describe("AI assist bridge + apply-to-draft", () => {
       replayed: false,
       _clientRequestId: body.clientRequestId,
     }));
-    api.listMessages.mockImplementation(async () => {
+    api.listMessages.mockImplementation(async (conversationId?: string) => {
       const last = api.enqueueJob.mock.calls.at(-1)?.[0] as
-        | { clientRequestId?: string; content?: string }
+        | { clientRequestId?: string; content?: string; conversationId?: string }
         | undefined;
       const clientRequestId = last?.clientRequestId ?? "missing";
+      const cid = conversationId ?? last?.conversationId ?? "conv-1";
       const refined = `${REFINE_RESULT_START}\n改善済みPR\n${REFINE_RESULT_END}\n【補足】数字があれば追記を`;
       return {
         messages: [
           {
             id: "u1",
-            conversationId: "conv-1",
+            conversationId: cid,
             role: "user",
             content: last?.content ?? "x",
             clientMessageId: clientRequestId,
@@ -238,7 +300,7 @@ describe("AI assist bridge + apply-to-draft", () => {
           },
           {
             id: "a1",
-            conversationId: "conv-1",
+            conversationId: cid,
             role: "assistant",
             content: refined,
             createdAt: new Date().toISOString(),
@@ -286,7 +348,40 @@ describe("AI assist bridge + apply-to-draft", () => {
     fireEvent.click(screen.getByTestId("ai-context-ref"));
     expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
     expect(api.enqueueJob).not.toHaveBeenCalled();
-    expect(api.createConversation).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(api.ensureAssistConversation).toHaveBeenCalled(),
+    );
+    expect(api.ensureAssistConversation.mock.calls[0][0].assistSlotKey).toBe(
+      "refine:profile:self_pr",
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+        "data-active-conversation-id",
+        "conv-1",
+      ),
+    );
+  });
+
+  it("uses independent conversation ids for different fields", async () => {
+    renderHarness();
+    fireEvent.click(screen.getByTestId("open-self-pr"));
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+        "data-active-conversation-id",
+        "conv-1",
+      ),
+    );
+    fireEvent.click(screen.getByTestId("open-employer"));
+    await waitFor(() =>
+      expect(api.ensureAssistConversation.mock.calls.length).toBeGreaterThan(1),
+    );
+    const slots = api.ensureAssistConversation.mock.calls.map(
+      (c) => c[0].assistSlotKey as string,
+    );
+    expect(slots).toContain("refine:profile:self_pr");
+    expect(slots).toContain(
+      "refine:career_employer:11111111-1111-4111-8111-111111111111",
+    );
   });
 
   it("binds career_employer target for work narrative", async () => {

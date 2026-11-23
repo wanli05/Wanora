@@ -39,6 +39,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local Playwright / phase1c-qa runner output (also gitignored).
+    "artifacts/**",
   ]),
 ]);
 

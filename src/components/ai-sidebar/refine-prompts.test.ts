@@ -4,6 +4,7 @@ import {
   REFINE_BODY_START,
   REFINE_RESULT_END,
   REFINE_RESULT_START,
+  assistSlotKeyForRefineField,
   buildRefinePrompt,
   refineFeatureForField,
   targetForRefineField,
@@ -51,5 +52,30 @@ describe("refine-prompts", () => {
       type: "career_project",
       id: "proj-1",
     });
+  });
+
+  it("builds assist slot keys per field / record / draft", () => {
+    expect(assistSlotKeyForRefineField("selfPr_ja", null)).toBe(
+      "refine:profile:self_pr",
+    );
+    expect(assistSlotKeyForRefineField("jobSummary_ja", null)).toBe(
+      "refine:profile:job_summary",
+    );
+    expect(
+      assistSlotKeyForRefineField(
+        "narrative_ja",
+        "11111111-1111-4111-8111-111111111111",
+      ),
+    ).toBe("refine:career_employer:11111111-1111-4111-8111-111111111111");
+    expect(
+      assistSlotKeyForRefineField(
+        "overview_ja",
+        null,
+        "22222222-2222-4222-8222-222222222222",
+      ),
+    ).toBe(
+      "refine:career_project:draft:22222222-2222-4222-8222-222222222222",
+    );
+    expect(assistSlotKeyForRefineField("overview_ja", null, null)).toBeNull();
   });
 });
