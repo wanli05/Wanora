@@ -342,6 +342,146 @@ body {
   display: grid;
   gap: 12px;
 }
+.mc-skills-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--mc-line);
+  border-radius: 12px;
+  background: var(--mc-card);
+}
+.mc-skills-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.mc-skills-col-cat {
+  width: 5.5rem;
+}
+.mc-skills-col-tech {
+  width: 8.5rem;
+}
+.mc-skills-col-years {
+  width: 5.25rem;
+}
+.mc-skills-col-desc {
+  width: auto;
+}
+.mc-skills-table th,
+.mc-skills-table td {
+  border-bottom: 1px solid var(--mc-line);
+  border-right: 1px solid var(--mc-line);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  color: var(--mc-ink);
+}
+.mc-skills-table th:last-child,
+.mc-skills-table td:last-child {
+  border-right: 0;
+}
+.mc-skills-table tr:last-child td {
+  border-bottom: 0;
+}
+.mc-skills-table thead th {
+  background: var(--mc-teal-soft);
+  color: var(--mc-teal-deep);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mc-skills-cat {
+  font-weight: 600;
+  color: var(--mc-teal-deep);
+  word-break: break-word;
+}
+.mc-skills-tech {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.mc-skills-years {
+  white-space: nowrap;
+  color: var(--mc-muted);
+}
+.mc-skills-desc-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mc-skills-desc-text {
+  min-width: 0;
+  flex: 1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.mc-skills-empty {
+  text-align: center;
+  color: var(--mc-muted);
+  padding: 18px 12px;
+}
+.mc-add-toggle {
+  justify-self: start;
+}
+.mc-row-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.mc-row-menu-trigger {
+  border: 0;
+  background: transparent;
+  color: var(--mc-muted);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.mc-row-menu-trigger:hover,
+.mc-row-menu-trigger[aria-expanded="true"] {
+  background: var(--mc-teal-soft);
+  color: var(--mc-teal-deep);
+}
+.mc-row-menu-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mc-row-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  min-width: 7rem;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--mc-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(28, 43, 42, 0.12);
+}
+.mc-row-menu-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--mc-ink);
+}
+.mc-row-menu-item-danger {
+  color: #8a3d2f;
+}
+.mc-row-menu-item:hover {
+  background: #f6ece9;
+}
 .mc-sec-head {
   display: flex;
   align-items: flex-end;

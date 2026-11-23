@@ -1,3 +1,4 @@
+import { planSkillTableRows } from "@/lib/domain/career-skills-table";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import type { ExportDocKind } from "@/lib/export/load-export-snapshot";
 
@@ -194,11 +195,17 @@ function shokumuHtml(s: ExportSnapshot): string {
   const langs = s.languages
     .map((l) => `<li>${esc(l.language)}（${esc(l.level)}）</li>`)
     .join("");
-  const skills = s.skillRows
-    .map(
-      (r) =>
-        `<tr><td>${esc(r.category)}</td><td>${esc(r.name)}</td><td>${esc(r.yearsText)}</td><td>${esc(r.description ?? "")}</td></tr>`,
-    )
+  const skills = planSkillTableRows(s.skillRows)
+    .map((planned) => {
+      const r = planned.skill;
+      const cat =
+        planned.categoryRowSpan === null
+          ? ""
+          : planned.categoryRowSpan >= 2
+            ? `<td rowspan="${planned.categoryRowSpan}" style="vertical-align:top;text-align:left">${esc(planned.category)}</td>`
+            : `<td style="vertical-align:top;text-align:left">${esc(planned.category)}</td>`;
+      return `<tr>${cat}<td>${esc(r.name)}</td><td>${esc(r.yearsText)}</td><td>${esc(r.description ?? "")}</td></tr>`;
+    })
     .join("");
   const links = s.selfStudyLinks
     .map(

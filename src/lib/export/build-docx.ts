@@ -30,6 +30,7 @@ function run(
     font: FONT,
   });
 }
+import { planSkillTableRows } from "@/lib/domain/career-skills-table";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import {
   PHOTO_DISPLAY_HEIGHT_PX,
@@ -69,6 +70,7 @@ function cell(
     right?: boolean;
     shade?: string;
     colspan?: number;
+    rowSpan?: number;
     size?: number;
     vAlign?:
       | typeof VerticalAlign.CENTER
@@ -85,6 +87,7 @@ function cell(
     borders,
     width: { size: opts.width, type: WidthType.DXA },
     columnSpan: opts.colspan,
+    rowSpan: opts.rowSpan,
     verticalAlign: opts.vAlign,
     shading: opts.shade ? { fill: opts.shade } : undefined,
     children: text.split("\n").map(
@@ -679,17 +682,31 @@ function buildShokumu(snapshot: ExportSnapshot): Document {
             cell("内容", { width: s3, bold: true, shade: "F3F3F3" }),
           ],
         }),
-        ...snapshot.skillRows.map(
-          (row) =>
-            new TableRow({
-              children: [
-                cell(row.category, { width: s0 }),
-                cell(row.name, { width: s1 }),
-                cell(row.yearsText, { width: s2 }),
-                cell(row.description ?? "", { width: s3 }),
-              ],
+        ...planSkillTableRows(snapshot.skillRows).map((planned) => {
+          const row = planned.skill;
+          const cells: TableCell[] = [];
+          if (planned.categoryRowSpan !== null) {
+            cells.push(
+              cell(planned.category, {
+                width: s0,
+                vAlign: VerticalAlign.TOP,
+                rowSpan:
+                  planned.categoryRowSpan >= 2
+                    ? planned.categoryRowSpan
+                    : undefined,
+              }),
+            );
+          }
+          cells.push(
+            cell(row.name, { width: s1, vAlign: VerticalAlign.TOP }),
+            cell(row.yearsText, { width: s2, vAlign: VerticalAlign.TOP }),
+            cell(row.description ?? "", {
+              width: s3,
+              vAlign: VerticalAlign.TOP,
             }),
-        ),
+          );
+          return new TableRow({ children: cells });
+        }),
       ],
     }),
   );
