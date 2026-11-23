@@ -4,6 +4,7 @@ import {
   assistSlotKeyForCareerEmployerDraft,
   assistSlotKeyForCareerProject,
   assistSlotKeyForProfile,
+  assistSlotKeyForProfileModule,
   parseAssistSlotKey,
   validateAssistRebindKeys,
   validateAssistSlotBinding,
@@ -22,6 +23,11 @@ describe("assist-slot keys", () => {
       kind: "profile",
       section: "job_summary",
     });
+    expect(parseAssistSlotKey(assistSlotKeyForProfileModule())).toEqual({
+      kind: "profile",
+      section: "module",
+    });
+    expect(assistSlotKeyForProfileModule()).toBe("refine:profile:module");
     expect(
       parseAssistSlotKey(assistSlotKeyForCareerEmployer(REC)),
     ).toMatchObject({
@@ -61,6 +67,12 @@ describe("validateAssistSlotBinding", () => {
       }).ok,
     ).toBe(true);
     expect(
+      validateAssistSlotBinding("refine:profile:module", {
+        type: "profile",
+        section: "module",
+      }).ok,
+    ).toBe(true);
+    expect(
       validateAssistSlotBinding(`refine:career_employer:${REC}`, {
         type: "career_employer",
         id: REC,
@@ -72,11 +84,22 @@ describe("validateAssistSlotBinding", () => {
     ).toBe(true);
   });
 
-  it("rejects mismatched pin or fabricated ids on draft", () => {
+  it("rejects mismatched pin or fabricated ids on draft (U5/U6)", () => {
     expect(
       validateAssistSlotBinding("refine:profile:self_pr", {
         type: "profile",
         section: "job_summary",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAssistSlotBinding("refine:profile:module", {
+        type: "profile",
+        section: "self_pr",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAssistSlotBinding("refine:profile:module", {
+        type: "profile",
       }).ok,
     ).toBe(false);
     expect(

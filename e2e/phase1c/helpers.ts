@@ -32,7 +32,8 @@ export { apiSignIn, apiSignUp, closeAiSidebar, E2E_PASSWORD, localeCookie };
 export { openAiSidebar } from "../ai-helpers";
 
 export const MOCK_REFINE_PREFIX = "（モック修正案）";
-export const REFINE_MARKER = "【修正案】";
+/** Matches unlabeled 【修正案】 and labeled 【修正案:fieldId】. */
+export const REFINE_MARKER = "【修正案";
 
 export function phase1cEmail(label: string): string {
   return uniqueE2eEmail(`p1c-${label}`);
@@ -137,10 +138,23 @@ export async function sendRefineAndWaitApply(page: Page): Promise<void> {
 }
 
 export async function applyRefineToDraft(page: Page): Promise<void> {
-  await page.getByTestId("ai-apply-to-draft").click();
-  await expect(page.getByTestId("mc-ai-draft-hint")).toBeVisible({
-    timeout: 15_000,
-  });
+  // Multi-field Apply may show 1–2 window.confirm dialogs (overwrite + field list).
+  const acceptDialog = (dialog: {
+    accept: () => Promise<void>;
+  }) => {
+    void dialog.accept().catch(() => {
+      /* already handled by another listener */
+    });
+  };
+  page.on("dialog", acceptDialog);
+  try {
+    await page.getByTestId("ai-apply-to-draft").click();
+    await expect(page.getByTestId("mc-ai-draft-hint")).toBeVisible({
+      timeout: 15_000,
+    });
+  } finally {
+    page.off("dialog", acceptDialog);
+  }
 }
 
 /** Open refine entry and wait for Apply on the latest bubble. */

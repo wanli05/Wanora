@@ -35,6 +35,7 @@ export {
   assistSlotKeyForCareerProject,
   assistSlotKeyForCareerProjectDraft,
   assistSlotKeyForProfile,
+  assistSlotKeyForProfileModule,
   normalizeAssistSlotKey,
   parseAssistSlotKey,
   validateAssistRebindKeys,

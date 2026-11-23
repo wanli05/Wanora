@@ -772,17 +772,21 @@ describe("MyCareerCenter", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /^編集$/ }));
-    expect(screen.getByTestId("ai-refine-selfPr_ja")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-refine-profile-module")).toBeInTheDocument();
+    expect(screen.queryByTestId("ai-refine-selfPr_ja")).not.toBeInTheDocument();
     fireEvent.change(screen.getByTestId("mc-self-pr-input"), {
       target: { value: "未保存PR" },
     });
-    fireEvent.click(screen.getByTestId("ai-refine-selfPr_ja"));
+    fireEvent.click(screen.getByTestId("ai-refine-profile-module"));
     await waitFor(() => expect(openSpy).toHaveBeenCalled());
-    expect(openSpy.mock.calls[0][0].draftText).toBe("未保存PR");
+    expect(openSpy.mock.calls[0][0].applyMode).toBe("multi");
+    expect(openSpy.mock.calls[0][0].fieldKey).toBe("profile_module");
     expect(openSpy.mock.calls[0][0].target).toEqual({
       type: "profile",
-      section: "self_pr",
+      section: "module",
     });
+    expect(openSpy.mock.calls[0][0].draftText).toContain("【添削対象:self_pr】");
+    expect(openSpy.mock.calls[0][0].draftText).toContain("未保存PR");
 
     openSpy.mockClear();
     fireEvent.click(screen.getByRole("button", { name: /職歴/ }));
@@ -793,6 +797,7 @@ describe("MyCareerCenter", () => {
       type: "career_employer",
       id: "11111111-1111-4111-8111-111111111111",
     });
+    expect(openSpy.mock.calls[0][0].applyMode ?? "single").toBe("single");
 
     openSpy.mockClear();
     fireEvent.click(screen.getByRole("button", { name: /プロジェクト/ }));
@@ -800,10 +805,12 @@ describe("MyCareerCenter", () => {
     fireEvent.change(screen.getByTestId("mc-project-overview-input"), {
       target: { value: "新規概要" },
     });
-    fireEvent.click(screen.getByTestId("ai-refine-overview_ja"));
+    fireEvent.click(screen.getByTestId("ai-refine-project-module"));
     await waitFor(() => expect(openSpy).toHaveBeenCalled());
     expect(openSpy.mock.calls[0][0].target).toBeNull();
     expect(openSpy.mock.calls[0][0].limitedContext).toBe(true);
-    expect(openSpy.mock.calls[0][0].draftText).toBe("新規概要");
+    expect(openSpy.mock.calls[0][0].applyMode).toBe("multi");
+    expect(openSpy.mock.calls[0][0].draftText).toContain("【添削対象:overview】");
+    expect(openSpy.mock.calls[0][0].draftText).toContain("新規概要");
   });
 });

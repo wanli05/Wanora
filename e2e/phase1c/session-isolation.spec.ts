@@ -1,11 +1,13 @@
 /**
  * Independent assist-slot conversations (My Career refine).
+ * Profile uses module slot; employer/project keep record slots.
  * Requires Mock Scheme A + phase1c-qa-e2e-runner isolation.
  */
 import { expect, test, type Page } from "@playwright/test";
 import {
   closeSidebarIfOpen,
   createEmployerAndReopen,
+  createProjectAndReopen,
   domClick,
   MOCK_REFINE_PREFIX,
   newPhase1cSignedInPage,
@@ -16,7 +18,7 @@ import {
 } from "./helpers";
 import { openAiSidebar } from "../ai-helpers";
 
-const REFINE = "【修正案】";
+const REFINE = "【修正案";
 
 async function activeConversationId(page: Page) {
   return page
@@ -39,8 +41,7 @@ async function waitAssistReady(page: Page) {
 }
 
 /** Wait until Assist has switched to `slotKey` and ensure/open finished. */
-async function waitAssistSlot(page: Page, slotKey: string) {
-  // Slot key flips on the first open render; do not race past via opening=false.
+async function waitAssistSlot(page: Page, slotKey: string | RegExp) {
   await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
     "data-assist-slot-key",
     slotKey,
@@ -50,7 +51,7 @@ async function waitAssistSlot(page: Page, slotKey: string) {
 }
 
 test.describe("session-isolation assist slots", () => {
-  test("S1/S2: cross-field independent ids; repeat click restores", async ({
+  test("S1/S2: profile module vs project independent; repeat restores", async ({
     browser,
   }) => {
     const { page, context } = await newPhase1cSignedInPage(browser, {
@@ -60,19 +61,35 @@ test.describe("session-isolation assist slots", () => {
     await panel.getByTestId("mc-self-pr-input").fill("独立会话PR【S1】");
     await panel.getByTestId("mc-job-summary-input").fill("独立会话要約【S1】");
 
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     const a = await activeConversationId(page);
     expect(a).toBeTruthy();
-    expect(await assistSlotKey(page)).toBe("refine:profile:self_pr");
+    expect(await assistSlotKey(page)).toBe("refine:profile:module");
 
-    await domClick(panel.getByTestId("ai-refine-jobSummary_ja"));
-    await waitAssistSlot(page, "refine:profile:job_summary");
+    const title = `独立PJ【S1】-${Date.now()}`;
+    await closeSidebarIfOpen(page);
+    const projectId = await createProjectAndReopen(page, {
+      title,
+      overview: "独立概要【S1】",
+    });
+    await refineOnce(page, "ai-refine-project-module");
+    await waitAssistSlot(
+      page,
+      new RegExp(`^refine:career_project:${projectId}$`),
+    );
     const b = await activeConversationId(page);
     expect(b).toBeTruthy();
     expect(b).not.toBe(a);
 
-    await domClick(panel.getByTestId("ai-refine-selfPr_ja"));
-    await waitAssistSlot(page, "refine:profile:self_pr");
+    await closeSidebarIfOpen(page);
+    await page
+      .getByTestId("mc-project-form")
+      .getByRole("button", { name: "閉じる", exact: true })
+      .click();
+
+    const panel2 = await openProfileCareerEditor(page);
+    await domClick(panel2.getByTestId("ai-refine-profile-module"));
+    await waitAssistSlot(page, "refine:profile:module");
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-active-conversation-id",
       a!,
@@ -92,12 +109,11 @@ test.describe("session-isolation assist slots", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("新規前PR【S3】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     const first = await activeConversationId(page);
     expect(first).toBeTruthy();
 
     await page.getByTestId("ai-new-conversation").click();
-    // click() does not await async onNewConversation — wait for id change.
     await expect(page.getByTestId("ai-sidebar-panel")).not.toHaveAttribute(
       "data-active-conversation-id",
       first!,
@@ -105,7 +121,7 @@ test.describe("session-isolation assist slots", () => {
     );
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-assist-slot-key",
-      "refine:profile:self_pr",
+      "refine:profile:module",
     );
     const second = await activeConversationId(page);
     expect(second).toBeTruthy();
@@ -188,7 +204,7 @@ test.describe("session-isolation assist slots", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("刷新前PR【S5】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     const before = await activeConversationId(page);
     expect(before).toBeTruthy();
     await closeSidebarIfOpen(page);
@@ -196,7 +212,7 @@ test.describe("session-isolation assist slots", () => {
     await page.reload({ waitUntil: "networkidle" });
     const panel2 = await openProfileCareerEditor(page);
     await panel2.getByTestId("mc-self-pr-input").fill("刷新後ドラフト【S5】");
-    await domClick(panel2.getByTestId("ai-refine-selfPr_ja"));
+    await domClick(panel2.getByTestId("ai-refine-profile-module"));
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-active-conversation-id",
       before!,
@@ -205,7 +221,6 @@ test.describe("session-isolation assist slots", () => {
     await expect(
       page.getByTestId("ai-msg-assistant").filter({ hasText: REFINE }),
     ).toBeVisible();
-    // Rule 6: reopen prefills latest draft; does not wipe history.
     await expect(page.getByTestId("ai-composer-input")).toContainText(
       "刷新後ドラフト【S5】",
     );
@@ -214,25 +229,39 @@ test.describe("session-isolation assist slots", () => {
     await context.close();
   });
 
-  test("S6: rapid A→B→A does not cross-arm Apply", async ({ browser }) => {
+  test("S6: rapid profile↔employer does not cross-arm Apply", async ({
+    browser,
+  }) => {
     const { page, context } = await newPhase1cSignedInPage(browser, {
       name: "Sess S6",
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("快速A【S6】");
-    await panel.getByTestId("mc-job-summary-input").fill("快速B【S6】");
-
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     const a = await activeConversationId(page);
-    await domClick(panel.getByTestId("ai-refine-jobSummary_ja"));
-    await waitAssistSlot(page, "refine:profile:job_summary");
+
+    await closeSidebarIfOpen(page);
+    const company = `快速会社【S6】-${Date.now()}`;
+    await createEmployerAndReopen(page, {
+      company,
+      narrative: "快速叙述【S6】",
+      startYm: "2020-01",
+    });
+    await domClick(page.getByTestId("ai-refine-narrative_ja"));
+    await waitAssistSlot(page, /^refine:career_employer:/);
     await sendRefineAndWaitApply(page);
     const b = await activeConversationId(page);
     expect(b).not.toBe(a);
     await expect(page.getByTestId("ai-apply-to-draft")).toHaveCount(1);
 
-    await domClick(panel.getByTestId("ai-refine-selfPr_ja"));
-    await waitAssistSlot(page, "refine:profile:self_pr");
+    await closeSidebarIfOpen(page);
+    await page
+      .getByTestId("mc-employer-form")
+      .getByRole("button", { name: "閉じる", exact: true })
+      .click();
+    const panel2 = await openProfileCareerEditor(page);
+    await domClick(panel2.getByTestId("ai-refine-profile-module"));
+    await waitAssistSlot(page, "refine:profile:module");
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-active-conversation-id",
       a!,
@@ -251,7 +280,7 @@ test.describe("session-isolation assist slots", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("普通入口【S7】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     const slotted = await activeConversationId(page);
     expect(slotted).toBeTruthy();
     await closeSidebarIfOpen(page);

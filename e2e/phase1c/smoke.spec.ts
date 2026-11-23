@@ -32,13 +32,13 @@ test.describe("Phase1C smoke", () => {
       .getByTestId("mc-self-pr-input")
       .fill(`煙测自己PR${marker}`);
 
-    await panel.getByTestId("ai-refine-selfPr_ja").click();
+    await panel.getByTestId("ai-refine-profile-module").click();
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-open",
       "true",
     );
     await expect(page.getByTestId("ai-composer-input")).toContainText(
-      "【添削対象本文】",
+      "【添削対象:self_pr】",
     );
 
     await sendRefineAndWaitApply(page);

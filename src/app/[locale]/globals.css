@@ -302,6 +302,44 @@ body {
   color: var(--mc-teal-deep);
   border: 1px solid var(--mc-line);
 }
+/* My Career AI refine — white fill, green border; hover stays light green (never black). */
+.mc-btn-ai-refine {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  color: var(--mc-teal-deep);
+  border: 1px solid var(--mc-teal);
+}
+.mc-btn-ai-refine:hover:not(:disabled),
+.mc-btn-ai-refine:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--mc-teal) 16%, #fff);
+  color: var(--mc-teal-deep);
+  border-color: var(--mc-teal);
+}
+.mc-btn-ai-refine:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mc-module-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.mc-module-title-row h3 {
+  margin: 0;
+}
 .mc-btn-danger {
   background: transparent;
   color: #8a3d2f;

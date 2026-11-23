@@ -14,6 +14,7 @@ const profileSectionSchema = z.enum([
   "job_summary",
   "headline",
   "overview",
+  "module",
 ]);
 
 /** Optional pinned TargetContext snapshot on a conversation. */

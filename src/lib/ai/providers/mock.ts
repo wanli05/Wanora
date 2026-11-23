@@ -8,46 +8,47 @@ import { estimateCostUsd } from "@/lib/ai/pricing/estimate";
 const MOCK_MODEL = "mock-v1";
 
 /**
- * Step 4C Mock Scheme A — **re-implementation** (not recovered original source).
+ * Mock Scheme A (+ module multi-field extension).
  *
- * Windows / Agent 备份未找到 Step 2 原文 `mock.ts` / `mock.test.ts`。
- * 本文件依据 Step 1/2 已确认契约重新编写，刻意标注为新实现，不得冒充历史源码。
+ * Single-field (legacy):
+ * - Features self_pr / job_summary / career_employer_narrative, or unlabeled
+ *   【添削対象本文】 markers → one unlabeled 【修正案】 pair.
  *
- * Contract (Scheme A):
- * - Only the four approved refine features (or prompts that already carry
- *   【添削対象本文】 markers) emit a single 【修正案】…【修正案ここまで】 pair.
- * - Body is taken from the *last* 【添削対象本文】…【添削対象本文ここまで】 block
- *   (COMMON_RULES / buildRefinePrompt also mention the phrase earlier).
- * - Refined text is deterministic: `（モック修正案）` + target body.
- * - Empty / placeholder / malformed target → short guidance inside one pair;
- *   never dump the full system/user prompt into the 修正案.
- * - Nested result markers in the target body are stripped so output has exactly
- *   one start/end pair (required by fail-closed `extractRefinedText`).
- * - Ordinary Mock chat keeps 【モック応答】 behavior.
+ * Multi-field modules:
+ * - profile_module_refine / career_project_refine with labeled
+ *   【添削対象:id】 blocks → labeled 【修正案:id】 pairs (omit empty drafts).
  *
- * Must stay aligned with:
- * - `src/components/ai-sidebar/refine-prompts.ts` marker constants
- * - `extractRefinedText` fail-closed parsing (do not relax)
- * - E2E `MOCK_REFINE_PREFIX = "（モック修正案）"`
+ * Must stay aligned with refine-prompts markers + extractRefinedText/Fields.
  */
 
-/** Keep in sync with refine-prompts.ts */
 const REFINE_BODY_START = "【添削対象本文】";
 const REFINE_BODY_END = "【添削対象本文ここまで】";
 const REFINE_RESULT_START = "【修正案】";
 const REFINE_RESULT_END = "【修正案ここまで】";
+const REFINE_LABELED_BODY_END = "【添削対象ここまで】";
 
 /** Prefix required by Phase 1C E2E / Apply smoke (Scheme A). */
 export const MOCK_REFINE_TEXT_PREFIX = "（モック修正案）";
 
-const APPROVED_REFINE_FEATURES = new Set([
+const SINGLE_REFINE_FEATURES = new Set([
   "self_pr_refine",
   "job_summary_refine",
   "career_employer_narrative_refine",
+]);
+
+const MODULE_REFINE_FEATURES = new Set([
+  "profile_module_refine",
   "career_project_refine",
 ]);
 
-/** Matches refine-prompts empty-body placeholder (ja). */
+const PROFILE_FIELD_IDS = ["self_pr", "job_summary", "strengths"] as const;
+const PROJECT_FIELD_IDS = [
+  "overview",
+  "phases",
+  "responsibilities",
+  "results",
+] as const;
+
 const EMPTY_BODY_PLACEHOLDER =
   "（本文は空です。不足点の確認と書き方の提案のみ行ってください。）";
 
@@ -58,7 +59,6 @@ const MALFORMED_BODY_GUIDANCE =
   `${MOCK_REFINE_TEXT_PREFIX}添削対象の本文マーカーが不完全です。対象本文を確認してください。`;
 
 function estimateTokens(text: string): number {
-  // Rough CJK-friendly estimate: ~1 token per 2 chars, min 1 when non-empty.
   const trimmed = text.trim();
   if (!trimmed) return 0;
   return Math.max(1, Math.ceil(trimmed.length / 2));
@@ -71,8 +71,7 @@ type TargetExtract =
   | { kind: "absent" };
 
 /**
- * Extract refine target from the last body-marker pair in user content.
- * Uses lastIndexOf so earlier mentions in COMMON_RULES / format examples are ignored.
+ * Extract refine target from the last unlabeled body-marker pair in user content.
  */
 export function extractMockRefineTarget(userContent: string): TargetExtract {
   const start = userContent.lastIndexOf(REFINE_BODY_START);
@@ -102,12 +101,87 @@ function wrapRefineResult(inner: string): string {
   return `${REFINE_RESULT_START}\n${body}\n${REFINE_RESULT_END}`;
 }
 
-function shouldEmitRefineContract(
+function wrapLabeledRefineResult(fieldId: string, inner: string): string {
+  const cleaned = stripNestedResultMarkers(inner)
+    .replace(new RegExp(`【修正案:${fieldId}】`, "gi"), "")
+    .trim();
+  const body = cleaned.length > 0 ? cleaned : EMPTY_BODY_GUIDANCE;
+  return `【修正案:${fieldId}】\n${body}\n${REFINE_RESULT_END}`;
+}
+
+function extractLabeledBody(
+  userContent: string,
+  fieldId: string,
+): TargetExtract {
+  const startTag = `【添削対象:${fieldId}】`;
+  const start = userContent.lastIndexOf(startTag);
+  if (start < 0) return { kind: "absent" };
+  const afterStart = start + startTag.length;
+  const end = userContent.indexOf(REFINE_LABELED_BODY_END, afterStart);
+  if (end < 0) return { kind: "malformed" };
+  const body = userContent.slice(afterStart, end).trim();
+  if (!body || body === EMPTY_BODY_PLACEHOLDER) return { kind: "empty" };
+  return { kind: "ok", body };
+}
+
+function buildModuleRefineReply(
+  feature: string,
+  userContent: string,
+): string {
+  const fieldIds =
+    feature === "profile_module_refine" ? PROFILE_FIELD_IDS : PROJECT_FIELD_IDS;
+  // Legacy project overview path: unlabeled body only → single unlabeled pair.
+  if (
+    feature === "career_project_refine" &&
+    !/【添削対象:[a-z0-9_]+】/i.test(userContent) &&
+    userContent.includes(REFINE_BODY_START)
+  ) {
+    return buildRefineReply(userContent);
+  }
+  const blocks: string[] = [];
+  let sawMalformed = false;
+  for (const id of fieldIds) {
+    const extracted = extractLabeledBody(userContent, id);
+    if (extracted.kind === "malformed") {
+      sawMalformed = true;
+      continue;
+    }
+    if (extracted.kind === "ok") {
+      blocks.push(
+        wrapLabeledRefineResult(
+          id,
+          `${MOCK_REFINE_TEXT_PREFIX}${stripNestedResultMarkers(extracted.body)}`,
+        ),
+      );
+    }
+    // empty / absent → omit pair (partial apply / no overwrite)
+  }
+  if (blocks.length > 0) return blocks.join("\n");
+  if (sawMalformed) {
+    return wrapLabeledRefineResult(fieldIds[0]!, MALFORMED_BODY_GUIDANCE);
+  }
+  // All empty: emit guidance on first field only so Apply still has one pair.
+  return wrapLabeledRefineResult(fieldIds[0]!, EMPTY_BODY_GUIDANCE);
+}
+
+function shouldEmitModuleRefine(
   feature: string,
   userContent: string,
 ): boolean {
-  if (APPROVED_REFINE_FEATURES.has(feature)) return true;
-  return userContent.includes(REFINE_BODY_START);
+  if (MODULE_REFINE_FEATURES.has(feature)) return true;
+  return /【添削対象:[a-z0-9_]+】/i.test(userContent);
+}
+
+function shouldEmitSingleRefine(
+  feature: string,
+  userContent: string,
+): boolean {
+  if (SINGLE_REFINE_FEATURES.has(feature)) return true;
+  // Unlabeled body without labeled bodies → legacy single refine.
+  return (
+    userContent.includes(REFINE_BODY_START) &&
+    !/【添削対象:[a-z0-9_]+】/i.test(userContent)
+  );
 }
 
 function buildRefineReply(userContent: string): string {
@@ -135,7 +209,10 @@ function buildChatReply(userContent: string): string {
 function buildReply(request: AiCompletionRequest): string {
   const lastUser = [...request.messages].reverse().find((m) => m.role === "user");
   const userContent = lastUser?.content ?? "";
-  if (shouldEmitRefineContract(request.feature, userContent)) {
+  if (shouldEmitModuleRefine(request.feature, userContent)) {
+    return buildModuleRefineReply(request.feature, userContent);
+  }
+  if (shouldEmitSingleRefine(request.feature, userContent)) {
     return buildRefineReply(userContent);
   }
   return buildChatReply(userContent);
@@ -143,7 +220,6 @@ function buildReply(request: AiCompletionRequest): string {
 
 /**
  * Deterministic mock provider — no network. Safe for CI and local without keys.
- * Scheme A refine contract is a Step 4C re-implementation (see file header).
  */
 export function createMockAiProvider(): AiProvider {
   return {

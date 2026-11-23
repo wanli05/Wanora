@@ -17,7 +17,7 @@ export const assistSlotKeySchema = z
   .max(ASSIST_SLOT_KEY_MAX)
   .regex(
     new RegExp(
-      `^refine:(profile:(self_pr|job_summary)|career_employer:(${uuidRe}|draft:${uuidRe})|career_project:(${uuidRe}|draft:${uuidRe}))$`,
+      `^refine:(profile:(self_pr|job_summary|module)|career_employer:(${uuidRe}|draft:${uuidRe})|career_project:(${uuidRe}|draft:${uuidRe}))$`,
       "i",
     ),
     "invalid_assist_slot_key",
@@ -26,7 +26,7 @@ export const assistSlotKeySchema = z
 export type AssistSlotKey = z.infer<typeof assistSlotKeySchema>;
 
 export type ParsedAssistSlot =
-  | { kind: "profile"; section: "self_pr" | "job_summary" }
+  | { kind: "profile"; section: "self_pr" | "job_summary" | "module" }
   | { kind: "career_employer"; mode: "record"; recordId: string }
   | { kind: "career_employer"; mode: "draft"; clientDraftKey: string }
   | { kind: "career_project"; mode: "record"; recordId: string }
@@ -41,11 +41,14 @@ export function parseAssistSlotKey(raw: string): ParsedAssistSlot | null {
   if (!parsed.success) return null;
   const key = parsed.data;
 
-  const profile = /^refine:profile:(self_pr|job_summary)$/i.exec(key);
+  const profile = /^refine:profile:(self_pr|job_summary|module)$/i.exec(key);
   if (profile) {
     return {
       kind: "profile",
-      section: profile[1]!.toLowerCase() as "self_pr" | "job_summary",
+      section: profile[1]!.toLowerCase() as
+        | "self_pr"
+        | "job_summary"
+        | "module",
     };
   }
 
@@ -101,9 +104,13 @@ export function parseAssistSlotKey(raw: string): ParsedAssistSlot | null {
 }
 
 export function assistSlotKeyForProfile(
-  section: "self_pr" | "job_summary",
+  section: "self_pr" | "job_summary" | "module",
 ): AssistSlotKey {
   return `refine:profile:${section}`;
+}
+
+export function assistSlotKeyForProfileModule(): AssistSlotKey {
+  return assistSlotKeyForProfile("module");
 }
 
 export function assistSlotKeyForCareerEmployer(recordId: string): AssistSlotKey {
@@ -141,7 +148,8 @@ function asPinnedTarget(value: unknown): AiTargetContext | null | undefined {
       section === "self_pr" ||
       section === "job_summary" ||
       section === "headline" ||
-      section === "overview"
+      section === "overview" ||
+      section === "module"
     ) {
       return {
         type: "profile",
@@ -151,7 +159,8 @@ function asPinnedTarget(value: unknown): AiTargetContext | null | undefined {
                 | "self_pr"
                 | "job_summary"
                 | "headline"
-                | "overview",
+                | "overview"
+                | "module",
             }
           : {}),
       };
