@@ -85,6 +85,20 @@ vi.mock("next-intl", () => ({
       errJobTimeout: "timeout",
       deleteConfirm: "confirm?",
       aiUnavailableShort: "AIオフ",
+      assistRefProfile: "参照：My Career · プロフィール",
+      assistScopeProfile: "対象：自己PR・職務要約・活かせる経験",
+      assistRefProject: "参照：My Career · プロジェクト",
+      assistScopeProject: "対象：概要・担当フェーズ・業務内容・実績",
+      assistRefEmployer: "参照：My Career · 職歴",
+      assistScopeEmployer: "対象：叙述",
+      assistRefLegacyProfile: "参照：My Career · プロフィール",
+      assistScopeLegacySelfPr: "対象：自己PR",
+      assistScopeLegacyJobSummary: "対象：職務要約",
+      assistScopeLegacyOverview: "対象：概要",
+      composerExpand: "拡大",
+      composerCollapse: "縮小",
+      composerExpandAria: "入力欄を拡大する",
+      composerCollapseAria: "入力欄を縮小する",
     };
     return map[key] ?? key;
   },
@@ -180,6 +194,66 @@ function Harness({
         }
       >
         open new project
+      </button>
+      <button
+        type="button"
+        data-testid="open-profile-module"
+        onClick={() =>
+          void openWithAssist({
+            target: { type: "profile", section: "module" },
+            draftText: "【添削対象:self_pr】\nPR\n",
+            feature: "profile_module_refine",
+            fieldKey: "profile_module",
+            draftSnapshot: "self_pr\0PR",
+            applyMode: "multi",
+            allowedFieldIds: ["self_pr", "job_summary", "strengths"],
+            getCurrentDraft: () => "self_pr\0PR",
+            getCurrentDrafts: () => ({
+              self_pr: "PR",
+              job_summary: "",
+              strengths: "",
+            }),
+            onApplyFields: () => true,
+            onApplyToDraft: onApply,
+          })
+        }
+      >
+        open profile module
+      </button>
+      <button
+        type="button"
+        data-testid="open-project-module"
+        onClick={() =>
+          void openWithAssist({
+            target: {
+              type: "career_project",
+              id: "33333333-3333-4333-8333-333333333333",
+            },
+            draftText: "【添削対象:overview】\n概要\n",
+            feature: "career_project_refine",
+            fieldKey: "project_module",
+            recordId: "33333333-3333-4333-8333-333333333333",
+            draftSnapshot: "overview\0概要",
+            applyMode: "multi",
+            allowedFieldIds: [
+              "overview",
+              "phases",
+              "responsibilities",
+              "results",
+            ],
+            getCurrentDraft: () => "overview\0概要",
+            getCurrentDrafts: () => ({
+              overview: "概要",
+              phases: "",
+              responsibilities: "",
+              results: "",
+            }),
+            onApplyFields: () => true,
+            onApplyToDraft: onApply,
+          })
+        }
+      >
+        open project module
       </button>
       <AiSidebar />
     </>
@@ -345,8 +419,16 @@ describe("AI assist bridge + apply-to-draft", () => {
     expect(composer.value).toContain(REFINE_BODY_START);
     expect(composer.value).toContain("未保存の自己PR");
     expect(composer.value).toContain("自己PRの文章を添削");
-    fireEvent.click(screen.getByTestId("ai-context-ref"));
-    expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
+    expect(screen.getByTestId("ai-assist-context")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-assist-ref")).toHaveTextContent(
+      "参照：My Career · プロフィール",
+    );
+    expect(screen.getByTestId("ai-assist-scope")).toHaveTextContent(
+      "対象：自己PR",
+    );
+    expect(screen.queryByTestId("ai-context-ref")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-context-adjuster")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
     expect(api.enqueueJob).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(api.ensureAssistConversation).toHaveBeenCalled(),
@@ -360,6 +442,62 @@ describe("AI assist bridge + apply-to-draft", () => {
         "conv-1",
       ),
     );
+  });
+
+  it("hides focus adjuster and shows module scope for profile/project module", async () => {
+    renderHarness();
+    fireEvent.click(screen.getByTestId("open-profile-module"));
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-assist-scope")).toHaveTextContent(
+        "対象：自己PR・職務要約・活かせる経験",
+      ),
+    );
+    expect(screen.getByTestId("ai-assist-ref")).toHaveTextContent(
+      "参照：My Career · プロフィール",
+    );
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-context-adjuster")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("open-project-module"));
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-assist-scope")).toHaveTextContent(
+        "対象：概要・担当フェーズ・業務内容・実績",
+      ),
+    );
+    expect(screen.getByTestId("ai-assist-ref")).toHaveTextContent(
+      "参照：My Career · プロジェクト",
+    );
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
+  });
+
+  it("keeps draft when toggling composer expand/collapse", async () => {
+    renderHarness();
+    fireEvent.click(screen.getByTestId("open-profile-module"));
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-composer-input")).toBeInTheDocument(),
+    );
+    const longDraft = "長い下書き\n".repeat(20);
+    fireEvent.change(screen.getByTestId("ai-composer-input"), {
+      target: { value: longDraft },
+    });
+    const expand = screen.getByTestId("ai-composer-expand");
+    expect(expand).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(expand);
+    expect(expand).toHaveAttribute("aria-pressed", "true");
+    expect(expand).toHaveTextContent("縮小");
+    expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(longDraft);
+    fireEvent.click(expand);
+    expect(expand).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(longDraft);
+    expect(api.enqueueJob).not.toHaveBeenCalled();
   });
 
   it("uses independent conversation ids for different fields", async () => {
@@ -393,10 +531,11 @@ describe("AI assist bridge + apply-to-draft", () => {
         "true",
       ),
     );
-    fireEvent.click(screen.getByTestId("ai-context-ref"));
-    expect(screen.getByTestId("ai-target-context")).toHaveTextContent(
-      "職歴（就業先）",
+    expect(screen.getByTestId("ai-assist-ref")).toHaveTextContent(
+      "参照：My Career · 職歴",
     );
+    expect(screen.getByTestId("ai-assist-scope")).toHaveTextContent("対象：叙述");
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
     expect(
       (screen.getByTestId("ai-composer-input") as HTMLTextAreaElement).value,
     ).toContain("就業先叙述草稿");
@@ -408,8 +547,38 @@ describe("AI assist bridge + apply-to-draft", () => {
     await waitFor(() =>
       expect(screen.getByTestId("ai-assist-limited-context")).toBeInTheDocument(),
     );
+    expect(screen.getByTestId("ai-assist-scope")).toHaveTextContent("対象：概要");
+    expect(screen.queryByTestId("ai-context-ref")).not.toBeInTheDocument();
+  });
+
+  it("module send uses AssistSession target, not stale focus adjuster state", async () => {
+    renderHarness();
+    // Open general chat first and set a focus, then open module assist.
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId("ai-context-ref"));
-    expect(screen.getByTestId("ai-target-context")).toHaveTextContent("指定なし");
+    fireEvent.change(screen.getByTestId("ai-target-select"), {
+      target: { value: "profile:self_pr" },
+    });
+    expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
+
+    fireEvent.click(screen.getByTestId("open-profile-module"));
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-assist-context")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("ai-composer-input"), {
+      target: { value: "自己PRだけを添削してください" },
+    });
+    fireEvent.click(screen.getByTestId("ai-composer-send"));
+    await waitFor(() => expect(api.enqueueJob).toHaveBeenCalled());
+    const body = api.enqueueJob.mock.calls.at(-1)![0] as {
+      targetContext: { type: string; section?: string };
+      feature?: string;
+    };
+    expect(body.targetContext).toEqual({ type: "profile", section: "module" });
+    expect(body.feature).toBe("profile_module_refine");
   });
 
   it("does not open when AI is disabled", async () => {

@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AiTargetContext } from "@/lib/ai/context/types";
@@ -8,6 +15,10 @@ import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
 import { useAiAssist } from "@/components/ai-sidebar/ai-assist-context";
 import { formatMultiApplyFieldList } from "@/components/ai-sidebar/apply-confirm";
+import {
+  assistContextLabelKeys,
+  shouldHideFocusAdjuster,
+} from "@/components/ai-sidebar/assist-context-labels";
 import {
   extractRefinedFields,
   extractRefinedText,
@@ -83,6 +94,11 @@ export function AiSidebar() {
     null,
   );
   const [adjustOpen, setAdjustOpen] = useState(false);
+  /** Pure UI: composer height expand; never persisted to conversation/DB. */
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const composerSelectionRef = useRef<{ start: number; end: number } | null>(
+    null,
+  );
   const [conversations, setConversations] = useState<AiConversationDto[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessageDto[]>([]);
@@ -798,8 +814,34 @@ export function AiSidebar() {
   function closePanel() {
     // Allow next general toggle-open to use unslotted restore (Q7).
     assistTargetLockRef.current = undefined;
+    setComposerExpanded(false);
+    setAdjustOpen(false);
     setOpen(false);
   }
+
+  function toggleComposerExpanded() {
+    const el = composerRef.current;
+    if (el) {
+      composerSelectionRef.current = {
+        start: el.selectionStart,
+        end: el.selectionEnd,
+      };
+    }
+    setComposerExpanded((v) => !v);
+  }
+
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    const sel = composerSelectionRef.current;
+    if (!el || !sel) return;
+    try {
+      el.setSelectionRange(sel.start, sel.end);
+      el.focus();
+    } catch {
+      /* ignore selection restore failures */
+    }
+    composerSelectionRef.current = null;
+  }, [composerExpanded]);
 
   function openViaToggle() {
     if (open) {
@@ -1079,51 +1121,87 @@ export function AiSidebar() {
         ) : null}
 
         <div className="ai-sidebar-composer-wrap">
-          <div className="ai-sidebar-ref-row">
-            <button
-              type="button"
-              className="ai-sidebar-ref"
-              data-testid="ai-context-ref"
-              aria-expanded={adjustOpen}
-              aria-controls={adjusterId}
-              onClick={() => setAdjustOpen((v) => !v)}
-            >
-              {referenceLabel()}
-            </button>
-            <span className="ai-sidebar-ref-hint" data-testid="ai-page-context">
-              {pageContext.area ?? "other"}
-            </span>
-          </div>
-
-          {adjustOpen ? (
+          {shouldHideFocusAdjuster(assistSession?.fieldKey) &&
+          assistSession ? (
             <div
-              id={adjusterId}
-              className="ai-sidebar-adjust"
-              data-testid="ai-context-adjuster"
+              className="ai-sidebar-assist-context"
+              data-testid="ai-assist-context"
             >
-              <p className="ai-sidebar-adjust-lead">{t("adjustLead")}</p>
-              <label className="ai-sidebar-adjust-field">
-                <span>{t("adjustFocus")}</span>
-                <select
-                  data-testid="ai-target-select"
-                  value={targetSelectValue(targetContext)}
-                  onChange={(e) => onTargetAdjust(e.target.value)}
-                >
-                  {ADJUSTABLE_TARGET_OPTIONS.map((o) => (
-                    <option key={o.value || "none"} value={o.value}>
-                      {t(o.labelKey)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p
-                className="ai-sidebar-target-view"
-                data-testid="ai-target-context"
-              >
-                {t("targetCurrent", { label: formatTarget(targetContext) })}
-              </p>
+              {(() => {
+                const keys = assistContextLabelKeys(assistSession.fieldKey);
+                return (
+                  <>
+                    <p
+                      className="ai-sidebar-assist-ref"
+                      data-testid="ai-assist-ref"
+                    >
+                      {t(keys.referenceKey)}
+                    </p>
+                    <p
+                      className="ai-sidebar-assist-scope"
+                      data-testid="ai-assist-scope"
+                    >
+                      {t(keys.scopeKey)}
+                    </p>
+                  </>
+                );
+              })()}
+              <span className="ai-sidebar-ref-hint" data-testid="ai-page-context">
+                {pageContext.area ?? "other"}
+              </span>
             </div>
-          ) : null}
+          ) : (
+            <>
+              <div className="ai-sidebar-ref-row">
+                <button
+                  type="button"
+                  className="ai-sidebar-ref"
+                  data-testid="ai-context-ref"
+                  aria-expanded={adjustOpen}
+                  aria-controls={adjusterId}
+                  onClick={() => setAdjustOpen((v) => !v)}
+                >
+                  {referenceLabel()}
+                </button>
+                <span
+                  className="ai-sidebar-ref-hint"
+                  data-testid="ai-page-context"
+                >
+                  {pageContext.area ?? "other"}
+                </span>
+              </div>
+
+              {adjustOpen ? (
+                <div
+                  id={adjusterId}
+                  className="ai-sidebar-adjust"
+                  data-testid="ai-context-adjuster"
+                >
+                  <p className="ai-sidebar-adjust-lead">{t("adjustLead")}</p>
+                  <label className="ai-sidebar-adjust-field">
+                    <span>{t("adjustFocus")}</span>
+                    <select
+                      data-testid="ai-target-select"
+                      value={targetSelectValue(targetContext)}
+                      onChange={(e) => onTargetAdjust(e.target.value)}
+                    >
+                      {ADJUSTABLE_TARGET_OPTIONS.map((o) => (
+                        <option key={o.value || "none"} value={o.value}>
+                          {t(o.labelKey)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p
+                    className="ai-sidebar-target-view"
+                    data-testid="ai-target-context"
+                  >
+                    {t("targetCurrent", { label: formatTarget(targetContext) })}
+                  </p>
+                </div>
+              ) : null}
+            </>
+          )}
 
           <form
             className="ai-sidebar-composer"
@@ -1132,10 +1210,27 @@ export function AiSidebar() {
               void onSend();
             }}
           >
+            <div className="ai-sidebar-composer-toolbar">
+              <button
+                type="button"
+                className="ai-sidebar-composer-expand"
+                data-testid="ai-composer-expand"
+                aria-pressed={composerExpanded}
+                aria-label={
+                  composerExpanded
+                    ? t("composerCollapseAria")
+                    : t("composerExpandAria")
+                }
+                onClick={toggleComposerExpanded}
+              >
+                {composerExpanded ? t("composerCollapse") : t("composerExpand")}
+              </button>
+            </div>
             <textarea
               ref={composerRef}
               data-testid="ai-composer-input"
-              rows={3}
+              data-expanded={composerExpanded ? "true" : "false"}
+              rows={composerExpanded ? 12 : 6}
               value={draft}
               placeholder={t("placeholder")}
               disabled={busy}

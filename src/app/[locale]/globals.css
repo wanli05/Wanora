@@ -1850,16 +1850,60 @@ body {
   color: #8b2e2e;
   font-size: 12.5px;
 }
+.ai-sidebar-assist-context {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-sidebar-assist-ref,
+.ai-sidebar-assist-scope {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ai-teal-deep);
+  font-weight: 600;
+}
+.ai-sidebar-assist-scope {
+  font-weight: 500;
+  color: var(--ai-ink);
+}
 .ai-sidebar-composer {
   display: grid;
   gap: 8px;
   padding: 0;
   background: transparent;
 }
+.ai-sidebar-composer-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+.ai-sidebar-composer-expand {
+  border: 1px solid var(--ai-line);
+  background: #fff;
+  color: var(--ai-teal-deep);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ai-sidebar-composer-expand:hover,
+.ai-sidebar-composer-expand:focus-visible {
+  background: var(--ai-soft);
+}
+.ai-sidebar-composer-expand[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ai-teal) 14%, #fff);
+  border-color: var(--ai-teal);
+}
 .ai-sidebar-composer textarea {
   width: 100%;
-  resize: vertical;
-  min-height: 72px;
+  resize: none;
+  height: 160px;
+  min-height: 160px;
+  max-height: min(45vh, 420px);
+  overflow-y: auto;
   border: 1px solid var(--ai-line);
   border-radius: 10px;
   padding: 10px 12px;
@@ -1867,8 +1911,14 @@ body {
   font-size: 13.5px;
   color: var(--ai-ink);
   background: var(--ai-card);
+  box-sizing: border-box;
 }
-.ai-sidebar-composer button {
+.ai-sidebar-composer textarea[data-expanded="true"] {
+  height: min(45vh, 420px);
+  min-height: min(45vh, 420px);
+}
+.ai-sidebar-composer > button[type="submit"],
+.ai-sidebar-composer > button[data-testid="ai-composer-send"] {
   justify-self: end;
   border: 0;
   background: var(--ai-teal);
@@ -1880,7 +1930,8 @@ body {
   border-radius: 10px;
   cursor: pointer;
 }
-.ai-sidebar-composer button:disabled {
+.ai-sidebar-composer > button[type="submit"]:disabled,
+.ai-sidebar-composer > button[data-testid="ai-composer-send"]:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -1891,6 +1942,15 @@ body {
   .ai-sidebar-toggle {
     right: 14px;
     bottom: 16px;
+  }
+  .ai-sidebar-composer textarea {
+    height: 120px;
+    min-height: 120px;
+    max-height: min(40vh, 320px);
+  }
+  .ai-sidebar-composer textarea[data-expanded="true"] {
+    height: min(40vh, 320px);
+    min-height: min(40vh, 320px);
   }
 }
 

@@ -139,5 +139,21 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     await expect(page.getByTestId("ai-target-select")).toBeVisible();
     await page.getByTestId("ai-target-select").selectOption("");
     await expect(page.getByTestId("ai-target-context")).toContainText("指定なし");
+
+    // Composer expand/collapse is UI-only and must not send.
+    const draftBefore = await page.getByTestId("ai-composer-input").inputValue();
+    await page.getByTestId("ai-composer-expand").click();
+    await expect(page.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+    await expect(page.getByTestId("ai-composer-input")).toHaveValue(draftBefore);
+    await expect(page.getByTestId("ai-job-status")).toHaveCount(0);
+    await page.getByTestId("ai-composer-expand").click();
+    await expect(page.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    await expect(page.getByTestId("ai-assist-context")).toHaveCount(0);
   });
 });
