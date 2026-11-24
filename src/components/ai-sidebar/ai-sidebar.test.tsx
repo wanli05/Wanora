@@ -80,8 +80,9 @@ vi.mock("next-intl", () => ({
         assistScopeLegacyOverview: "対象：概要",
         composerExpand: "拡大",
         composerCollapse: "縮小",
-        composerExpandAria: "入力欄を拡大する",
-        composerCollapseAria: "入力欄を縮小する",
+        composerExpandAria: "入力欄を拡大",
+        composerCollapseAria: "入力欄を縮小",
+        composerResizeAria: "入力欄の高さをドラッグで調整",
       };
       return map[key] ?? key;
     },
@@ -334,17 +335,66 @@ describe("AiSidebar", () => {
       target: { value: draft },
     });
     const expand = screen.getByTestId("ai-composer-expand");
-    expect(expand).toHaveTextContent("拡大");
+    expect(expand).toHaveAttribute("aria-label", "入力欄を拡大");
+    expect(expand).not.toHaveTextContent("拡大");
     fireEvent.click(expand);
-    expect(expand).toHaveTextContent("縮小");
+    expect(expand).toHaveAttribute("aria-label", "入力欄を縮小");
+    expect(expand).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
       "data-expanded",
       "true",
     );
+    expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-size-mode",
+      "expanded",
+    );
     expect(screen.getByTestId("ai-composer-input")).toHaveValue(draft);
     expect(screen.getByTestId("ai-composer-send")).not.toBeDisabled();
     fireEvent.click(expand);
-    expect(expand).toHaveTextContent("拡大");
+    expect(expand).toHaveAttribute("aria-label", "入力欄を拡大");
+    expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-size-mode",
+      "default",
+    );
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(draft);
+    expect(api.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it("manual drag via resize handle enters manual height without sending", async () => {
+    renderSidebar();
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+
+    const draft = "ドラッグ下書き";
+    fireEvent.change(screen.getByTestId("ai-composer-input"), {
+      target: { value: draft },
+    });
+    const handle = screen.getByTestId("ai-composer-resize-handle");
+    const before = Number.parseFloat(
+      (screen.getByTestId("ai-composer-input") as HTMLTextAreaElement).style
+        .height,
+    );
+    fireEvent.pointerDown(handle, {
+      pointerId: 1,
+      button: 0,
+      clientY: 400,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(handle, {
+      pointerId: 1,
+      clientY: 340,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 340 });
+    const after = Number.parseFloat(
+      (screen.getByTestId("ai-composer-input") as HTMLTextAreaElement).style
+        .height,
+    );
+    expect(after).toBeGreaterThan(before);
+    expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-size-mode",
+      "manual",
+    );
     expect(screen.getByTestId("ai-composer-input")).toHaveValue(draft);
     expect(api.enqueueJob).not.toHaveBeenCalled();
   });

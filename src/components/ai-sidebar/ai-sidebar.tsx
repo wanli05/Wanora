@@ -7,6 +7,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -19,6 +20,17 @@ import {
   assistContextLabelKeys,
   shouldHideFocusAdjuster,
 } from "@/components/ai-sidebar/assist-context-labels";
+import {
+  type ComposerSizeMode,
+  composerMaxHeightPx,
+  composerShowsCollapseControl,
+  heightFromDrag,
+  resolveComposerHeightPx,
+} from "@/components/ai-sidebar/composer-height";
+import {
+  Maximize2Icon,
+  Minimize2Icon,
+} from "@/components/ai-sidebar/composer-icons";
 import {
   extractRefinedFields,
   extractRefinedText,
@@ -94,11 +106,26 @@ export function AiSidebar() {
     null,
   );
   const [adjustOpen, setAdjustOpen] = useState(false);
-  /** Pure UI: composer height expand; never persisted to conversation/DB. */
-  const [composerExpanded, setComposerExpanded] = useState(false);
+  /** Pure UI height mode; never persisted to conversation/DB. */
+  const [composerSizeMode, setComposerSizeMode] =
+    useState<ComposerSizeMode>("default");
+  const [composerManualHeightPx, setComposerManualHeightPx] = useState<
+    number | null
+  >(null);
+  const [composerViewport, setComposerViewport] = useState({
+    width: 1280,
+    height: 800,
+  });
+  const [composerPanelHeightPx, setComposerPanelHeightPx] = useState(700);
   const composerSelectionRef = useRef<{ start: number; end: number } | null>(
     null,
   );
+  const composerDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startHeight: number;
+  } | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
   const [conversations, setConversations] = useState<AiConversationDto[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessageDto[]>([]);
@@ -118,6 +145,14 @@ export function AiSidebar() {
   const sendingRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerHeightPx = resolveComposerHeightPx({
+    mode: composerSizeMode,
+    manualHeightPx: composerManualHeightPx,
+    viewportWidthPx: composerViewport.width,
+    viewportHeightPx: composerViewport.height,
+    panelHeightPx: composerPanelHeightPx,
+  });
+  const composerCollapse = composerShowsCollapseControl(composerSizeMode);
   /** When set (including null), open/select must not clobber Target with conversation pin. */
   const assistTargetLockRef = useRef<AiTargetContext | null | undefined>(
     undefined,
@@ -811,23 +846,92 @@ export function AiSidebar() {
     messages.length === 0 && !busy && !pending && !assistSession;
   const chips = suggestionsForPage(pageContext);
 
+  function resetComposerSize() {
+    setComposerSizeMode("default");
+    setComposerManualHeightPx(null);
+  }
+
   function closePanel() {
     // Allow next general toggle-open to use unslotted restore (Q7).
     assistTargetLockRef.current = undefined;
-    setComposerExpanded(false);
+    resetComposerSize();
     setAdjustOpen(false);
     setOpen(false);
   }
 
-  function toggleComposerExpanded() {
+  function rememberComposerSelection() {
     const el = composerRef.current;
-    if (el) {
-      composerSelectionRef.current = {
-        start: el.selectionStart,
-        end: el.selectionEnd,
-      };
+    if (!el) return;
+    composerSelectionRef.current = {
+      start: el.selectionStart,
+      end: el.selectionEnd,
+    };
+  }
+
+  function toggleComposerExpanded() {
+    rememberComposerSelection();
+    if (composerShowsCollapseControl(composerSizeMode)) {
+      resetComposerSize();
+      return;
     }
-    setComposerExpanded((v) => !v);
+    setComposerManualHeightPx(null);
+    setComposerSizeMode("expanded");
+  }
+
+  function onComposerResizePointerDown(
+    e: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    // Desktop drag only — avoid fighting mobile page scroll.
+    if (composerViewport.width <= 640) return;
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    const panel = panelRef.current;
+    if (panel) {
+      setComposerPanelHeightPx(panel.getBoundingClientRect().height);
+    }
+    const handle = e.currentTarget;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      /* jsdom / unsupported */
+    }
+    composerDragRef.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startHeight: composerHeightPx,
+    };
+    document.body.style.userSelect = "none";
+  }
+
+  function onComposerResizePointerMove(
+    e: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    const drag = composerDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const max = composerMaxHeightPx(
+      composerPanelHeightPx,
+      composerViewport.height,
+    );
+    const clamped = heightFromDrag(
+      drag.startHeight,
+      drag.startY,
+      e.clientY,
+      max,
+    );
+    setComposerSizeMode("manual");
+    setComposerManualHeightPx(clamped);
+  }
+
+  function endComposerResize(e: ReactPointerEvent<HTMLDivElement>) {
+    const drag = composerDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    composerDragRef.current = null;
+    document.body.style.userSelect = "";
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
   }
 
   useLayoutEffect(() => {
@@ -841,7 +945,30 @@ export function AiSidebar() {
       /* ignore selection restore failures */
     }
     composerSelectionRef.current = null;
-  }, [composerExpanded]);
+  }, [composerSizeMode, composerHeightPx]);
+
+  useEffect(() => {
+    function syncViewport() {
+      setComposerViewport({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+      const panel = panelRef.current;
+      if (panel) {
+        setComposerPanelHeightPx(panel.getBoundingClientRect().height);
+      }
+    }
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, [open]);
+
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = "";
+      composerDragRef.current = null;
+    };
+  }, []);
 
   function openViaToggle() {
     if (open) {
@@ -882,6 +1009,7 @@ export function AiSidebar() {
       ) : null}
 
       <aside
+        ref={panelRef}
         id="ai-sidebar-panel"
         className="ai-sidebar-panel"
         data-testid="ai-sidebar-panel"
@@ -1215,22 +1343,52 @@ export function AiSidebar() {
                 type="button"
                 className="ai-sidebar-composer-expand"
                 data-testid="ai-composer-expand"
-                aria-pressed={composerExpanded}
+                data-size-mode={composerSizeMode}
+                aria-pressed={composerCollapse}
                 aria-label={
-                  composerExpanded
+                  composerCollapse
                     ? t("composerCollapseAria")
                     : t("composerExpandAria")
                 }
+                title={
+                  composerCollapse ? t("composerCollapse") : t("composerExpand")
+                }
                 onClick={toggleComposerExpanded}
               >
-                {composerExpanded ? t("composerCollapse") : t("composerExpand")}
+                {composerCollapse ? (
+                  <Minimize2Icon className="ai-sidebar-composer-expand-icon" />
+                ) : (
+                  <Maximize2Icon className="ai-sidebar-composer-expand-icon" />
+                )}
               </button>
+            </div>
+            <div
+              className="ai-sidebar-composer-resize"
+              data-testid="ai-composer-resize-handle"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label={t("composerResizeAria")}
+              aria-valuenow={composerHeightPx}
+              aria-valuemin={100}
+              aria-valuemax={composerMaxHeightPx(
+                composerPanelHeightPx,
+                composerViewport.height,
+              )}
+              onPointerDown={onComposerResizePointerDown}
+              onPointerMove={onComposerResizePointerMove}
+              onPointerUp={endComposerResize}
+              onPointerCancel={endComposerResize}
+            >
+              <span className="ai-sidebar-composer-resize-grip" aria-hidden />
             </div>
             <textarea
               ref={composerRef}
+              className="ai-sidebar-composer-input"
               data-testid="ai-composer-input"
-              data-expanded={composerExpanded ? "true" : "false"}
-              rows={composerExpanded ? 12 : 6}
+              data-expanded={composerCollapse ? "true" : "false"}
+              data-size-mode={composerSizeMode}
+              rows={6}
+              style={{ height: composerHeightPx }}
               value={draft}
               placeholder={t("placeholder")}
               disabled={busy}

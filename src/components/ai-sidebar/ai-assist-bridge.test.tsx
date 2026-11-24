@@ -97,8 +97,9 @@ vi.mock("next-intl", () => ({
       assistScopeLegacyOverview: "対象：概要",
       composerExpand: "拡大",
       composerCollapse: "縮小",
-      composerExpandAria: "入力欄を拡大する",
-      composerCollapseAria: "入力欄を縮小する",
+      composerExpandAria: "入力欄を拡大",
+      composerCollapseAria: "入力欄を縮小",
+      composerResizeAria: "入力欄の高さをドラッグで調整",
     };
     return map[key] ?? key;
   },
@@ -482,9 +483,10 @@ describe("AI assist bridge + apply-to-draft", () => {
     });
     const expand = screen.getByTestId("ai-composer-expand");
     expect(expand).toHaveAttribute("aria-pressed", "false");
+    expect(expand).toHaveAttribute("aria-label", "入力欄を拡大");
     fireEvent.click(expand);
     expect(expand).toHaveAttribute("aria-pressed", "true");
-    expect(expand).toHaveTextContent("縮小");
+    expect(expand).toHaveAttribute("aria-label", "入力欄を縮小");
     expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
       "data-expanded",
       "true",

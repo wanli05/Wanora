@@ -453,6 +453,7 @@
     "composerCollapse": "缩小",
     "composerExpandAria": "放大输入框",
     "composerCollapseAria": "缩小输入框",
+    "composerResizeAria": "拖动调整输入框高度",
     "adjustLead": "必要なら、相談の焦点を選べます（任意）",
     "adjustFocus": "焦点（任意）",
     "targetCurrent": "現在の焦点：{label}",
