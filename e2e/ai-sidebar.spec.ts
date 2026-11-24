@@ -140,20 +140,63 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     await page.getByTestId("ai-target-select").selectOption("");
     await expect(page.getByTestId("ai-target-context")).toContainText("指定なし");
 
-    // Composer expand/collapse is UI-only and must not send.
+    // Composer expand/collapse is icon-only UI and must not send.
     const draftBefore = await page.getByTestId("ai-composer-input").inputValue();
-    await page.getByTestId("ai-composer-expand").click();
+    const expand = page.getByTestId("ai-composer-expand");
+    await expect(expand).toHaveAttribute("aria-label", "入力欄を拡大");
+    await expect(expand).not.toContainText("拡大");
+    await expand.click();
     await expect(page.getByTestId("ai-composer-input")).toHaveAttribute(
       "data-expanded",
       "true",
     );
+    await expect(expand).toHaveAttribute("aria-label", "入力欄を縮小");
     await expect(page.getByTestId("ai-composer-input")).toHaveValue(draftBefore);
     await expect(page.getByTestId("ai-job-status")).toHaveCount(0);
-    await page.getByTestId("ai-composer-expand").click();
+    await expand.click();
     await expect(page.getByTestId("ai-composer-input")).toHaveAttribute(
       "data-expanded",
       "false",
     );
     await expect(page.getByTestId("ai-assist-context")).toHaveCount(0);
+  });
+
+  test("UX: native resize disabled; top-edge drag grows height", async ({
+    request,
+  }) => {
+    await expectAiStatus(request, true);
+    await page.goto("/");
+    await openAiSidebar(page);
+    await page.getByTestId("ai-new-conversation").click();
+
+    const composer = page.getByTestId("ai-composer-input");
+    await composer.fill("ドラッグで高さを変えるテスト\n".repeat(6));
+
+    const resizeCss = await composer.evaluate((el) =>
+      getComputedStyle(el).resize,
+    );
+    expect(resizeCss).toBe("none");
+
+    const handle = page.getByTestId("ai-composer-resize-handle");
+    await expect(handle).toBeVisible();
+    const before = await composer.boundingBox();
+    expect(before).toBeTruthy();
+
+    const box = await handle.boundingBox();
+    expect(box).toBeTruthy();
+    const cx = box!.x + box!.width / 2;
+    const cy = box!.y + box!.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy - 80, { steps: 8 });
+    await page.mouse.up();
+
+    const after = await composer.boundingBox();
+    expect(after).toBeTruthy();
+    expect(after!.height).toBeGreaterThan(before!.height + 40);
+    await expect(composer).toHaveAttribute("data-size-mode", "manual");
+    await expect(composer).toHaveValue(/ドラッグで高さを変えるテスト/);
+    await expect(page.getByTestId("ai-composer-send")).toBeEnabled();
+    await expect(page.getByTestId("ai-job-status")).toHaveCount(0);
   });
 });

@@ -453,6 +453,7 @@
     "composerCollapse": "Collapse",
     "composerExpandAria": "Expand the composer",
     "composerCollapseAria": "Collapse the composer",
+    "composerResizeAria": "Drag to resize the composer",
     "adjustLead": "必要なら、相談の焦点を選べます（任意）",
     "adjustFocus": "焦点（任意）",
     "targetCurrent": "現在の焦点：{label}",
