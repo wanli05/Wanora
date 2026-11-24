@@ -453,7 +453,7 @@
     "applyToDraft": "この内容を使用",
     "applyDraftOnly": "編集欄に反映しました（まだ保存されていません）",
     "applyOverwriteConfirm": "編集中の文が変わっています。AIの修正案で上書きしますか？",
-    "applyFieldsConfirm": "将写回以下字段：{fields}。继续？（仅草稿，不会写入数据库）",
+    "applyFieldsConfirm": "将把修正案反映到以下项目：\n・{fields}\n\n当前编辑内容可能会被覆盖。是否继续？（仅草稿，不会写入数据库）",
     "applyExtractFailed": "修正本文を特定できないため、必要なら手動でコピーしてください",
     "applyRejectedStale": "編集対象が変わったため、この修正案は反映できません",
     "aiUnavailableShort": "AIは現在利用できません",

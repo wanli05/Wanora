@@ -77,17 +77,39 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     const marker = `A8刷新復元 ${Date.now()}`;
     await sendAiMessageAndWaitForMockReply(page, marker);
 
+    const beforeId = await page
+      .getByTestId("ai-sidebar-panel")
+      .getAttribute("data-active-conversation-id");
+    expect(beforeId).toBeTruthy();
+    // General chat must stay unslotted (Q7 isolation).
+    await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+      "data-assist-slot-key",
+      "",
+    );
+
     await page.reload({ waitUntil: "networkidle" });
     await openAiSidebar(page);
 
+    // Wait for general restore to finish selecting a conversation (not just panel open).
+    await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+      "data-active-conversation-id",
+      beforeId!,
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
+      "data-assist-slot-key",
+      "",
+    );
     await expect(
       page.getByTestId("ai-msg-user").filter({ hasText: marker }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page
         .getByTestId("ai-msg-assistant")
         .filter({ hasText: "【モック応答】ご入力を受け取りました：" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
+    // Refresh must not re-arm Assist Apply (no refine session after general restore).
+    await expect(page.getByTestId("ai-apply-to-draft")).toHaveCount(0);
     await closeAiSidebar(page);
   });
 

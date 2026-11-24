@@ -7,6 +7,7 @@ import type { AiTargetContext } from "@/lib/ai/context/types";
 import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
 import { useAiAssist } from "@/components/ai-sidebar/ai-assist-context";
+import { formatMultiApplyFieldList } from "@/components/ai-sidebar/apply-confirm";
 import {
   extractRefinedFields,
   extractRefinedText,
@@ -15,7 +16,6 @@ import {
   assistSlotKeyForRefineField,
   buildRefinePrompt,
   defaultAssistTitle,
-  moduleFieldLabelJa,
   type RefineFeature,
   type RefineFieldKey,
 } from "@/components/ai-sidebar/refine-prompts";
@@ -735,16 +735,10 @@ export function AiSidebar() {
         assistSession.allowedFieldIds,
       );
       if (fields && assistSession.onApplyFields) {
-        const current = assistSession.getCurrentDraft();
-        if (current !== assistSession.draftSnapshot) {
-          const ok = window.confirm(t("applyOverwriteConfirm"));
-          if (!ok) return;
-        }
-        const labels = Object.keys(fields)
-          .map((id) => moduleFieldLabelJa(id))
-          .join("、");
+        // One confirm only: list fields that will be written + overwrite warning.
+        const fieldList = formatMultiApplyFieldList(Object.keys(fields));
         const proceed = window.confirm(
-          t("applyFieldsConfirm", { fields: labels }),
+          t("applyFieldsConfirm", { fields: fieldList }),
         );
         if (!proceed) return;
         const applied = assistSession.onApplyFields(fields);
