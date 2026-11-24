@@ -29,7 +29,7 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("原稿【QA13】");
-    await panel.getByTestId("ai-refine-selfPr_ja").click();
+    await panel.getByTestId("ai-refine-profile-module").click();
 
     // Gate: hold job poll briefly so we can edit while job chrome may be active.
     let release: (() => void) | undefined;
@@ -85,13 +85,10 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("原稿【QA14】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     await panel.getByTestId("mc-self-pr-input").fill("事后改稿【QA14】");
 
-    page.once("dialog", async (d: Dialog) => {
-      expect(d.type()).toBe("confirm");
-      await d.accept();
-    });
+    // applyRefineToDraft accepts overwrite + multi-field confirms.
     await applyRefineToDraft(page);
     await expect(panel.getByTestId("mc-self-pr-input")).toContainText(
       MOCK_REFINE_PREFIX,
@@ -188,7 +185,7 @@ test.describe("QA-13～22 lifecycle", () => {
       .filter({ hasText: titleA })
       .getByRole("button", { name: "編集", exact: true })
       .click();
-    await refineOnce(page, "ai-refine-overview_ja");
+    await refineOnce(page, "ai-refine-project-module");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
 
     await domClick(
@@ -215,7 +212,7 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("取消編集【QA19】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
 
     await domClick(
@@ -234,7 +231,7 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("離页【QA20】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
 
     // Nav chrome label is「進捗ボード」(ja); older specs used「応募進捗」(AiSidebar.pageBoard).
@@ -253,7 +250,7 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("二重適用【QA21】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     await applyRefineToDraft(page);
     const afterFirst = await panel.getByTestId("mc-self-pr-input").inputValue();
     await applyRefineToDraft(page);
@@ -278,7 +275,7 @@ test.describe("QA-13～22 lifecycle", () => {
     await context.close();
   });
 
-  test("QA-22: rapid field switch uses independent conversations", async ({
+  test("QA-22: rapid module switch uses independent conversations", async ({
     browser,
   }) => {
     const { page, context } = await newPhase1cSignedInPage(browser, {
@@ -286,23 +283,28 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("快速切替PR【QA22】");
-    await panel.getByTestId("mc-job-summary-input").fill("快速切替要約【QA22】");
 
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
-    const selfPrConv = await page
+    const profileConv = await page
       .getByTestId("ai-sidebar-panel")
       .getAttribute("data-active-conversation-id");
-    expect(selfPrConv).toBeTruthy();
+    expect(profileConv).toBeTruthy();
     expect(
       await page.getByTestId("ai-sidebar-panel").getAttribute("data-assist-slot-key"),
-    ).toBe("refine:profile:self_pr");
+    ).toBe("refine:profile:module");
 
-    await domClick(panel.getByTestId("ai-refine-jobSummary_ja"));
-    // Wait for slot flip first — opening=false alone can race the prior ready state.
+    await closeSidebarIfOpen(page);
+    const company = `快速会社【QA22】-${Date.now()}`;
+    await createEmployerAndReopen(page, {
+      company,
+      narrative: "快速叙述【QA22】",
+      startYm: "2020-01",
+    });
+    await domClick(page.getByTestId("ai-refine-narrative_ja"));
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-assist-slot-key",
-      "refine:profile:job_summary",
+      /^refine:career_employer:/,
       { timeout: 30_000 },
     );
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
@@ -311,27 +313,28 @@ test.describe("QA-13～22 lifecycle", () => {
       { timeout: 30_000 },
     );
     await sendRefineAndWaitApply(page);
-    const jobSummaryConv = await page
+    const employerConv = await page
       .getByTestId("ai-sidebar-panel")
       .getAttribute("data-active-conversation-id");
-    expect(jobSummaryConv).toBeTruthy();
-    expect(jobSummaryConv).not.toBe(selfPrConv);
-    expect(
-      await page.getByTestId("ai-sidebar-panel").getAttribute("data-assist-slot-key"),
-    ).toBe("refine:profile:job_summary");
-    // Current slot arms Apply on its own thread only.
+    expect(employerConv).toBeTruthy();
+    expect(employerConv).not.toBe(profileConv);
     await expect(page.getByTestId("ai-apply-to-draft")).toHaveCount(1);
     await expect(lastRefineAssistant(page)).toBeVisible();
 
-    // Switch back — prior self_pr conversation / messages restore.
-    await domClick(panel.getByTestId("ai-refine-selfPr_ja"));
+    await closeSidebarIfOpen(page);
+    await page
+      .getByTestId("mc-employer-form")
+      .getByRole("button", { name: "閉じる", exact: true })
+      .click();
+    const panel2 = await openProfileCareerEditor(page);
+    await domClick(panel2.getByTestId("ai-refine-profile-module"));
     await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(
       "data-active-conversation-id",
-      selfPrConv!,
+      profileConv!,
       { timeout: 30_000 },
     );
     await expect(
-      page.getByTestId("ai-msg-assistant").filter({ hasText: "【修正案】" }),
+      page.getByTestId("ai-msg-assistant").filter({ hasText: "【修正案" }),
     ).toBeVisible();
 
     await closeSidebarIfOpen(page);
@@ -346,7 +349,7 @@ test.describe("QA-13～22 lifecycle", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("模块切替【QA19b】");
-    await refineOnce(page, "ai-refine-selfPr_ja");
+    await refineOnce(page, "ai-refine-profile-module");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
 
     await domClick(

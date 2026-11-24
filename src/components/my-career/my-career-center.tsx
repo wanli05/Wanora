@@ -10,19 +10,29 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { AiRefineButton } from "@/components/ai-sidebar/ai-refine-button";
+import {
+  AiModuleRefineButton,
+  AiRefineButton,
+} from "@/components/ai-sidebar/ai-refine-button";
 import { useAiAssistOptional } from "@/components/ai-sidebar/ai-assist-context";
 import {
   canApplyToProfileDraft,
   canApplyToRecordDraft,
 } from "@/components/ai-sidebar/assist-apply-guard";
 import { rebindAssistConversation } from "@/components/ai-sidebar/ai-api";
+import {
+  PROFILE_MODULE_FIELD_IDS,
+  PROJECT_MODULE_FIELD_IDS,
+  serializeModuleDrafts,
+} from "@/components/ai-sidebar/refine-prompts";
 import { useLiveRef } from "@/components/ai-sidebar/use-live-ref";
 import {
   assistSlotKeyForCareerEmployer,
   assistSlotKeyForCareerEmployerDraft,
   assistSlotKeyForCareerProject,
   assistSlotKeyForCareerProjectDraft,
+  assistSlotKeyForProfile,
+  assistSlotKeyForProfileModule,
 } from "@/lib/ai/conversation/assist-slot";
 import {
   ProfilePageForm,
@@ -356,6 +366,7 @@ function ProfileModule({
   const [nationality, setNationality] = useState(extras.nationality);
   const [selfPrJa, setSelfPrJa] = useState(extras.selfPrJa);
   const [jobSummaryJa, setJobSummaryJa] = useState(extras.jobSummaryJa);
+  const [strengthsJa, setStrengthsJa] = useState(extras.strengthsText);
   const [draftDirtyHint, setDraftDirtyHint] = useState<string | null>(null);
   const tAi = useTranslations("AiSidebar");
   const assist = useAiAssistOptional();
@@ -363,6 +374,7 @@ function ProfileModule({
   const editingRef = useLiveRef(editing);
   const selfPrJaRef = useLiveRef(selfPrJa);
   const jobSummaryJaRef = useLiveRef(jobSummaryJa);
+  const strengthsJaRef = useLiveRef(strengthsJa);
   const japanese = isJapaneseNationality(nationality);
   const recentGroups = useMemo(
     () => groupCareerTimelineByAt(timeline).slice(0, 4),
@@ -387,6 +399,90 @@ function ProfileModule({
     }
     wasPending.current = pending;
   }, [pending, state.ok, router, assist]);
+
+  // Legacy + module slot binders for history write-back while profile editor is open.
+  useEffect(() => {
+    if (!assist || !editing) return;
+    const profileGuard = () =>
+      canApplyToProfileDraft({
+        mounted: mountedRef.current,
+        editorOpen: editingRef.current,
+      });
+    const getDrafts = () => ({
+      self_pr: selfPrJaRef.current,
+      job_summary: jobSummaryJaRef.current,
+      strengths: strengthsJaRef.current,
+    });
+    const applyFields = (fields: Readonly<Record<string, string>>) => {
+      if (!profileGuard()) return false;
+      if (fields.self_pr !== undefined) setSelfPrJa(fields.self_pr);
+      if (fields.job_summary !== undefined) setJobSummaryJa(fields.job_summary);
+      if (fields.strengths !== undefined) setStrengthsJa(fields.strengths);
+      setDraftDirtyHint(tAi("applyDraftOnly"));
+      return true;
+    };
+    const unbindModule = assist.registerLegacySlotBinder(
+      assistSlotKeyForProfileModule(),
+      () => ({
+        target: { type: "profile", section: "module" },
+        draftText: "",
+        feature: "profile_module_refine",
+        fieldKey: "profile_module",
+        draftSnapshot: serializeModuleDrafts(
+          PROFILE_MODULE_FIELD_IDS,
+          getDrafts(),
+        ),
+        applyMode: "multi",
+        allowedFieldIds: PROFILE_MODULE_FIELD_IDS,
+        getCurrentDraft: () =>
+          serializeModuleDrafts(PROFILE_MODULE_FIELD_IDS, getDrafts()),
+        getCurrentDrafts: getDrafts,
+        onApplyFields: applyFields,
+        onApplyToDraft: () => false,
+      }),
+    );
+    const unbindSelfPr = assist.registerLegacySlotBinder(
+      assistSlotKeyForProfile("self_pr"),
+      () => ({
+        target: { type: "profile", section: "self_pr" },
+        draftText: selfPrJaRef.current,
+        feature: "self_pr_refine",
+        fieldKey: "selfPr_ja",
+        draftSnapshot: selfPrJaRef.current,
+        applyMode: "single",
+        getCurrentDraft: () => selfPrJaRef.current,
+        onApplyToDraft: (text) => {
+          if (!profileGuard()) return false;
+          setSelfPrJa(text);
+          setDraftDirtyHint(tAi("applyDraftOnly"));
+          return true;
+        },
+      }),
+    );
+    const unbindJob = assist.registerLegacySlotBinder(
+      assistSlotKeyForProfile("job_summary"),
+      () => ({
+        target: { type: "profile", section: "job_summary" },
+        draftText: jobSummaryJaRef.current,
+        feature: "job_summary_refine",
+        fieldKey: "jobSummary_ja",
+        draftSnapshot: jobSummaryJaRef.current,
+        applyMode: "single",
+        getCurrentDraft: () => jobSummaryJaRef.current,
+        onApplyToDraft: (text) => {
+          if (!profileGuard()) return false;
+          setJobSummaryJa(text);
+          setDraftDirtyHint(tAi("applyDraftOnly"));
+          return true;
+        },
+      }),
+    );
+    return () => {
+      unbindModule();
+      unbindSelfPr();
+      unbindJob();
+    };
+  }, [assist, editing, editingRef, selfPrJaRef, jobSummaryJaRef, strengthsJaRef, tAi]);
 
   const name = jaOf(profileForm.initial.fullName as LocalizedText);
   const tags = extras.directionTags
@@ -414,6 +510,10 @@ function ProfileModule({
               assist?.invalidateAssistApply();
               setLangs(extras.languages);
               setNationality(extras.nationality);
+              setSelfPrJa(extras.selfPrJa);
+              setJobSummaryJa(extras.jobSummaryJa);
+              setStrengthsJa(extras.strengthsText);
+              setDraftDirtyHint(null);
               setEditing(false);
             }}
           >
@@ -429,6 +529,7 @@ function ProfileModule({
               setNationality(extras.nationality);
               setSelfPrJa(extras.selfPrJa);
               setJobSummaryJa(extras.jobSummaryJa);
+              setStrengthsJa(extras.strengthsText);
               setDraftDirtyHint(null);
               setEditing(true);
             }}
@@ -542,7 +643,41 @@ function ProfileModule({
             value={JSON.stringify(langs)}
           />
           <div className="mc-card">
-            <h3>{labels.modules.profile}</h3>
+            <div className="mc-module-title-row">
+              <h3>{labels.modules.profile}</h3>
+              <AiModuleRefineButton
+                kind="profile"
+                drafts={{
+                  self_pr: selfPrJa,
+                  job_summary: jobSummaryJa,
+                  strengths: strengthsJa,
+                }}
+                getCurrentDrafts={() => ({
+                  self_pr: selfPrJaRef.current,
+                  job_summary: jobSummaryJaRef.current,
+                  strengths: strengthsJaRef.current,
+                })}
+                onApplyFields={(fields) => {
+                  if (
+                    !canApplyToProfileDraft({
+                      mounted: mountedRef.current,
+                      editorOpen: editingRef.current,
+                    })
+                  ) {
+                    return false;
+                  }
+                  if (fields.self_pr !== undefined) setSelfPrJa(fields.self_pr);
+                  if (fields.job_summary !== undefined) {
+                    setJobSummaryJa(fields.job_summary);
+                  }
+                  if (fields.strengths !== undefined) {
+                    setStrengthsJa(fields.strengths);
+                  }
+                  setDraftDirtyHint(tAi("applyDraftOnly"));
+                  return true;
+                }}
+              />
+            </div>
             <label className="mc-field">
               {labels.fields.headline}
               <input
@@ -560,27 +695,7 @@ function ProfileModule({
               />
             </label>
             <label className="mc-field">
-              <span className="flex items-center justify-between gap-2">
-                {labels.fields.selfPr}
-                <AiRefineButton
-                  fieldKey="selfPr_ja"
-                  draftText={selfPrJa}
-                  getCurrentDraft={() => selfPrJaRef.current}
-                  onApplyToDraft={(text) => {
-                    if (
-                      !canApplyToProfileDraft({
-                        mounted: mountedRef.current,
-                        editorOpen: editingRef.current,
-                      })
-                    ) {
-                      return false;
-                    }
-                    setSelfPrJa(text);
-                    setDraftDirtyHint(tAi("applyDraftOnly"));
-                    return true;
-                  }}
-                />
-              </span>
+              {labels.fields.selfPr}
               <textarea
                 name="selfPr_ja"
                 rows={4}
@@ -593,27 +708,7 @@ function ProfileModule({
               />
             </label>
             <label className="mc-field">
-              <span className="flex items-center justify-between gap-2">
-                {labels.fields.jobSummary}
-                <AiRefineButton
-                  fieldKey="jobSummary_ja"
-                  draftText={jobSummaryJa}
-                  getCurrentDraft={() => jobSummaryJaRef.current}
-                  onApplyToDraft={(text) => {
-                    if (
-                      !canApplyToProfileDraft({
-                        mounted: mountedRef.current,
-                        editorOpen: editingRef.current,
-                      })
-                    ) {
-                      return false;
-                    }
-                    setJobSummaryJa(text);
-                    setDraftDirtyHint(tAi("applyDraftOnly"));
-                    return true;
-                  }}
-                />
-              </span>
+              {labels.fields.jobSummary}
               <textarea
                 name="jobSummary_ja"
                 rows={4}
@@ -635,7 +730,12 @@ function ProfileModule({
               <textarea
                 name="strengths"
                 rows={4}
-                defaultValue={extras.strengthsText}
+                value={strengthsJa}
+                data-testid="mc-strengths-input"
+                onChange={(e) => {
+                  setStrengthsJa(e.target.value);
+                  setDraftDirtyHint(null);
+                }}
               />
             </label>
             <label className="mc-field">
@@ -1161,6 +1261,107 @@ function ProjectsModule({
     })();
   }, [state, clientDraftKeyRef, router, tAi]);
 
+  // History write-back: multi labeled + unlabeled overview-only fallback.
+  useEffect(() => {
+    if (!assist || !editing) return;
+    const recordId = editing.id || null;
+    const draftKey = clientDraftKeyRef.current;
+    const slotKey = recordId
+      ? assistSlotKeyForCareerProject(recordId)
+      : draftKey
+        ? assistSlotKeyForCareerProjectDraft(draftKey)
+        : null;
+    if (!slotKey) return;
+
+    const expectedRecordId = recordId;
+    const recordGuard = () =>
+      canApplyToRecordDraft({
+        mounted: mountedRef.current,
+        editorOpen: editingRef.current != null,
+        currentRecordId: editingRef.current?.id,
+        expectedRecordId,
+      });
+    const getDrafts = () => ({
+      overview: editingRef.current?.overviewJa ?? "",
+      phases: editingRef.current?.phasesJa ?? "",
+      responsibilities: editingRef.current?.responsibilitiesJa ?? "",
+      results: editingRef.current?.resultsJa ?? "",
+    });
+    const applyFields = (fields: Readonly<Record<string, string>>) => {
+      if (!recordGuard()) return false;
+      setEditing((prev) => {
+        if (
+          !prev ||
+          !canApplyToRecordDraft({
+            mounted: true,
+            editorOpen: true,
+            currentRecordId: prev.id,
+            expectedRecordId,
+          })
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          ...(fields.overview !== undefined
+            ? { overviewJa: fields.overview }
+            : {}),
+          ...(fields.phases !== undefined ? { phasesJa: fields.phases } : {}),
+          ...(fields.responsibilities !== undefined
+            ? { responsibilitiesJa: fields.responsibilities }
+            : {}),
+          ...(fields.results !== undefined
+            ? { resultsJa: fields.results }
+            : {}),
+        };
+      });
+      setDraftDirtyHint(tAi("applyDraftOnly"));
+      return true;
+    };
+    const applyOverviewOnly = (text: string) => {
+      if (!recordGuard()) return false;
+      setEditing((prev) => {
+        if (
+          !prev ||
+          !canApplyToRecordDraft({
+            mounted: true,
+            editorOpen: true,
+            currentRecordId: prev.id,
+            expectedRecordId,
+          })
+        ) {
+          return prev;
+        }
+        return { ...prev, overviewJa: text };
+      });
+      setDraftDirtyHint(tAi("applyDraftOnly"));
+      return true;
+    };
+
+    const unbind = assist.registerLegacySlotBinder(slotKey, () => ({
+      target: recordId
+        ? { type: "career_project", id: recordId }
+        : null,
+      draftText: "",
+      feature: "career_project_refine",
+      fieldKey: "project_module",
+      recordId,
+      clientDraftKey: draftKey,
+      draftSnapshot: serializeModuleDrafts(PROJECT_MODULE_FIELD_IDS, getDrafts()),
+      applyMode: "multi",
+      allowedFieldIds: PROJECT_MODULE_FIELD_IDS,
+      limitedContext: !recordId,
+      getCurrentDraft: () =>
+        serializeModuleDrafts(PROJECT_MODULE_FIELD_IDS, getDrafts()),
+      getCurrentDrafts: getDrafts,
+      onApplyFields: applyFields,
+      onApplyToDraft: applyOverviewOnly,
+    }));
+    return () => {
+      unbind();
+    };
+  }, [assist, editing, editingRef, clientDraftKeyRef, tAi]);
+
   const empty = (): CareerProjectDto => ({
     id: "",
     titleJa: "",
@@ -1302,6 +1503,100 @@ function ProjectsModule({
           data-testid="mc-project-form"
         >
           <input type="hidden" name="id" value={editing.id} />
+          <div className="mc-module-title-row">
+            <h3 className="m-0 text-base font-semibold text-[var(--mc-teal-deep)]">
+              {editing.id ? "プロジェクト編集" : "プロジェクト追加"}
+            </h3>
+            <AiModuleRefineButton
+              kind="project"
+              recordId={editing.id || null}
+              clientDraftKey={editing.id ? null : clientDraftKey}
+              drafts={{
+                overview: editing.overviewJa,
+                phases: editing.phasesJa,
+                responsibilities: editing.responsibilitiesJa,
+                results: editing.resultsJa,
+              }}
+              getCurrentDrafts={() => ({
+                overview: editingRef.current?.overviewJa ?? "",
+                phases: editingRef.current?.phasesJa ?? "",
+                responsibilities: editingRef.current?.responsibilitiesJa ?? "",
+                results: editingRef.current?.resultsJa ?? "",
+              })}
+              onApplyFields={(fields) => {
+                const expectedRecordId = editing.id || null;
+                if (
+                  !canApplyToRecordDraft({
+                    mounted: mountedRef.current,
+                    editorOpen: editingRef.current != null,
+                    currentRecordId: editingRef.current?.id,
+                    expectedRecordId,
+                  })
+                ) {
+                  return false;
+                }
+                setEditing((prev) => {
+                  if (
+                    !prev ||
+                    !canApplyToRecordDraft({
+                      mounted: true,
+                      editorOpen: true,
+                      currentRecordId: prev.id,
+                      expectedRecordId,
+                    })
+                  ) {
+                    return prev;
+                  }
+                  return {
+                    ...prev,
+                    ...(fields.overview !== undefined
+                      ? { overviewJa: fields.overview }
+                      : {}),
+                    ...(fields.phases !== undefined
+                      ? { phasesJa: fields.phases }
+                      : {}),
+                    ...(fields.responsibilities !== undefined
+                      ? { responsibilitiesJa: fields.responsibilities }
+                      : {}),
+                    ...(fields.results !== undefined
+                      ? { resultsJa: fields.results }
+                      : {}),
+                  };
+                });
+                setDraftDirtyHint(tAi("applyDraftOnly"));
+                return true;
+              }}
+              onApplyToDraft={(text) => {
+                const expectedRecordId = editing.id || null;
+                if (
+                  !canApplyToRecordDraft({
+                    mounted: mountedRef.current,
+                    editorOpen: editingRef.current != null,
+                    currentRecordId: editingRef.current?.id,
+                    expectedRecordId,
+                  })
+                ) {
+                  return false;
+                }
+                setEditing((prev) => {
+                  if (
+                    !prev ||
+                    !canApplyToRecordDraft({
+                      mounted: true,
+                      editorOpen: true,
+                      currentRecordId: prev.id,
+                      expectedRecordId,
+                    })
+                  ) {
+                    return prev;
+                  }
+                  return { ...prev, overviewJa: text };
+                });
+                setDraftDirtyHint(tAi("applyDraftOnly"));
+                return true;
+              }}
+            />
+          </div>
           <label className="mc-field">
             タイトル
             <input name="title_ja" defaultValue={editing.titleJa} required />
@@ -1333,46 +1628,7 @@ function ProjectsModule({
             </select>
           </label>
           <label className="mc-field">
-            <span className="flex items-center justify-between gap-2">
-              概要
-              <AiRefineButton
-                fieldKey="overview_ja"
-                draftText={editing.overviewJa}
-                recordId={editing.id || null}
-                clientDraftKey={editing.id ? null : clientDraftKey}
-                testId="ai-refine-overview_ja"
-                getCurrentDraft={() => editingRef.current?.overviewJa ?? ""}
-                onApplyToDraft={(text) => {
-                  const expectedRecordId = editing.id || null;
-                  if (
-                    !canApplyToRecordDraft({
-                      mounted: mountedRef.current,
-                      editorOpen: editingRef.current != null,
-                      currentRecordId: editingRef.current?.id,
-                      expectedRecordId,
-                    })
-                  ) {
-                    return false;
-                  }
-                  setEditing((prev) => {
-                    if (
-                      !prev ||
-                      !canApplyToRecordDraft({
-                        mounted: true,
-                        editorOpen: true,
-                        currentRecordId: prev.id,
-                        expectedRecordId,
-                      })
-                    ) {
-                      return prev;
-                    }
-                    return { ...prev, overviewJa: text };
-                  });
-                  setDraftDirtyHint(tAi("applyDraftOnly"));
-                  return true;
-                }}
-              />
-            </span>
+            概要
             <textarea
               name="overview_ja"
               rows={3}
@@ -1393,14 +1649,34 @@ function ProjectsModule({
           ) : null}
           <label className="mc-field">
             担当フェーズ
-            <textarea name="phases_ja" rows={2} defaultValue={editing.phasesJa} />
+            <textarea
+              name="phases_ja"
+              rows={2}
+              value={editing.phasesJa}
+              data-testid="mc-project-phases-input"
+              onChange={(e) => {
+                setEditing((prev) =>
+                  prev ? { ...prev, phasesJa: e.target.value } : prev,
+                );
+                setDraftDirtyHint(null);
+              }}
+            />
           </label>
           <label className="mc-field">
             業務内容
             <textarea
               name="responsibilities_ja"
               rows={3}
-              defaultValue={editing.responsibilitiesJa}
+              value={editing.responsibilitiesJa}
+              data-testid="mc-project-responsibilities-input"
+              onChange={(e) => {
+                setEditing((prev) =>
+                  prev
+                    ? { ...prev, responsibilitiesJa: e.target.value }
+                    : prev,
+                );
+                setDraftDirtyHint(null);
+              }}
             />
           </label>
           <label className="mc-field">
@@ -1408,7 +1684,14 @@ function ProjectsModule({
             <textarea
               name="results_ja"
               rows={3}
-              defaultValue={editing.resultsJa}
+              value={editing.resultsJa}
+              data-testid="mc-project-results-input"
+              onChange={(e) => {
+                setEditing((prev) =>
+                  prev ? { ...prev, resultsJa: e.target.value } : prev,
+                );
+                setDraftDirtyHint(null);
+              }}
             />
           </label>
           <label className="mc-field">

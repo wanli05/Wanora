@@ -103,18 +103,28 @@ async function loadTargetDetail(
       const safe = sanitizeProfile(profile);
       const section = target.section;
       const data =
-        section && section !== "overview"
+        section === "module"
           ? {
               section,
-              value:
-                section === "self_pr"
-                  ? safe.selfPr
-                  : section === "job_summary"
-                    ? safe.jobSummary
-                    : safe.headline,
+              value: {
+                selfPr: safe.selfPr,
+                jobSummary: safe.jobSummary,
+                strengths: safe.strengths,
+              },
               profile: safe,
             }
-          : { section: section ?? "overview", profile: safe };
+          : section && section !== "overview"
+            ? {
+                section,
+                value:
+                  section === "self_pr"
+                    ? safe.selfPr
+                    : section === "job_summary"
+                      ? safe.jobSummary
+                      : safe.headline,
+                profile: safe,
+              }
+            : { section: section ?? "overview", profile: safe };
       return fragment("target", "操作対象: プロフィール", data);
     }
     case "career_project": {

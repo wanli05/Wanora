@@ -32,7 +32,8 @@ export { apiSignIn, apiSignUp, closeAiSidebar, E2E_PASSWORD, localeCookie };
 export { openAiSidebar } from "../ai-helpers";
 
 export const MOCK_REFINE_PREFIX = "（モック修正案）";
-export const REFINE_MARKER = "【修正案】";
+/** Matches unlabeled 【修正案】 and labeled 【修正案:fieldId】. */
+export const REFINE_MARKER = "【修正案";
 
 export function phase1cEmail(label: string): string {
   return uniqueE2eEmail(`p1c-${label}`);
@@ -137,10 +138,46 @@ export async function sendRefineAndWaitApply(page: Page): Promise<void> {
 }
 
 export async function applyRefineToDraft(page: Page): Promise<void> {
-  await page.getByTestId("ai-apply-to-draft").click();
-  await expect(page.getByTestId("mc-ai-draft-hint")).toBeVisible({
-    timeout: 15_000,
-  });
+  // Multi-field Apply shows one window.confirm listing fields (+ overwrite warn).
+  const acceptDialog = (dialog: {
+    accept: () => Promise<void>;
+  }) => {
+    void dialog.accept().catch(() => {
+      /* already handled by another listener */
+    });
+  };
+  page.on("dialog", acceptDialog);
+  try {
+    await page.getByTestId("ai-apply-to-draft").click();
+    await expect(page.getByTestId("mc-ai-draft-hint")).toBeVisible({
+      timeout: 15_000,
+    });
+  } finally {
+    page.off("dialog", acceptDialog);
+  }
+}
+
+/**
+ * Rewrite the open assist composer so Mock emits only one labeled field pair.
+ * Keeps module feature routing (job feature is session-bound, not prompt-bound).
+ */
+export async function rewriteComposerToSingleLabeledField(
+  page: Page,
+  fieldId: string,
+  body: string,
+): Promise<void> {
+  const input = page.getByTestId("ai-composer-input");
+  await expect(input).toBeEnabled({ timeout: 30_000 });
+  const current = await input.inputValue();
+  const intro = current.split("【添削対象:")[0]?.trim() || "添削してください。";
+  const next = [
+    intro,
+    "",
+    `【添削対象:${fieldId}】`,
+    body,
+    "【添削対象ここまで】",
+  ].join("\n");
+  await input.fill(next);
 }
 
 /** Open refine entry and wait for Apply on the latest bubble. */
@@ -297,11 +334,46 @@ export async function readProjectOverview(
   email: string,
   projectId: string,
 ): Promise<string> {
+  return readProjectJaField(email, projectId, "overview");
+}
+
+export async function readProjectJaField(
+  email: string,
+  projectId: string,
+  field: "overview" | "phases" | "responsibilities" | "results",
+): Promise<string> {
   const userId = await userIdByEmail(email);
   return withDb(async (client) => {
     const res = await client.query<{ v: string | null }>(
-      `select overview->>'ja' as v from career_projects where user_id = $1 and id = $2`,
+      `select ${field}->>'ja' as v from career_projects where user_id = $1 and id = $2`,
       [userId, projectId],
+    );
+    return res.rows[0]?.v ?? "";
+  });
+}
+
+export async function readProfileStrengthsText(email: string): Promise<string> {
+  const userId = await userIdByEmail(email);
+  return withDb(async (client) => {
+    const res = await client.query<{ v: unknown }>(
+      `select strengths as v from profiles where user_id = $1 limit 1`,
+      [userId],
+    );
+    const raw = res.rows[0]?.v;
+    if (Array.isArray(raw)) return raw.map(String).join("\n");
+    return "";
+  });
+}
+
+export async function readProfileJaField(
+  email: string,
+  field: "self_pr" | "job_summary",
+): Promise<string> {
+  const userId = await userIdByEmail(email);
+  return withDb(async (client) => {
+    const res = await client.query<{ v: string | null }>(
+      `select ${field}->>'ja' as v from profiles where user_id = $1 limit 1`,
+      [userId],
     );
     return res.rows[0]?.v ?? "";
   });

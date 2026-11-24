@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { extractRefinedText } from "@/components/ai-sidebar/extract-refined-text";
 import {
+  extractRefinedFields,
+  extractRefinedText,
+} from "@/components/ai-sidebar/extract-refined-text";
+import {
+  PROFILE_MODULE_FIELD_IDS,
+  PROJECT_MODULE_FIELD_IDS,
   REFINE_BODY_END,
   REFINE_BODY_START,
+  REFINE_LABELED_BODY_END,
   REFINE_RESULT_END,
   REFINE_RESULT_START,
+  buildModuleRefinePrompt,
   buildRefinePrompt,
+  refineLabeledBodyStart,
 } from "@/components/ai-sidebar/refine-prompts";
 import {
   createMockAiProvider,
@@ -20,6 +28,10 @@ const REFINE_FEATURES = [
   "career_employer_narrative_refine",
   "career_project_refine",
 ] as const;
+
+function wrapLabeledBody(fieldId: string, body: string): string {
+  return `${refineLabeledBodyStart(fieldId)}\n${body}\n${REFINE_LABELED_BODY_END}`;
+}
 
 function wrapBody(body: string): string {
   return `${REFINE_BODY_START}\n${body}\n${REFINE_BODY_END}`;
@@ -241,5 +253,91 @@ describe("mockEstimatedCostUsd", () => {
   it("scales linearly with tokens", () => {
     expect(mockEstimatedCostUsd(0)).toBe("0.000000");
     expect(mockEstimatedCostUsd(100)).toBe("0.001000");
+  });
+});
+
+describe("createMockAiProvider (module multi-field Scheme A)", () => {
+  const provider = createMockAiProvider();
+
+  it("profile_module_refine emits labeled pairs for non-empty drafts (U4)", async () => {
+    const prompt = buildModuleRefinePrompt({
+      feature: "profile_module_refine",
+      fieldIds: PROFILE_MODULE_FIELD_IDS,
+      drafts: {
+        self_pr: "PR原文",
+        job_summary: "要約原文",
+        strengths: "経験1\n経験2",
+      },
+    });
+    const result = await provider.complete({
+      feature: "profile_module_refine",
+      messages: [{ role: "user", content: prompt }],
+    });
+    const fields = extractRefinedFields(result.text, PROFILE_MODULE_FIELD_IDS);
+    expect(fields).toEqual({
+      self_pr: `${MOCK_REFINE_TEXT_PREFIX}PR原文`,
+      job_summary: `${MOCK_REFINE_TEXT_PREFIX}要約原文`,
+      strengths: `${MOCK_REFINE_TEXT_PREFIX}経験1\n経験2`,
+    });
+    expect(extractRefinedText(result.text)).toBeNull();
+  });
+
+  it("omits empty drafts so Apply can leave them untouched", async () => {
+    const userContent = [
+      wrapLabeledBody("self_pr", "だけ返す"),
+      wrapLabeledBody("job_summary", "   "),
+      wrapLabeledBody("strengths", ""),
+    ].join("\n");
+    const result = await provider.complete({
+      feature: "profile_module_refine",
+      messages: [{ role: "user", content: userContent }],
+    });
+    const fields = extractRefinedFields(result.text, PROFILE_MODULE_FIELD_IDS);
+    expect(fields).toEqual({
+      self_pr: `${MOCK_REFINE_TEXT_PREFIX}だけ返す`,
+    });
+  });
+
+  it("career_project_refine labeled path returns four fields", async () => {
+    const prompt = buildModuleRefinePrompt({
+      feature: "career_project_refine",
+      fieldIds: PROJECT_MODULE_FIELD_IDS,
+      drafts: {
+        overview: "概要原",
+        phases: "フェーズ原",
+        responsibilities: "業務原",
+        results: "実績原",
+      },
+    });
+    const result = await provider.complete({
+      feature: "career_project_refine",
+      messages: [{ role: "user", content: prompt }],
+    });
+    expect(
+      extractRefinedFields(result.text, PROJECT_MODULE_FIELD_IDS),
+    ).toEqual({
+      overview: `${MOCK_REFINE_TEXT_PREFIX}概要原`,
+      phases: `${MOCK_REFINE_TEXT_PREFIX}フェーズ原`,
+      responsibilities: `${MOCK_REFINE_TEXT_PREFIX}業務原`,
+      results: `${MOCK_REFINE_TEXT_PREFIX}実績原`,
+    });
+  });
+
+  it("legacy unlabeled career_project_refine still emits one unlabeled pair", async () => {
+    const draft = "旧overview単フィールド";
+    const prompt = buildRefinePrompt({
+      feature: "career_project_refine",
+      draftText: draft,
+    });
+    const result = await provider.complete({
+      feature: "career_project_refine",
+      messages: [{ role: "user", content: prompt }],
+    });
+    expect(extractRefinedText(result.text)).toBe(
+      `${MOCK_REFINE_TEXT_PREFIX}${draft}`,
+    );
+    expect(
+      extractRefinedFields(result.text, PROJECT_MODULE_FIELD_IDS),
+    ).toBeNull();
   });
 });

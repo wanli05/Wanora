@@ -6,6 +6,7 @@ import {
   assistSlotKeyForCareerEmployer,
   assistSlotKeyForCareerEmployerDraft,
   assistSlotKeyForProfile,
+  assistSlotKeyForProfileModule,
 } from "@/lib/ai/conversation/assist-slot";
 import { createCareerEmployer } from "@/lib/data/career-employers";
 import {
@@ -247,5 +248,65 @@ describe("ensure-assist / rebind-assist", () => {
       ),
     ).toBe(true);
     expect(unslottedBody.conversations.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("ensures refine:profile:module with section module (I1)", async () => {
+    const { cookie } = await signUp(uniqueEmail("ensure-module"));
+    const slot = assistSlotKeyForProfileModule();
+    const ok = await ensureRoute.POST(
+      req("/api/ai/conversations/ensure-assist", {
+        cookie,
+        body: {
+          assistSlotKey: slot,
+          pinnedTarget: { type: "profile", section: "module" },
+          title: "プロフィール 添削",
+        },
+      }),
+    );
+    expect(ok.status).toBe(200);
+    const json = await ok.json();
+    expect(json.conversation.assistSlotKey).toBe("refine:profile:module");
+  });
+
+  it("rejects module slot with self_pr target (I2)", async () => {
+    const { cookie } = await signUp(uniqueEmail("ensure-module-bad"));
+    const bad = await ensureRoute.POST(
+      req("/api/ai/conversations/ensure-assist", {
+        cookie,
+        body: {
+          assistSlotKey: assistSlotKeyForProfileModule(),
+          pinnedTarget: { type: "profile", section: "self_pr" },
+        },
+      }),
+    );
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toBe("invalid_assist_binding");
+  });
+
+  it("keeps legacy self_pr ensure working alongside module (I3)", async () => {
+    const { cookie } = await signUp(uniqueEmail("ensure-legacy-ok"));
+    const legacy = await ensureRoute.POST(
+      req("/api/ai/conversations/ensure-assist", {
+        cookie,
+        body: {
+          assistSlotKey: assistSlotKeyForProfile("self_pr"),
+          pinnedTarget: { type: "profile", section: "self_pr" },
+        },
+      }),
+    );
+    const moduleEnsure = await ensureRoute.POST(
+      req("/api/ai/conversations/ensure-assist", {
+        cookie,
+        body: {
+          assistSlotKey: assistSlotKeyForProfileModule(),
+          pinnedTarget: { type: "profile", section: "module" },
+        },
+      }),
+    );
+    expect(legacy.status).toBe(200);
+    expect(moduleEnsure.status).toBe(200);
+    const legacyId = (await legacy.json()).conversation.id;
+    const moduleId = (await moduleEnsure.json()).conversation.id;
+    expect(legacyId).not.toBe(moduleId);
   });
 });

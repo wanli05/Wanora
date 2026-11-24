@@ -28,7 +28,6 @@ async function refineApplySaveProfileField(
   email: string,
   opts: {
     testId: "mc-self-pr-input" | "mc-job-summary-input";
-    refineTestId: "ai-refine-selfPr_ja" | "ai-refine-jobSummary_ja";
     dbField: "self_pr" | "job_summary";
     rawMarker: string;
     label: string;
@@ -38,7 +37,8 @@ async function refineApplySaveProfileField(
   const raw = `${opts.label}${opts.rawMarker}`;
   await panel.getByTestId(opts.testId).fill(raw);
 
-  await panel.getByTestId(opts.refineTestId).click();
+  // Module-level entry; Mock returns labeled pairs for non-empty drafts.
+  await panel.getByTestId("ai-refine-profile-module").click();
   await sendRefineAndWaitApply(page);
   await applyRefineToDraft(page);
   await expect(panel.getByTestId(opts.testId)).toContainText(MOCK_REFINE_PREFIX);
@@ -80,7 +80,6 @@ test.describe("QA-01～12 core targets", () => {
     });
     await refineApplySaveProfileField(page, email, {
       testId: "mc-self-pr-input",
-      refineTestId: "ai-refine-selfPr_ja",
       dbField: "self_pr",
       rawMarker: "【SELFPR-RAW】",
       label: "自己PR原文",
@@ -96,7 +95,6 @@ test.describe("QA-01～12 core targets", () => {
     });
     await refineApplySaveProfileField(page, email, {
       testId: "mc-job-summary-input",
-      refineTestId: "ai-refine-jobSummary_ja",
       dbField: "job_summary",
       rawMarker: "【JOBSUM-RAW】",
       label: "職務要約原文",
@@ -224,7 +222,7 @@ test.describe("QA-01～12 core targets", () => {
     const formA = page.getByTestId("mc-project-form");
     await expect(formA.locator('input[name="id"]')).toHaveValue(idA);
 
-    await formA.getByTestId("ai-refine-overview_ja").click();
+    await formA.getByTestId("ai-refine-project-module").click();
     await sendRefineAndWaitApply(page);
     await applyRefineToDraft(page);
     await expect(formA.getByTestId("mc-project-overview-input")).toContainText(

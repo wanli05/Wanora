@@ -7,7 +7,11 @@ import type { AiTargetContext } from "@/lib/ai/context/types";
 import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
 import { useAiAssist } from "@/components/ai-sidebar/ai-assist-context";
-import { extractRefinedText } from "@/components/ai-sidebar/extract-refined-text";
+import { formatMultiApplyFieldList } from "@/components/ai-sidebar/apply-confirm";
+import {
+  extractRefinedFields,
+  extractRefinedText,
+} from "@/components/ai-sidebar/extract-refined-text";
 import {
   assistSlotKeyForRefineField,
   buildRefinePrompt,
@@ -15,6 +19,7 @@ import {
   type RefineFeature,
   type RefineFieldKey,
 } from "@/components/ai-sidebar/refine-prompts";
+import type { AssistApplyMode } from "@/components/ai-sidebar/ai-assist-context";
 import {
   cancelJob,
   createConversation,
@@ -50,6 +55,10 @@ type AssistSession = {
   getCurrentDraft: () => string;
   /** Returns false when binding is stale / unmounted. */
   onApplyToDraft: (refined: string) => boolean;
+  applyMode: AssistApplyMode;
+  allowedFieldIds: readonly string[];
+  getCurrentDrafts?: () => Record<string, string>;
+  onApplyFields?: (fields: Readonly<Record<string, string>>) => boolean;
   limitedContext?: boolean;
   clientRequestId?: string;
   applyMessageId?: string | null;
@@ -63,7 +72,11 @@ export function AiSidebar() {
   const titleId = useId();
   const adjusterId = useId();
   const pageContext = pageContextFromPath(pathname);
-  const { registerOpenHandler, registerInvalidateHandler } = useAiAssist();
+  const {
+    registerOpenHandler,
+    registerInvalidateHandler,
+    resolveLegacySlotBinder,
+  } = useAiAssist();
   const [open, setOpen] = useState(false);
   /** Optional field focus; default null so chat can start without picking a Target. */
   const [targetContext, setTargetContext] = useState<AiTargetContext | null>(
@@ -192,14 +205,50 @@ export function AiSidebar() {
         conv != null &&
         (convSlot == null || convSlot !== lockedSlot);
 
+      const armLegacyBinder = (slot: string): boolean => {
+        const legacy = resolveLegacySlotBinder(slot);
+        if (!legacy) return false;
+        assistTargetLockRef.current = legacy.target;
+        assistSlotKeyRef.current = slot;
+        setTargetContext(legacy.target);
+        setAssistSession({
+          requestId: crypto.randomUUID(),
+          fieldKey: legacy.fieldKey,
+          feature: legacy.feature,
+          target: legacy.target,
+          recordId: legacy.recordId ?? null,
+          assistSlotKey: slot,
+          draftSnapshot: legacy.draftSnapshot,
+          getCurrentDraft: legacy.getCurrentDraft,
+          onApplyToDraft: legacy.onApplyToDraft,
+          applyMode: legacy.applyMode ?? "single",
+          allowedFieldIds: legacy.allowedFieldIds ?? [],
+          getCurrentDrafts: legacy.getCurrentDrafts,
+          onApplyFields: legacy.onApplyFields,
+          limitedContext: legacy.limitedContext,
+          applyMessageId: null,
+          applyRevoked: false,
+        });
+        return true;
+      };
+
       if (leavingAssistSlot) {
         // Switching to another slot or legacy: drop Apply + wrong Target/send ctx.
         clearAssistSendContext();
         setTargetContext(
           (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
         );
+        // Rebuild Apply for legacy / module slots when editor registered a binder.
+        if (convSlot) armLegacyBinder(convSlot);
+      } else if (lockedSlot == null && convSlot) {
+        // History select without an active assist lock — arm binder if editor open.
+        if (!armLegacyBinder(convSlot)) {
+          setTargetContext(
+            (conv?.pinnedTarget as AiTargetContext | null | undefined) ?? null,
+          );
+        }
       } else {
-        // Switching threads must not let an old assistant reply apply to a new field.
+        // Same assist slot: keep session, clear prior Apply message id.
         setAssistSession((prev) =>
           prev
             ? { ...prev, applyMessageId: null, clientRequestId: undefined }
@@ -215,7 +264,12 @@ export function AiSidebar() {
       }
       await refreshMessages(id);
     },
-    [refreshMessages, clearAssistSendContext, setAdjustOpen],
+    [
+      refreshMessages,
+      clearAssistSendContext,
+      setAdjustOpen,
+      resolveLegacySlotBinder,
+    ],
   );
   useEffect(() => {
     selectConversationRef.current = selectConversation;
@@ -324,6 +378,8 @@ export function AiSidebar() {
             applyRevoked: true,
             getCurrentDraft: () => "",
             onApplyToDraft: () => false,
+            onApplyFields: () => false,
+            getCurrentDrafts: () => ({}),
           }
         : null,
     );
@@ -372,13 +428,16 @@ export function AiSidebar() {
       setAssistOpening(true);
       // Always rebind Target for this assist request — never keep a stale pin.
       setTargetContext(input.target);
+      const applyMode: AssistApplyMode = input.applyMode ?? "single";
       setDraft(
-        buildRefinePrompt({
-          feature: input.feature,
-          draftText: input.draftText,
-          promptSeed: input.promptSeed,
-          limitedContext: input.limitedContext,
-        }),
+        applyMode === "multi"
+          ? input.draftText
+          : buildRefinePrompt({
+              feature: input.feature,
+              draftText: input.draftText,
+              promptSeed: input.promptSeed,
+              limitedContext: input.limitedContext,
+            }),
       );
       setAssistSession({
         requestId,
@@ -390,6 +449,10 @@ export function AiSidebar() {
         draftSnapshot: input.draftSnapshot,
         getCurrentDraft: input.getCurrentDraft,
         onApplyToDraft: input.onApplyToDraft,
+        applyMode,
+        allowedFieldIds: input.allowedFieldIds ?? [],
+        getCurrentDrafts: input.getCurrentDrafts,
+        onApplyFields: input.onApplyFields,
         limitedContext: input.limitedContext,
         applyMessageId: null,
         applyRevoked: false,
@@ -665,6 +728,49 @@ export function AiSidebar() {
     ) {
       return;
     }
+
+    if (assistSession.applyMode === "multi") {
+      const fields = extractRefinedFields(
+        message.content,
+        assistSession.allowedFieldIds,
+      );
+      if (fields && assistSession.onApplyFields) {
+        // One confirm only: list fields that will be written + overwrite warning.
+        const fieldList = formatMultiApplyFieldList(Object.keys(fields));
+        const proceed = window.confirm(
+          t("applyFieldsConfirm", { fields: fieldList }),
+        );
+        if (!proceed) return;
+        const applied = assistSession.onApplyFields(fields);
+        if (!applied) {
+          setApplyNotice(t("applyRejectedStale"));
+          revokeAssistApply();
+          return;
+        }
+        setApplyNotice(t("applyDraftOnly"));
+        return;
+      }
+      // Legacy unlabeled bubble in a module thread → overview / single binder only.
+      const legacySingle = extractRefinedText(message.content);
+      if (!legacySingle) {
+        setApplyNotice(t("applyExtractFailed"));
+        return;
+      }
+      const current = assistSession.getCurrentDraft();
+      if (current !== assistSession.draftSnapshot) {
+        const ok = window.confirm(t("applyOverwriteConfirm"));
+        if (!ok) return;
+      }
+      const applied = assistSession.onApplyToDraft(legacySingle);
+      if (!applied) {
+        setApplyNotice(t("applyRejectedStale"));
+        revokeAssistApply();
+        return;
+      }
+      setApplyNotice(t("applyDraftOnly"));
+      return;
+    }
+
     const refined = extractRefinedText(message.content);
     if (!refined) {
       setApplyNotice(t("applyExtractFailed"));
@@ -875,14 +981,23 @@ export function AiSidebar() {
                 !!assistSession &&
                 !assistSession.applyRevoked &&
                 assistSession.applyMessageId === m.id;
+              const multiOk =
+                !!assistSession &&
+                assistSession.applyMode === "multi" &&
+                extractRefinedFields(
+                  m.content,
+                  assistSession.allowedFieldIds,
+                ) != null;
+              const singleOk = extractRefinedText(m.content) != null;
+              const parseOk =
+                !!assistSession &&
+                (assistSession.applyMode === "multi"
+                  ? multiOk || singleOk
+                  : singleOk);
               const canApply =
-                m.role === "assistant" &&
-                applyArmed &&
-                extractRefinedText(m.content) != null;
+                m.role === "assistant" && applyArmed && parseOk;
               const copyOnly =
-                m.role === "assistant" &&
-                applyArmed &&
-                extractRefinedText(m.content) == null;
+                m.role === "assistant" && applyArmed && !parseOk;
               return (
                 <div
                   key={m.id}

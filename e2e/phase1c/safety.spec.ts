@@ -67,7 +67,7 @@ test.describe("QA-23～32 safety", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("停滞取消【QA24】");
-    await panel.getByTestId("ai-refine-selfPr_ja").click();
+    await panel.getByTestId("ai-refine-profile-module").click();
 
     let releasePoll: (() => void) | undefined;
     const holdPoll = new Promise<void>((r) => {
@@ -212,9 +212,9 @@ test.describe("QA-23～32 safety", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("");
-    await panel.getByTestId("ai-refine-selfPr_ja").click();
+    await panel.getByTestId("ai-refine-profile-module").click();
     await sendRefineAndWaitApply(page);
-    await expect(lastRefineAssistant(page)).toContainText("【修正案】");
+    await expect(lastRefineAssistant(page)).toContainText("【修正案");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
     await closeSidebarIfOpen(page);
     await context.close();
@@ -227,9 +227,9 @@ test.describe("QA-23～32 safety", () => {
     const panel = await openProfileCareerEditor(page);
     const long = `長文【QA28】${"あ".repeat(4000)}`;
     await panel.getByTestId("mc-self-pr-input").fill(long);
-    await panel.getByTestId("ai-refine-selfPr_ja").click();
+    await panel.getByTestId("ai-refine-profile-module").click();
     await sendRefineAndWaitApply(page);
-    await expect(lastRefineAssistant(page)).toContainText("【修正案】");
+    await expect(lastRefineAssistant(page)).toContainText("【修正案");
     await closeSidebarIfOpen(page);
     await context.close();
   });
@@ -242,7 +242,7 @@ test.describe("QA-23～32 safety", () => {
     });
     const panel = await openProfileCareerEditor(page);
     await panel.getByTestId("mc-self-pr-input").fill("二重送信【QA29】");
-    await panel.getByTestId("ai-refine-selfPr_ja").click();
+    await panel.getByTestId("ai-refine-profile-module").click();
     await sendRefineAndWaitApply(page);
     // Second send in same session — composer is cleared after enqueue; refill first
     // or send stays disabled and Playwright waits until test timeout.
@@ -256,7 +256,7 @@ test.describe("QA-23～32 safety", () => {
     await expect(lastRefineAssistant(page)).toBeVisible();
     const count = await page
       .getByTestId("ai-msg-assistant")
-      .filter({ hasText: "【修正案】" })
+      .filter({ hasText: "【修正案" })
       .count();
     expect(count).toBeGreaterThanOrEqual(1);
     expect(count).toBeLessThanOrEqual(3);

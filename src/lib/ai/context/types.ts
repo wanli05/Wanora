@@ -24,7 +24,9 @@ export type ProfileTargetSection =
   | "self_pr"
   | "job_summary"
   | "headline"
-  | "overview";
+  | "overview"
+  /** Module-level Profile refine (self_pr + job_summary + strengths). */
+  | "module";
 
 /** Conversation thread identity — separate from Page/Target. */
 export type AiConversationRef = {
