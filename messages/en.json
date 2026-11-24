@@ -5,13 +5,56 @@
   "Nav": {
     "language": "Language",
     "primary": "Primary navigation",
-    "progress": "Progress board",
+    "home": "Home",
+    "progress": "Applications",
     "recruiters": "Recruiters",
     "profile": "Profile",
-    "myCareer": "My Career"
+    "myCareer": "My Career",
+    "version": "Version",
+    "contact": "Contact",
+    "settings": "Settings",
+    "collapseNav": "Collapse navigation",
+    "expandNav": "Expand navigation",
+    "openNav": "Open menu",
+    "closeNav": "Close menu"
   },
   "Home": {
-    "tagline": "Job application tracker for job seekers in Japan"
+    "tagline": "Job application tracker for job seekers in Japan",
+    "welcomeTitle": "Home",
+    "welcomeBody": "Continue from My Career or your application board.",
+    "linkCareer": "Organize resume, work history, and skills",
+    "linkProgress": "Track stages and interviews"
+  },
+  "VersionPage": {
+    "title": "Version",
+    "subtitle": "Current Wanora version and recent updates.",
+    "currentVersion": "Current version",
+    "changelogTitle": "Highlights",
+    "updateSkillsTable": "Skills table category cell merge and row-menu delete",
+    "updateCollapsedForms": "Collapsed-by-default add forms for skills and career goals",
+    "updateExportSkills": "Aligned technical-skills merge in the career-history export",
+    "updateShellNav": "Signed-in left navigation plus Settings, Contact, and Version pages"
+  },
+  "ContactPage": {
+    "title": "Contact",
+    "subtitle": "Send bug reports or feature requests.",
+    "topicsTitle": "What we accept",
+    "topicBug": "Bugs",
+    "topicFeature": "Feature requests",
+    "howtoTitle": "Please include",
+    "howtoBody": "For bugs, share the page, the steps you took, and any error message you saw.",
+    "privacyNote": "Do not include account passwords or personal details from your resume.",
+    "channelTitle": "Channel",
+    "mailtoCta": "Email us",
+    "pending": "The contact desk is not ready yet"
+  },
+  "SettingsPage": {
+    "title": "Settings",
+    "subtitle": "Display preferences.",
+    "displayTitle": "Display",
+    "sidebarTitle": "Sidebar",
+    "sidebarExpanded": "Expanded",
+    "sidebarCollapsed": "Collapsed"
   },
   "Board": {
     "title": "Application progress",
@@ -461,6 +504,15 @@
     "applyExtractFailed": "修正本文を特定できないため、必要なら手動でコピーしてください",
     "applyRejectedStale": "編集対象が変わったため、この修正案は反映できません",
     "aiUnavailableShort": "AIは現在利用できません",
+    "viewChat": "Chat",
+    "viewHistory": "History",
+    "newChat": "+ New chat",
+    "historyEmpty": "No conversations yet",
+    "historySourceProfile": "Profile",
+    "historySourceProject": "Project",
+    "historySourceEmployer": "Work history",
+    "historySourceGeneral": "General",
+    "conversationMenu": "Conversation menu",
     "selectConversation": "会話を選択",
     "untitled": "無題の会話",
     "archivedPrefix": "［アーカイブ］",

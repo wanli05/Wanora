@@ -10,7 +10,7 @@ test("signed-in user can edit profile and add education on one page", async ({
   const creds = await apiSignUp(request, { name: "山田 太郎" });
   const { page, context } = await newSignedInPage(browser, creds);
 
-  await page.getByRole("link", { name: "My Career" }).click();
+  await page.getByRole("link", { name: /マイキャリア|My Career/ }).click();
   await expect(page).toHaveURL("/profile");
 
   // Career overview has its own 編集; resume fields live in .mc-resume-wrap.

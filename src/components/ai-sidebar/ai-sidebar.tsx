@@ -10,7 +10,11 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { usePathname } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  formatConversationDate,
+  historySourceKeyFromSlot,
+} from "@/components/ai-sidebar/conversation-history-meta";
 import type { AiTargetContext } from "@/lib/ai/context/types";
 import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
@@ -82,11 +86,98 @@ type AssistSession = {
   applyRevoked?: boolean;
 };
 
+function ConversationRowMenu({
+  archiveLabel,
+  deleteLabel,
+  menuLabel,
+  disabled,
+  onArchive,
+  onDelete,
+}: {
+  archiveLabel: string;
+  deleteLabel: string;
+  menuLabel: string;
+  disabled?: boolean;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="ai-hist-menu" ref={rootRef}>
+      <button
+        type="button"
+        className="ai-hist-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={menuLabel}
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        {"\u2026"}
+      </button>
+      {open ? (
+        <div className="ai-hist-menu-panel" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="ai-archive-conversation"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+              onArchive();
+            }}
+          >
+            {archiveLabel}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ai-hist-menu-danger"
+            data-testid="ai-delete-conversation"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            {deleteLabel}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AiSidebar() {
   const t = useTranslations("AiSidebar");
+  const locale = useLocale();
   const pathname = usePathname() ?? "/";
   const titleId = useId();
   const pageContext = pageContextFromPath(pathname);
+  const [panelView, setPanelView] = useState<"chat" | "history">("chat");
   const {
     registerOpenHandler,
     registerInvalidateHandler,
@@ -441,6 +532,7 @@ export function AiSidebar() {
       assistTargetLockRef.current = input.target;
       assistSlotKeyRef.current = slotKey;
       setShowAllConversations(false);
+      setPanelView("chat");
       setOpen(true);
       setError(null);
       setApplyNotice(null);
@@ -705,23 +797,49 @@ export function AiSidebar() {
     }
   }
 
-  async function onArchive() {
-    if (!activeId) return;
-    await patchConversation(activeId, { status: "archived" });
-    await refreshConversations();
+  async function onArchive(conversationId?: string) {
+    const id = conversationId ?? activeId;
+    if (!id) return;
+    await patchConversation(id, { status: "archived" });
+    await refreshConversations({
+      assistSlotKey: assistSession?.assistSlotKey ?? null,
+      showAll: panelView === "history" ? true : showAllConversations,
+    });
   }
 
-  async function onDelete() {
-    if (!activeId) return;
+  async function onDelete(conversationId?: string) {
+    const id = conversationId ?? activeId;
+    if (!id) return;
     if (!window.confirm(t("deleteConfirm"))) return;
-    await deleteConversation(activeId);
-    writeActiveConversationId(null);
-    setActiveId(null);
-    setMessages([]);
-    setTargetContext(null);
-    const list = await refreshConversations();
-    const next = list.find((c) => c.status === "active");
-    if (next) await selectConversation(next.id, list);
+    await deleteConversation(id);
+    if (id === activeId) {
+      writeActiveConversationId(null);
+      setActiveId(null);
+      setMessages([]);
+      setTargetContext(null);
+    }
+    const list = await refreshConversations({
+      assistSlotKey: assistSession?.assistSlotKey ?? null,
+      showAll: panelView === "history" ? true : showAllConversations,
+    });
+    if (id === activeId) {
+      const next = list.find((c) => c.status === "active");
+      if (next) await selectConversation(next.id, list);
+    }
+  }
+
+  async function openHistoryView() {
+    setPanelView("history");
+    setShowAllConversations(true);
+    await refreshConversations({
+      assistSlotKey: assistSession?.assistSlotKey ?? null,
+      showAll: true,
+    });
+  }
+
+  async function pickHistoryConversation(id: string) {
+    setPanelView("chat");
+    await selectConversation(id, conversations);
   }
 
   function applySuggestion(chip: ReturnType<typeof suggestionsForPage>[number]) {
@@ -1009,71 +1127,111 @@ export function AiSidebar() {
           </p>
         ) : null}
 
-        <div className="ai-sidebar-conv-bar">
-          <select
-            data-testid="ai-conversation-select"
-            value={activeId ?? ""}
-            onChange={(e) => {
-              const id = e.target.value;
-              if (id) void selectConversation(id, conversations);
-            }}
-          >
-            <option value="" disabled>
-              {t("selectConversation")}
-            </option>
-            {conversations
-              .filter((c) => c.status !== "deleted")
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.status === "archived" ? t("archivedPrefix") : ""}
-                  {c.title?.trim() || t("untitled")}
-                </option>
-              ))}
-          </select>
-          {assistSession ? (
-            <button
-              type="button"
-              data-testid="ai-show-all-conversations"
-              aria-pressed={showAllConversations}
-              onClick={() => {
-                const next = !showAllConversations;
-                setShowAllConversations(next);
-                void refreshConversations({
-                  assistSlotKey: assistSession.assistSlotKey,
-                  showAll: next,
-                });
-              }}
-            >
-              {showAllConversations
-                ? t("filterSlotOnly")
-                : t("showAllConversations")}
-            </button>
-          ) : null}
+        <div className="ai-sidebar-view-tabs" role="tablist" aria-label={t("title")}>
           <button
             type="button"
-            data-testid="ai-new-conversation"
-            onClick={() => void onNewConversation()}
+            role="tab"
+            className="ai-sidebar-view-tab"
+            data-testid="ai-view-chat"
+            aria-selected={panelView === "chat"}
+            data-active={panelView === "chat" ? "true" : "false"}
+            onClick={() => setPanelView("chat")}
           >
-            {t("new")}
+            {t("viewChat")}
           </button>
           <button
             type="button"
-            data-testid="ai-archive-conversation"
-            onClick={() => void onArchive()}
-            disabled={!activeId}
+            role="tab"
+            className="ai-sidebar-view-tab"
+            data-testid="ai-view-history"
+            aria-selected={panelView === "history"}
+            data-active={panelView === "history" ? "true" : "false"}
+            onClick={() => void openHistoryView()}
           >
-            {t("archive")}
-          </button>
-          <button
-            type="button"
-            data-testid="ai-delete-conversation"
-            onClick={() => void onDelete()}
-            disabled={!activeId}
-          >
-            {t("delete")}
+            {t("viewHistory")}
           </button>
         </div>
 
+        {panelView === "history" ? (
+          <div
+            className="ai-sidebar-history"
+            data-testid="ai-conversation-history"
+          >
+            {conversations.filter((c) => c.status !== "deleted").length ===
+            0 ? (
+              <p className="ai-sidebar-empty">{t("historyEmpty")}</p>
+            ) : (
+              <ul className="ai-hist-list">
+                {conversations
+                  .filter((c) => c.status !== "deleted")
+                  .map((c) => {
+                    const sourceKey = historySourceKeyFromSlot(c.assistSlotKey);
+                    const source =
+                      sourceKey != null ? t(sourceKey) : null;
+                    const date = formatConversationDate(c.updatedAt, locale);
+                    const title =
+                      (c.status === "archived" ? t("archivedPrefix") : "") +
+                      (c.title?.trim() || t("untitled"));
+                    return (
+                      <li key={c.id}>
+                        <div
+                          className="ai-hist-row"
+                          data-active={c.id === activeId ? "true" : "false"}
+                        >
+                          <button
+                            type="button"
+                            className="ai-hist-main"
+                            data-testid="ai-history-item"
+                            data-conversation-id={c.id}
+                            onClick={() => void pickHistoryConversation(c.id)}
+                          >
+                            <span className="ai-hist-title">{title}</span>
+                            <span className="ai-hist-meta">
+                              {[source, date].filter(Boolean).join(" · ")}
+                            </span>
+                          </button>
+                          <ConversationRowMenu
+                            menuLabel={t("conversationMenu")}
+                            archiveLabel={t("archive")}
+                            deleteLabel={t("delete")}
+                            onArchive={() => void onArchive(c.id)}
+                            onDelete={() => void onDelete(c.id)}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        {panelView === "chat" && !assistSession ? (
+          <div className="ai-sidebar-conv-bar">
+            <button
+              type="button"
+              data-testid="ai-new-conversation"
+              onClick={() => void onNewConversation()}
+            >
+              {t("newChat")}
+            </button>
+          </div>
+        ) : null}
+        {/* Assist refine keeps a hidden new-chat control for existing e2e flows. */}
+        {panelView === "chat" && assistSession ? (
+          <button
+            type="button"
+            className="sr-only"
+            data-testid="ai-new-conversation"
+            tabIndex={-1}
+            onClick={() => void onNewConversation()}
+          >
+            {t("newChat")}
+          </button>
+        ) : null}
+
+        {panelView === "chat" ? (
+          <>
         <div
           className="ai-sidebar-messages"
           ref={listRef}
@@ -1206,7 +1364,7 @@ export function AiSidebar() {
           </p>
         ) : null}
 
-        <div className="ai-sidebar-composer-wrap">
+        <div className="ai-sidebar-composer-wrap" data-testid="ai-composer-wrap">
           {assistSession ? (
             <div
               className="ai-sidebar-assist-context"
@@ -1330,6 +1488,8 @@ export function AiSidebar() {
             </button>
           </form>
         </div>
+          </>
+        ) : null}
       </aside>
     </>
   );

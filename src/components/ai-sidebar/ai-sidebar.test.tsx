@@ -1,13 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const pathnameRef = { current: "/ja" };
+const pathnameRef = { current: "/progress" };
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathnameRef.current,
 }));
 
 vi.mock("next-intl", () => ({
+  useLocale: () => "ja",
   useTranslations: () =>
     (key: string, values?: { label?: string; page?: string; target?: string }) => {
       if (key === "targetCurrent") return `現在の焦点：${values?.label ?? ""}`;
@@ -26,6 +27,15 @@ vi.mock("next-intl", () => ({
         targetJobSummary: "職務要約",
         targetHeadline: "見出し",
         targetOverview: "概要",
+        viewChat: "チャット",
+        viewHistory: "会話履歴",
+        newChat: "＋ 新しいチャット",
+        historyEmpty: "会話はまだありません",
+        historySourceProfile: "プロフィール",
+        historySourceProject: "プロジェクト",
+        historySourceEmployer: "職歴",
+        historySourceGeneral: "一般",
+        conversationMenu: "会話メニュー",
         selectConversation: "会話を選択",
         untitled: "無題の会話",
         archivedPrefix: "［アーカイブ］",
@@ -128,7 +138,7 @@ function renderSidebar() {
 
 describe("AiSidebar", () => {
   beforeEach(() => {
-    pathnameRef.current = "/ja";
+    pathnameRef.current = "/progress";
     api.listConversations.mockResolvedValue({
       conversations: [],
       pagination: { limit: 50, offset: 0, total: 0 },
@@ -243,7 +253,7 @@ describe("AiSidebar", () => {
 
   it("does not clear TargetContext when the path changes", () => {
     const prev = {
-      pageContext: pageContextFromPath("/ja"),
+      pageContext: pageContextFromPath("/progress"),
       targetContext: {
         type: "profile" as const,
         section: "job_summary" as const,

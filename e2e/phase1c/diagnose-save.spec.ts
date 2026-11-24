@@ -108,7 +108,7 @@ test.describe("Phase1C diagnose-save D1–D3", () => {
     // Reload + reopen same id still shows refined text.
     await page.reload({ waitUntil: "networkidle" });
     await page
-      .locator("aside.mc-side")
+      .getByTestId("mc-module-tabs")
       .getByRole("button", { name: "職歴" })
       .click();
     await page

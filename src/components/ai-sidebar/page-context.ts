@@ -5,9 +5,6 @@ export function pageContextFromPath(pathname: string): AiPageContext {
   const path = pathname || "/";
   const stripped = path.replace(/^\/(ja|zh-CN|en)(?=\/|$)/, "") || "/";
 
-  if (stripped === "/" || stripped === "") {
-    return { path, area: "board" };
-  }
   if (stripped.startsWith("/profile")) {
     return { path, area: "my_career" };
   }
@@ -16,7 +13,8 @@ export function pageContextFromPath(pathname: string): AiPageContext {
   }
   if (
     stripped.startsWith("/board") ||
-    stripped.startsWith("/progress") ||
+    stripped === "/progress" ||
+    stripped.startsWith("/progress/") ||
     stripped.startsWith("/applications")
   ) {
     return { path, area: "board" };

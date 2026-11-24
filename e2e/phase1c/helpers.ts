@@ -101,7 +101,10 @@ export async function gotoCareerModule(
   module: "職歴" | "プロジェクト",
 ): Promise<void> {
   await page.goto("/profile");
-  await page.locator("aside.mc-side").getByRole("button", { name: module }).click();
+  await page
+    .getByTestId("mc-module-tabs")
+    .getByRole("button", { name: module })
+    .click();
 }
 
 /** Latest assistant bubble that carries a refine proposal for the current job. */

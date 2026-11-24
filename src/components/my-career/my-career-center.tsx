@@ -263,25 +263,30 @@ export function MyCareerCenter(props: Props) {
         </p>
       ) : null}
       <div className="mc-layout">
-        <aside className="mc-side mc-no-print">
-          <h2>My Career</h2>
-          {MODULES.map((id, index) => (
-            <button
-              key={id}
-              type="button"
-              aria-current={module === id ? "page" : undefined}
-              onClick={() => {
-                if (id !== module) {
-                  assist?.invalidateAssistApply();
-                }
-                setModule(id);
-              }}
-            >
-              <span className="mc-n">{id === "export" ? "↓" : index + 1}</span>
-              <span>{props.labels.modules[id]}</span>
-            </button>
-          ))}
-        </aside>
+        <nav
+          className="mc-tabs mc-no-print"
+          data-testid="mc-module-tabs"
+        >
+          <div className="mc-tabs-scroll">
+            {MODULES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className="mc-tab"
+                aria-current={module === id ? "page" : undefined}
+                data-active={module === id ? "true" : "false"}
+                onClick={() => {
+                  if (id !== module) {
+                    assist?.invalidateAssistApply();
+                  }
+                  setModule(id);
+                }}
+              >
+                {props.labels.modules[id]}
+              </button>
+            ))}
+          </div>
+        </nav>
         <div className="mc-main">
           {module === "profile" ? (
             <ProfileModule {...props} />
