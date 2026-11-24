@@ -40,6 +40,23 @@ test.describe("multifield module refine", () => {
       "data-assist-slot-key",
       "refine:profile:module",
     );
+    // Assist context from AssistSession (not URL); no focus adjuster.
+    await expect(page.getByTestId("ai-assist-ref")).toContainText("プロフィール");
+    await expect(page.getByTestId("ai-assist-scope")).toContainText("自己PR");
+    await expect(page.getByTestId("ai-assist-scope")).toContainText("職務要約");
+    await expect(page.getByTestId("ai-target-select")).toHaveCount(0);
+    await expect(page.getByTestId("ai-context-adjuster")).toHaveCount(0);
+    await expect(page.getByTestId("ai-context-ref")).toHaveCount(0);
+    // Composer default height + expand/collapse keeps draft.
+    const composer = page.getByTestId("ai-composer-input");
+    await expect(composer).toHaveAttribute("data-expanded", "false");
+    const expand = page.getByTestId("ai-composer-expand");
+    await expect(expand).toBeVisible();
+    await expand.click();
+    await expect(composer).toHaveAttribute("data-expanded", "true");
+    await expect(expand).toHaveAttribute("aria-pressed", "true");
+    await expand.click();
+    await expect(composer).toHaveAttribute("data-expanded", "false");
     // No auto-send: composer prefilled, no assistant refine yet.
     await expect(page.getByTestId("ai-composer-input")).toContainText(
       "【添削対象:self_pr】",
@@ -99,6 +116,13 @@ test.describe("multifield module refine", () => {
 
     await expect(form.getByTestId("ai-refine-project-module")).toBeVisible();
     await expect(form.getByTestId("ai-refine-overview_ja")).toHaveCount(0);
+
+    await form.getByTestId("ai-refine-project-module").click();
+    await expect(page.getByTestId("ai-assist-ref")).toContainText("プロジェクト");
+    await expect(page.getByTestId("ai-assist-scope")).toContainText("実績");
+    await expect(page.getByTestId("ai-target-select")).toHaveCount(0);
+    await expect(page.getByTestId("ai-context-adjuster")).toHaveCount(0);
+    await closeSidebarIfOpen(page);
 
     await refineOnce(page, "ai-refine-project-module");
     await applyRefineToDraft(page);

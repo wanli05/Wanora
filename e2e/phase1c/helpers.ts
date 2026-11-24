@@ -168,6 +168,8 @@ export async function rewriteComposerToSingleLabeledField(
 ): Promise<void> {
   const input = page.getByTestId("ai-composer-input");
   await expect(input).toBeEnabled({ timeout: 30_000 });
+  // Wait for AssistSession prefill — rewriting too early races openWithAssist setDraft.
+  await expect(input).toContainText("【添削対象:", { timeout: 30_000 });
   const current = await input.inputValue();
   const intro = current.split("【添削対象:")[0]?.trim() || "添削してください。";
   const next = [
@@ -178,6 +180,13 @@ export async function rewriteComposerToSingleLabeledField(
     "【添削対象ここまで】",
   ].join("\n");
   await input.fill(next);
+  await expect(input).toHaveValue(next);
+  await expect
+    .poll(async () => {
+      const v = await input.inputValue();
+      return [...v.matchAll(/【添削対象:([a-z0-9_]+)】/gi)].map((m) => m[1]);
+    })
+    .toEqual([fieldId]);
 }
 
 /** Open refine entry and wait for Apply on the latest bubble. */

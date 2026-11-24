@@ -68,6 +68,20 @@ vi.mock("next-intl", () => ({
         errSend: "send fail",
         errJobTimeout: "timeout",
         deleteConfirm: "confirm?",
+        assistRefProfile: "参照：My Career · プロフィール",
+        assistScopeProfile: "対象：自己PR・職務要約・活かせる経験",
+        assistRefProject: "参照：My Career · プロジェクト",
+        assistScopeProject: "対象：概要・担当フェーズ・業務内容・実績",
+        assistRefEmployer: "参照：My Career · 職歴",
+        assistScopeEmployer: "対象：叙述",
+        assistRefLegacyProfile: "参照：My Career · プロフィール",
+        assistScopeLegacySelfPr: "対象：自己PR",
+        assistScopeLegacyJobSummary: "対象：職務要約",
+        assistScopeLegacyOverview: "対象：概要",
+        composerExpand: "拡大",
+        composerCollapse: "縮小",
+        composerExpandAria: "入力欄を拡大する",
+        composerCollapseAria: "入力欄を縮小する",
       };
       return map[key] ?? key;
     },
@@ -308,6 +322,40 @@ describe("AiSidebar", () => {
     });
     expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
     expect(screen.getByTestId("ai-context-ref")).toHaveTextContent("自己PR");
+  });
+
+  it("expands and collapses composer without clearing draft or sending", async () => {
+    renderSidebar();
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+
+    const draft = "拡大テスト下書き\n".repeat(8);
+    fireEvent.change(screen.getByTestId("ai-composer-input"), {
+      target: { value: draft },
+    });
+    const expand = screen.getByTestId("ai-composer-expand");
+    expect(expand).toHaveTextContent("拡大");
+    fireEvent.click(expand);
+    expect(expand).toHaveTextContent("縮小");
+    expect(screen.getByTestId("ai-composer-input")).toHaveAttribute(
+      "data-expanded",
+      "true",
+    );
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(draft);
+    expect(screen.getByTestId("ai-composer-send")).not.toBeDisabled();
+    fireEvent.click(expand);
+    expect(expand).toHaveTextContent("拡大");
+    expect(screen.getByTestId("ai-composer-input")).toHaveValue(draft);
+    expect(api.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it("general chat still shows optional focus adjuster (not assist context)", async () => {
+    renderSidebar();
+    fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    expect(screen.queryByTestId("ai-assist-context")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-context-ref")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-composer-expand")).toBeInTheDocument();
   });
 
   it("hides suggestions once messages exist", async () => {
