@@ -143,4 +143,61 @@ describe("buildExportHtml", () => {
     expect(html).toContain("TypeScript");
     expect(html).toContain("■自己PR");
   });
+
+  it("merges 分類 cells for multi-skill categories in shokumu skills table", () => {
+    const base = sampleSnapshot();
+    const html = buildExportHtml(
+      {
+        ...base,
+        skillRows: [
+          {
+            category: "OS",
+            name: "Linux",
+            yearsText: "3年",
+            description: "サーバ",
+          },
+          {
+            category: "言語",
+            name: "TypeScript",
+            yearsText: "4年",
+            description: "Web",
+          },
+          {
+            category: "OS",
+            name: "Windows",
+            yearsText: "2年",
+            description: "開発",
+          },
+          {
+            category: "言語",
+            name: "JavaScript",
+            yearsText: "5年",
+            description: "FE",
+          },
+          {
+            category: "FW",
+            name: "React",
+            yearsText: "3年",
+            description: "UI",
+          },
+          {
+            category: "言語",
+            name: "Python",
+            yearsText: "1年",
+            description: "脚本",
+          },
+        ],
+      },
+      "shokumu",
+    );
+    const skillsIdx = html.indexOf("■（テクニカル）スキル");
+    const skillsHtml = html.slice(skillsIdx);
+    expect(skillsHtml).toContain('rowspan="2"');
+    expect(skillsHtml).toContain('rowspan="3"');
+    expect(skillsHtml).toMatch(
+      /rowspan="2"[^>]*>OS[\s\S]*Windows[\s\S]*rowspan="3"[^>]*>言語[\s\S]*>FW</,
+    );
+    // Single-skill category: ordinary cell, no rowspan on FW
+    expect(skillsHtml).toMatch(/<td style="vertical-align:top;text-align:left">FW<\/td>/);
+  });
 });

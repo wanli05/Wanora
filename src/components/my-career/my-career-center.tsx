@@ -53,6 +53,7 @@ import {
   type CareerLanguage,
   type CareerTimelineItem,
 } from "@/lib/domain/career";
+import { planSkillTableRows } from "@/lib/domain/career-skills-table";
 import { groupCareerTimelineByAt } from "@/lib/domain/career-timeline";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 import { formatYearMonthInputValue } from "@/lib/domain/dates";
@@ -1454,6 +1455,176 @@ function ProjectsModule({
   );
 }
 
+function SkillRowMenu({
+  deleteLabel,
+  disabled,
+  onDelete,
+}: {
+  deleteLabel: string;
+  disabled: boolean;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="mc-row-menu" ref={rootRef}>
+      <button
+        type="button"
+        className="mc-row-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="メニュー"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+      >
+        …
+      </button>
+      {open ? (
+        <div className="mc-row-menu-panel" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="mc-row-menu-item mc-row-menu-item-danger"
+            disabled={disabled}
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            {deleteLabel}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SkillAddForm({
+  labels,
+  onSuccess,
+  onCancel,
+}: {
+  labels: MyCareerLabels;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [state, action, pending] = useActionState(saveCareerSkillAction, {});
+  const wasPending = useRef(false);
+
+  useEffect(() => {
+    if (wasPending.current && !pending && state.ok) {
+      onSuccess();
+    }
+    wasPending.current = pending;
+  }, [pending, state.ok, onSuccess]);
+
+  return (
+    <form action={action} className="mc-card mc-stack">
+      <div className="mc-grid-2">
+        <label className="mc-field">
+          分類
+          <input name="category" required />
+        </label>
+        <label className="mc-field">
+          技術
+          <input name="name" required />
+        </label>
+      </div>
+      <label className="mc-field">
+        使用期間
+        <input name="yearsText" required />
+      </label>
+      <label className="mc-field">
+        内容
+        <input name="description" />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button className="mc-btn" type="submit" disabled={pending}>
+          {labels.add}
+        </button>
+        <button
+          type="button"
+          className="mc-btn mc-btn-ghost"
+          disabled={pending}
+          onClick={onCancel}
+        >
+          {labels.cancel}
+        </button>
+      </div>
+      <Feedback state={state} labels={labels} />
+    </form>
+  );
+}
+
+function GoalAddForm({
+  labels,
+  onSuccess,
+  onCancel,
+}: {
+  labels: MyCareerLabels;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [state, action, pending] = useActionState(saveCareerGoalAction, {});
+  const wasPending = useRef(false);
+
+  useEffect(() => {
+    if (wasPending.current && !pending && state.ok) {
+      onSuccess();
+    }
+    wasPending.current = pending;
+  }, [pending, state.ok, onSuccess]);
+
+  return (
+    <form action={action} className="mc-card mc-stack">
+      <label className="mc-field">
+        種類
+        <select name="kind" defaultValue="short">
+          <option value="short">{labels.goalShort}</option>
+          <option value="long">{labels.goalLong}</option>
+        </select>
+      </label>
+      <label className="mc-field">
+        内容
+        <textarea name="content_ja" rows={3} required />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button className="mc-btn" type="submit" disabled={pending}>
+          {labels.add}
+        </button>
+        <button
+          type="button"
+          className="mc-btn mc-btn-ghost"
+          disabled={pending}
+          onClick={onCancel}
+        >
+          {labels.cancel}
+        </button>
+      </div>
+      <Feedback state={state} labels={labels} />
+    </form>
+  );
+}
+
 function SkillsModule({
   labels,
   skills,
@@ -1463,11 +1634,24 @@ function SkillsModule({
   skills: CareerSkillDto[];
   licenses: CareerLicenseDto[];
 }) {
-  const [state, action, pending] = useActionState(saveCareerSkillAction, {});
   const [editingLic, setEditingLic] = useState<CareerLicenseDto | null>(null);
   const [licPending, setLicPending] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [formKey, setFormKey] = useState(0);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const plannedRows = useMemo(() => planSkillTableRows(skills), [skills]);
+
+  const handleAddSuccess = () => {
+    setAdding(false);
+    setFormKey((k) => k + 1);
+    router.refresh();
+  };
+
+  const collapseAddForm = () => {
+    setAdding(false);
+    setFormKey((k) => k + 1);
+  };
 
   return (
     <div className="mc-stack">
@@ -1477,57 +1661,90 @@ function SkillsModule({
           <p>{labels.skillsSub}</p>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {skills.map((skill) => (
-          <div key={skill.id} className="mc-card">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs text-[var(--mc-muted)]">{skill.category}</p>
-                <p className="font-semibold">{skill.name}</p>
-                <p className="text-xs text-[var(--mc-muted)]">{skill.yearsText}</p>
-                <p className="mt-1 text-sm">{skill.description}</p>
-              </div>
-              <button
-                type="button"
-                className="mc-btn mc-btn-danger"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    await deleteCareerSkillAction(skill.id);
-                    router.refresh();
-                  })
-                }
-              >
-                {labels.remove}
-              </button>
-            </div>
-          </div>
-        ))}
+
+      <div className="mc-skills-scroll">
+        <table className="mc-skills-table">
+          <colgroup>
+            <col className="mc-skills-col-cat" />
+            <col className="mc-skills-col-tech" />
+            <col className="mc-skills-col-years" />
+            <col className="mc-skills-col-desc" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">分類</th>
+              <th scope="col">技術</th>
+              <th scope="col">使用期間</th>
+              <th scope="col">内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plannedRows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="mc-skills-empty">
+                  —
+                </td>
+              </tr>
+            ) : (
+              plannedRows.map((planned) => {
+                const skill = planned.skill;
+                return (
+                  <tr key={skill.id}>
+                    {planned.categoryRowSpan !== null ? (
+                      <td
+                        className="mc-skills-cat"
+                        rowSpan={
+                          planned.categoryRowSpan >= 2
+                            ? planned.categoryRowSpan
+                            : undefined
+                        }
+                      >
+                        {planned.category}
+                      </td>
+                    ) : null}
+                    <td className="mc-skills-tech">{skill.name}</td>
+                    <td className="mc-skills-years">{skill.yearsText}</td>
+                    <td className="mc-skills-desc">
+                      <div className="mc-skills-desc-row">
+                        <span className="mc-skills-desc-text">
+                          {skill.description || "—"}
+                        </span>
+                        <SkillRowMenu
+                          deleteLabel={labels.remove}
+                          disabled={isPending}
+                          onDelete={() =>
+                            startTransition(async () => {
+                              await deleteCareerSkillAction(skill.id);
+                              router.refresh();
+                            })
+                          }
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
-      <form action={action} className="mc-card mc-stack">
-        <div className="mc-grid-2">
-          <label className="mc-field">
-            分類
-            <input name="category" required />
-          </label>
-          <label className="mc-field">
-            技術
-            <input name="name" required />
-          </label>
-        </div>
-        <label className="mc-field">
-          経験
-          <input name="yearsText" required />
-        </label>
-        <label className="mc-field">
-          内容
-          <input name="description" />
-        </label>
-        <button className="mc-btn" type="submit" disabled={pending}>
-          {labels.add}
+
+      {adding ? (
+        <SkillAddForm
+          key={formKey}
+          labels={labels}
+          onSuccess={handleAddSuccess}
+          onCancel={collapseAddForm}
+        />
+      ) : (
+        <button
+          type="button"
+          className="mc-btn mc-btn-ghost mc-add-toggle"
+          onClick={() => setAdding(true)}
+        >
+          ＋ 技能を追加
         </button>
-        <Feedback state={state} labels={labels} />
-      </form>
+      )}
 
       <div className="mc-sec-head">
         <div>
@@ -1654,7 +1871,8 @@ function GoalsModule({
   labels: MyCareerLabels;
   goals: CareerGoalDto[];
 }) {
-  const [state, action, pending] = useActionState(saveCareerGoalAction, {});
+  const [adding, setAdding] = useState(false);
+  const [formKey, setFormKey] = useState(0);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const shortGoals = useMemo(
@@ -1665,6 +1883,17 @@ function GoalsModule({
     () => goals.filter((g) => g.kind === "long"),
     [goals],
   );
+
+  const handleAddSuccess = () => {
+    setAdding(false);
+    setFormKey((k) => k + 1);
+    router.refresh();
+  };
+
+  const collapseAddForm = () => {
+    setAdding(false);
+    setFormKey((k) => k + 1);
+  };
 
   return (
     <div className="mc-stack">
@@ -1726,23 +1955,22 @@ function GoalsModule({
           </ul>
         </article>
       </div>
-      <form action={action} className="mc-card mc-stack">
-        <label className="mc-field">
-          種類
-          <select name="kind" defaultValue="short">
-            <option value="short">{labels.goalShort}</option>
-            <option value="long">{labels.goalLong}</option>
-          </select>
-        </label>
-        <label className="mc-field">
-          内容
-          <textarea name="content_ja" rows={3} required />
-        </label>
-        <button className="mc-btn" type="submit" disabled={pending}>
-          {labels.add}
+      {adding ? (
+        <GoalAddForm
+          key={formKey}
+          labels={labels}
+          onSuccess={handleAddSuccess}
+          onCancel={collapseAddForm}
+        />
+      ) : (
+        <button
+          type="button"
+          className="mc-btn mc-btn-ghost mc-add-toggle"
+          onClick={() => setAdding(true)}
+        >
+          ＋ 目標を追加
         </button>
-        <Feedback state={state} labels={labels} />
-      </form>
+      )}
     </div>
   );
 }

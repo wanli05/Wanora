@@ -1,3 +1,4 @@
+import { planSkillTableRows } from "@/lib/domain/career-skills-table";
 import type { ExportSnapshot } from "@/lib/domain/export-snapshot";
 
 function nl(text: string) {
@@ -306,14 +307,28 @@ function ShokumuSheet({ snapshot }: { snapshot: ExportSnapshot }) {
           </tr>
         </thead>
         <tbody>
-          {snapshot.skillRows.map((row, i) => (
-            <tr key={i}>
-              <td>{row.category}</td>
-              <td>{row.name}</td>
-              <td>{row.yearsText}</td>
-              <td>{row.description}</td>
-            </tr>
-          ))}
+          {planSkillTableRows(snapshot.skillRows).map((planned, i) => {
+            const row = planned.skill;
+            return (
+              <tr key={i}>
+                {planned.categoryRowSpan !== null ? (
+                  <td
+                    rowSpan={
+                      planned.categoryRowSpan >= 2
+                        ? planned.categoryRowSpan
+                        : undefined
+                    }
+                    style={{ verticalAlign: "top", textAlign: "left" }}
+                  >
+                    {planned.category}
+                  </td>
+                ) : null}
+                <td>{row.name}</td>
+                <td>{row.yearsText}</td>
+                <td>{row.description}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
