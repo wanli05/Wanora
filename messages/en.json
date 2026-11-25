@@ -582,6 +582,7 @@
     "customGuidance": "Prepare your answer to this question.",
     "customInputPlaceholder": "Type a question to add",
     "addQuestion": "Add question",
+    "removeCustomQuestion": "Remove",
     "aiSuggestQuestions": "Suggest with AI",
     "aiSuggestPending": "Selecting and adding AI suggestions connects later. You can chat in the sidebar now.",
     "demoNotice": "Core questions are fixed templates. Application context and formal save are not connected yet.",

@@ -582,6 +582,7 @@
     "customGuidance": "整理对该问题的回答。",
     "customInputPlaceholder": "输入要追加的问题",
     "addQuestion": "追加问题",
+    "removeCustomQuestion": "删除",
     "aiSuggestQuestions": "用 AI 建议问题",
     "aiSuggestPending": "AI 建议的选择与写入将在后续接入。现在可在侧栏讨论。",
     "demoNotice": "基础问题为固定模板。应聘上下文自动引用与正式保存尚未接入。",

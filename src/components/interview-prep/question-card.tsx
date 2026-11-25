@@ -28,6 +28,9 @@ type Props = {
   labels: QuestionCardLabels;
   onAiFocus?: (questionId: string) => void;
   aiFocused?: boolean;
+  /** Optional remove control (custom questions only). */
+  onRemove?: () => void;
+  removeLabel?: string;
 };
 
 /**
@@ -39,6 +42,8 @@ export function QuestionCard({
   labels,
   onAiFocus,
   aiFocused = false,
+  onRemove,
+  removeLabel,
 }: Props) {
   const assist = useAiAssistOptional();
   const [open, setOpen] = useState(false);
@@ -67,20 +72,32 @@ export function QuestionCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h3
-          className="m-0 flex-1 text-sm font-semibold text-[var(--pb-ink)]"
+          className="m-0 min-w-0 flex-1 text-sm font-semibold text-[var(--pb-ink)]"
           lang="ja"
         >
           {theme.title}
         </h3>
-        <button
-          type="button"
-          className="pb-btn pb-btn-ghost pb-btn-sm shrink-0"
-          data-testid={`prep-question-toggle-${theme.id}`}
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          {open ? labels.collapse : labels.expand}
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {onRemove && removeLabel ? (
+            <button
+              type="button"
+              className="pb-btn pb-btn-ghost pb-btn-sm"
+              data-testid={`prep-custom-remove-${theme.id}`}
+              onClick={onRemove}
+            >
+              {removeLabel}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="pb-btn pb-btn-ghost pb-btn-sm"
+            data-testid={`prep-question-toggle-${theme.id}`}
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? labels.collapse : labels.expand}
+          </button>
+        </div>
       </div>
 
       {open ? (

@@ -95,6 +95,13 @@ export function InterviewPrepPage({ application }: Props) {
     setAddHint(t("customDemoHint"));
   }
 
+  function removeCustomQuestion(id: string) {
+    setCustomQuestions((prev) => prev.filter((item) => item.id !== id));
+    if (aiFocusedQuestionId === id) {
+      setAiFocusedQuestionId(null);
+    }
+  }
+
   async function openAiSuggest() {
     setAiFocusedQuestionId("custom-suggest");
     if (!assist) {
@@ -120,41 +127,45 @@ export function InterviewPrepPage({ application }: Props) {
 
   return (
     <main
-      className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 lg:max-w-6xl"
+      className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:max-w-6xl"
       data-testid="interview-prep-page"
     >
       <div className="pb-shell overflow-hidden rounded-2xl border border-[#cfdad3] p-4 sm:p-6 lg:p-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <Link
-            href="/progress"
-            className="pb-btn pb-btn-ghost pb-btn-sm"
-            data-testid="prep-back"
-          >
-            {t("backToBoard")}
-          </Link>
-        </div>
-
-        <header className="mb-5">
-          <p className="m-0 text-xs font-semibold tracking-wide text-[var(--pb-muted)]">
-            {t("title")}
-          </p>
-          <h1
-            className="mt-1 text-2xl font-semibold text-[var(--pb-teal-deep)] sm:text-3xl"
-            lang="ja"
-            data-testid="prep-company"
-          >
-            {application.company}
-          </h1>
-          <p
-            className="mt-1 text-sm text-[var(--pb-ink-soft)]"
-            lang="ja"
-            data-testid="prep-role"
-          >
-            {application.role?.trim() ? application.role : t("roleUnset")}
-          </p>
+        <header className="mb-5 border-b border-[var(--pb-line)] pb-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <Link
+                href="/progress"
+                className="pb-btn pb-btn-ghost pb-btn-sm mb-3 inline-flex"
+                data-testid="prep-back"
+              >
+                {t("backToBoard")}
+              </Link>
+              <p className="m-0 text-xs font-semibold tracking-wide text-[var(--pb-muted)]">
+                {t("title")}
+              </p>
+              <h1
+                className="mt-1 text-xl font-semibold leading-snug text-[var(--pb-teal-deep)] sm:text-2xl"
+                lang="ja"
+                data-testid="prep-company"
+              >
+                {application.company}
+              </h1>
+              <p
+                className="mt-1 m-0 text-sm text-[var(--pb-ink-soft)]"
+                lang="ja"
+                data-testid="prep-role"
+              >
+                {application.role?.trim() ? application.role : t("roleUnset")}
+              </p>
+            </div>
+          </div>
         </header>
 
-        <section className="mb-5 flex flex-col gap-3">
+        <section
+          className="mb-5 grid gap-3 rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:items-end sm:gap-4 sm:p-4"
+          data-testid="prep-meta"
+        >
           <RoundSelector
             rounds={application.rounds}
             value={roundId}
@@ -165,7 +176,7 @@ export function InterviewPrepPage({ application }: Props) {
           />
 
           <div
-            className="rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-3 py-3 text-sm"
+            className="rounded-lg border border-[var(--pb-line)] bg-white px-3 py-2.5 text-sm"
             data-testid="prep-schedule-status"
           >
             {schedule.kind === "unscheduled" ? (
@@ -186,43 +197,42 @@ export function InterviewPrepPage({ application }: Props) {
                 {t("scheduleUnscheduled")}
               </p>
             )}
-            <p className="mt-1 m-0 text-xs text-[var(--pb-muted)]">
+            <p className="mt-1 m-0 text-xs leading-relaxed text-[var(--pb-muted)]">
               {t("scheduleHint")}
             </p>
           </div>
         </section>
 
         <p
-          className="mb-2 m-0 text-xs text-[var(--pb-muted)]"
+          className="mb-4 m-0 rounded-lg border border-[var(--pb-line)] px-3 py-2 text-xs leading-relaxed text-[var(--pb-ink-soft)]"
           data-testid="prep-demo-notice"
         >
-          {t("demoNotice")}
-        </p>
-        <p
-          className="mb-4 m-0 text-xs text-[var(--pb-amber)]"
-          data-testid="prep-round-switch-hint"
-        >
-          {t("roundSwitchHint")}
+          <span>{t("demoNotice")}</span>{" "}
+          <span className="text-[var(--pb-amber)]" data-testid="prep-round-switch-hint">
+            {t("roundSwitchHint")}
+          </span>
         </p>
 
         <section
           className="mb-5 rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-4 py-3 sm:px-5"
           data-testid="prep-refer-info"
         >
-          <h2 className="m-0 text-sm font-semibold text-[var(--pb-teal-deep)]">
-            {t("referHeading")}
-          </h2>
-          <p className="mt-1 m-0 text-xs text-[var(--pb-muted)]">{t("referHint")}</p>
-          <ul className="mt-3 mb-0 list-none space-y-2 p-0">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="m-0 text-sm font-semibold text-[var(--pb-teal-deep)]">
+              {t("referHeading")}
+            </h2>
+            <p className="m-0 text-xs text-[var(--pb-muted)]">{t("referHint")}</p>
+          </div>
+          <ul className="mt-3 mb-0 grid list-none gap-x-6 gap-y-2 p-0 sm:grid-cols-2">
             {referRows.map((row) => (
               <li
                 key={row.key}
-                className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                className="flex items-center justify-between gap-2 text-sm"
                 data-testid={`prep-refer-${row.key}`}
                 data-status={row.status}
               >
                 <span lang="ja">{row.label}</span>
-                <span className="text-xs text-[var(--pb-muted)]">
+                <span className="shrink-0 text-xs text-[var(--pb-muted)]">
                   {referStatusLabel(row.status)}
                 </span>
               </li>
@@ -333,6 +343,8 @@ export function InterviewPrepPage({ application }: Props) {
                   labels={questionLabels}
                   aiFocused={aiFocusedQuestionId === item.id}
                   onAiFocus={setAiFocusedQuestionId}
+                  removeLabel={t("removeCustomQuestion")}
+                  onRemove={() => removeCustomQuestion(item.id)}
                 />
               );
             })

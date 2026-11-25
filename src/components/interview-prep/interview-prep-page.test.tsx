@@ -43,6 +43,7 @@ const messages = {
     customGuidance: "この質問への回答を整理します。",
     customInputPlaceholder: "追加したい質問を入力",
     addQuestion: "質問を追加",
+    removeCustomQuestion: "削除",
     aiSuggestQuestions: "AIで質問を提案",
     aiSuggestPending: "提案の選択は今後",
     demoNotice: "デモ通知",
@@ -158,6 +159,21 @@ describe("InterviewPrepPage UI v2", () => {
     expect(
       screen.getByText("チームのオンボーディングはどうですか。"),
     ).toBeInTheDocument();
+  });
+
+  it("removes a custom question from the demo list", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    fireEvent.change(screen.getByTestId("prep-custom-input"), {
+      target: { value: "削除対象の質問" },
+    });
+    fireEvent.click(screen.getByTestId("prep-custom-add"));
+    const remove = document.querySelector(
+      '[data-testid^="prep-custom-remove-custom-"]',
+    );
+    expect(remove).toBeTruthy();
+    fireEvent.click(remove!);
+    expect(screen.queryByText("削除対象の質問")).not.toBeInTheDocument();
+    expect(screen.getByTestId("prep-custom-empty")).toBeInTheDocument();
   });
 
   it("opens sidebar from AI suggest without claiming save", async () => {

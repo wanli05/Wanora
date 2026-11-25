@@ -67,6 +67,8 @@ test("board 面接準備 shows seven base themes and AI sidebar entry", async ({
   await expect(page.getByTestId("prep-custom-demo-hint")).toContainText(
     "データベースには保存されません",
   );
+  await page.locator('[data-testid^="prep-custom-remove-custom-"]').click();
+  await expect(page.getByTestId("prep-custom-empty")).toBeVisible();
 
   await page.getByTestId("prep-ai-assist-base-motivation").click();
   await expect(page.getByTestId("ai-sidebar-panel")).toHaveAttribute(

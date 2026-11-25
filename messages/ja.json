@@ -582,6 +582,7 @@
     "customGuidance": "この質問への回答を整理します。",
     "customInputPlaceholder": "追加したい質問を入力",
     "addQuestion": "質問を追加",
+    "removeCustomQuestion": "削除",
     "aiSuggestQuestions": "AIで質問を提案",
     "aiSuggestPending": "AI 提案の選択・追加は今後接続します。いまはサイドバーで相談できます。",
     "demoNotice": "基本質問は固定テンプレートです。応募コンテキストの自動参照と正式保存はまだありません。",
