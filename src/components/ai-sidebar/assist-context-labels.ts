@@ -60,10 +60,3 @@ export function assistContextLabelKeys(
     }
   }
 }
-
-/** True when the optional focus adjuster must stay hidden. */
-export function shouldHideFocusAdjuster(
-  assistFieldKey: RefineFieldKey | null | undefined,
-): boolean {
-  return assistFieldKey != null;
-}

@@ -113,7 +113,7 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     await closeAiSidebar(page);
   });
 
-  test("UX: page hint, optional adjuster, suggestion fills only", async ({
+  test("UX: page hint, no focus adjuster, suggestion fills only", async ({
     request,
   }) => {
     await expectAiStatus(request, true);
@@ -122,8 +122,10 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     await openAiSidebar(page);
     await page.getByTestId("ai-new-conversation").click();
 
-    await expect(page.getByTestId("ai-context-ref")).toContainText("My Career");
+    await expect(page.getByTestId("ai-context-ref")).toContainText("参照：My Career");
     await expect(page.getByTestId("ai-page-context")).toHaveText("my_career");
+    await expect(page.getByTestId("ai-context-adjuster")).toHaveCount(0);
+    await expect(page.getByTestId("ai-target-select")).toHaveCount(0);
     await expect(page.getByTestId("ai-suggestions")).toBeVisible();
     await expect(page.getByTestId("ai-suggest-self_pr")).toBeVisible();
 
@@ -133,12 +135,9 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     );
     await expect(page.getByTestId("ai-job-status")).toHaveCount(0);
     await expect(page.getByTestId("ai-msg-user")).toHaveCount(0);
-
-    await page.getByTestId("ai-context-ref").click();
-    await expect(page.getByTestId("ai-context-adjuster")).toBeVisible();
-    await expect(page.getByTestId("ai-target-select")).toBeVisible();
-    await page.getByTestId("ai-target-select").selectOption("");
-    await expect(page.getByTestId("ai-target-context")).toContainText("指定なし");
+    // Suggestion may set send Target, but 参照 stays page-only and adjuster stays gone.
+    await expect(page.getByTestId("ai-context-ref")).toContainText("参照：My Career");
+    await expect(page.getByTestId("ai-context-adjuster")).toHaveCount(0);
 
     // Composer expand/collapse is icon-only UI and must not send.
     const draftBefore = await page.getByTestId("ai-composer-input").inputValue();

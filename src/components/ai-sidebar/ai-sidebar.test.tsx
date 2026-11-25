@@ -313,16 +313,15 @@ describe("AiSidebar", () => {
     expect(screen.getByTestId("ai-composer-send")).not.toBeDisabled();
   });
 
-  it("lets the user optionally adjust focus near the composer", async () => {
+  it("shows read-only page reference without a focus adjuster", async () => {
     renderSidebar();
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    expect(screen.getByTestId("ai-context-ref")).toHaveTextContent("参照：応募進捗");
+    expect(screen.queryByTestId("ai-context-adjuster")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("ai-context-ref"));
-    expect(screen.getByTestId("ai-context-adjuster")).toBeInTheDocument();
-    fireEvent.change(screen.getByTestId("ai-target-select"), {
-      target: { value: "profile:self_pr" },
-    });
-    expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
-    expect(screen.getByTestId("ai-context-ref")).toHaveTextContent("自己PR");
+    expect(screen.queryByTestId("ai-context-adjuster")).not.toBeInTheDocument();
   });
 
   it("expands and collapses composer without clearing draft or sending", async () => {

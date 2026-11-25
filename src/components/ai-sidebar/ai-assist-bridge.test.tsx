@@ -553,20 +553,22 @@ describe("AI assist bridge + apply-to-draft", () => {
     expect(screen.queryByTestId("ai-context-ref")).not.toBeInTheDocument();
   });
 
-  it("module send uses AssistSession target, not stale focus adjuster state", async () => {
+  it("module send uses AssistSession target, not stale suggestion target", async () => {
     renderHarness();
-    // Open general chat first and set a focus, then open module assist.
+    // Open general chat and pick a suggestion that sets profile:self_pr, then open module assist.
     fireEvent.click(screen.getByTestId("ai-sidebar-toggle"));
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByTestId("ai-context-ref"));
-    fireEvent.change(screen.getByTestId("ai-target-select"), {
-      target: { value: "profile:self_pr" },
-    });
-    expect(screen.getByTestId("ai-target-context")).toHaveTextContent("自己PR");
+    fireEvent.click(screen.getByTestId("ai-suggest-self_pr"));
+    expect(screen.getByTestId("ai-context-ref")).toHaveTextContent("参照：My Career");
+    expect(screen.queryByTestId("ai-assist-context")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("open-profile-module"));
     await waitFor(() =>
       expect(screen.getByTestId("ai-assist-context")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("ai-assist-ref")).toHaveTextContent(
+      "参照：My Career · プロフィール",
     );
     expect(screen.queryByTestId("ai-target-select")).not.toBeInTheDocument();
 
