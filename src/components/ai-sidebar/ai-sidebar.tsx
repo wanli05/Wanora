@@ -180,6 +180,7 @@ export function AiSidebar() {
   const [panelView, setPanelView] = useState<"chat" | "history">("chat");
   const {
     registerOpenHandler,
+    registerPanelOpener,
     registerInvalidateHandler,
     resolveLegacySlotBinder,
   } = useAiAssist();
@@ -1046,17 +1047,31 @@ export function AiSidebar() {
     };
   }, []);
 
+  useEffect(() => {
+    return registerPanelOpener(() => {
+      // Same general entry as the floating toggle (no My Career slot resume).
+      assistTargetLockRef.current = undefined;
+      assistSlotKeyRef.current = null;
+      setAssistSession(null);
+      setApplyNotice(null);
+      setShowAllConversations(false);
+      setPanelView("chat");
+      setError(null);
+      setOpen(true);
+    });
+  }, [registerPanelOpener]);
+
   function openViaToggle() {
     if (open) {
       closePanel();
       return;
     }
-    // General entry must not resume a My Career refine slot (Q7).
     assistTargetLockRef.current = undefined;
     assistSlotKeyRef.current = null;
     setAssistSession(null);
     setApplyNotice(null);
     setShowAllConversations(false);
+    setPanelView("chat");
     setOpen(true);
   }
 

@@ -1,130 +1,116 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MockPrepQuestion } from "@/lib/interview-prep/mock-pack";
-import { QuestionCard } from "./question-card";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PrepBaseTheme } from "@/lib/interview-prep/base-themes";
+import { QuestionCard, type QuestionCardLabels } from "./question-card";
 
-const labels = {
-  intent: "質問の意図",
-  points: "回答のポイント",
+const openPanel = vi.fn();
+
+vi.mock("@/components/ai-sidebar/ai-assist-context", () => ({
+  useAiAssistOptional: () => ({
+    openPanel,
+    openWithAssist: vi.fn(),
+    invalidateAssistApply: vi.fn(),
+    registerOpenHandler: () => () => {},
+    registerPanelOpener: () => () => {},
+    registerInvalidateHandler: () => () => {},
+    registerLegacySlotBinder: () => () => {},
+    resolveLegacySlotBinder: () => null,
+    bridgeError: null,
+    clearBridgeError: vi.fn(),
+  }),
+}));
+
+const labels: QuestionCardLabels = {
   expand: "詳細を開く",
   collapse: "詳細を閉じる",
-  generate: "AI回答例を生成",
-  generating: "生成中…",
-  retry: "再試行",
-  regenerate: "回答例を再生成",
-  sampleHeading: "回答例（デモ）",
-  generateError: "回答例を表示できませんでした。",
-  demoBadge: "デモ",
-  editAnswer: "回答を編集",
-  finishEdit: "編集を完了（デモ）",
-  cancelEdit: "編集をやめる",
-  draftHeading: "あなたの回答（デモ）",
+  guidanceLabel: "準備のポイント",
+  answerHeading: "自分の回答",
+  openAiAssist: "AIで回答を作成・修正",
+  aiAssistHint: "サイドバーを開きます",
+  reflectComingSoon: "反映は今後",
   editorHint: "デモ：入力内容は保存されません",
-  editorPlaceholder: "ここに自分の回答を書いてください",
+  editorPlaceholder: "回答を書く",
+  aiUnavailable: "AI を開けませんでした",
+  successLabel: "成功体験",
+  failureLabel: "失敗体験",
+  reverseItemLabel: "逆質問",
+  addReverseItem: "質問を追加",
+  removeReverseItem: "削除",
+  reversePlaceholder: "聞きたいこと",
 };
 
-const question: MockPrepQuestion = {
-  id: "q-1",
-  question: "志望動機を教えてください。",
-  intent: "意図テキスト",
-  points: ["ポイントA", "ポイントB"],
-  sampleAnswer: "サンプル回答本文",
+const textTheme: PrepBaseTheme = {
+  id: "base-motivation",
+  title: "志望動機",
+  guidance: "接点を整理する",
+  answerKind: "text",
 };
-
-function generateReady() {
-  fireEvent.click(screen.getByTestId("prep-generate-q-1"));
-  act(() => {
-    vi.runAllTimers();
-  });
-}
 
 describe("QuestionCard", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
+    openPanel.mockReset();
+    openPanel.mockResolvedValue(true);
   });
 
-  it("keeps details collapsed until expanded", () => {
-    render(<QuestionCard question={question} labels={labels} />);
+  it("expands guidance and answer editor without mock generate", () => {
+    render(<QuestionCard theme={textTheme} labels={labels} />);
+    fireEvent.click(screen.getByTestId("prep-question-toggle-base-motivation"));
     expect(
-      screen.queryByTestId("prep-question-details-q-1"),
+      screen.getByTestId("prep-question-details-base-motivation"),
+    ).toHaveTextContent("接点を整理する");
+    expect(
+      screen.getByTestId("prep-editor-input-base-motivation"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("prep-generate-base-motivation"),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("prep-question-toggle-q-1"));
-    expect(screen.getByTestId("prep-question-details-q-1")).toHaveTextContent(
-      "意図テキスト",
-    );
   });
 
-  it("moves idle → loading → ready for mock sample answer", () => {
-    render(<QuestionCard question={question} labels={labels} />);
-    const card = screen.getByTestId("prep-question-q-1");
-    fireEvent.click(screen.getByTestId("prep-generate-q-1"));
-    expect(card).toHaveAttribute("data-answer-state", "loading");
-    act(() => {
-      vi.runAllTimers();
-    });
-    expect(card).toHaveAttribute("data-answer-state", "ready");
-    expect(screen.getByTestId("prep-sample-q-1")).toHaveTextContent(
-      "サンプル回答本文",
+  it("opens AI panel on assist click", async () => {
+    const onAiFocus = vi.fn();
+    render(
+      <QuestionCard
+        theme={textTheme}
+        labels={labels}
+        onAiFocus={onAiFocus}
+      />,
     );
+    fireEvent.click(screen.getByTestId("prep-question-toggle-base-motivation"));
+    fireEvent.click(screen.getByTestId("prep-ai-assist-base-motivation"));
+    await waitFor(() => expect(openPanel).toHaveBeenCalledTimes(1));
+    expect(onAiFocus).toHaveBeenCalledWith("base-motivation");
   });
 
-  it("opens editor seeded from sample and commits draft without save success copy", () => {
-    render(<QuestionCard question={question} labels={labels} />);
-    generateReady();
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    const input = screen.getByTestId("prep-editor-input-q-1");
-    expect(input).toHaveValue("サンプル回答本文");
-    expect(screen.getByTestId("prep-editor-q-1")).toHaveTextContent(
-      "デモ：入力内容は保存されません",
+  it("supports dual success/failure editors", () => {
+    const dual: PrepBaseTheme = {
+      id: "base-success-failure",
+      title: "成功体験・失敗体験",
+      guidance: "分けて書く",
+      answerKind: "dual_experience",
+    };
+    render(<QuestionCard theme={dual} labels={labels} />);
+    fireEvent.click(
+      screen.getByTestId("prep-question-toggle-base-success-failure"),
     );
-    fireEvent.change(input, { target: { value: "ユーザー編集後の回答" } });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent(
-      "ユーザー編集後の回答",
-    );
-    expect(screen.queryByText("保存しました")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("prep-editor-success-base-success-failure"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("prep-editor-failure-base-success-failure"),
+    ).toBeInTheDocument();
   });
 
-  it("cancel restores the draft from before edit", () => {
-    render(<QuestionCard question={question} labels={labels} />);
-    generateReady();
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
-      target: { value: "初回ドラフト" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent("初回ドラフト");
-
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
-      target: { value: "破棄される編集" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-cancel-q-1"));
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent("初回ドラフト");
-    expect(screen.queryByTestId("prep-editor-q-1")).not.toBeInTheDocument();
-  });
-
-  it("regenerating mock sample does not overwrite the user draft", () => {
-    render(<QuestionCard question={question} labels={labels} />);
-    generateReady();
-    fireEvent.click(screen.getByTestId("prep-edit-q-1"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-q-1"), {
-      target: { value: "守られるドラフト" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-q-1"));
-
-    fireEvent.click(screen.getByTestId("prep-generate-again-q-1"));
-    act(() => {
-      vi.runAllTimers();
-    });
-    expect(screen.getByTestId("prep-sample-q-1")).toHaveTextContent(
-      "サンプル回答本文",
-    );
-    expect(screen.getByTestId("prep-draft-q-1")).toHaveTextContent(
-      "守られるドラフト",
-    );
+  it("supports multiple reverse questions", () => {
+    const reverse: PrepBaseTheme = {
+      id: "base-reverse-qa",
+      title: "逆質問",
+      guidance: "複数用意",
+      answerKind: "reverse_qa_list",
+    };
+    render(<QuestionCard theme={reverse} labels={labels} />);
+    fireEvent.click(screen.getByTestId("prep-question-toggle-base-reverse-qa"));
+    expect(screen.getByTestId("prep-reverse-item-base-reverse-qa-0")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("prep-reverse-add-base-reverse-qa"));
+    expect(screen.getByTestId("prep-reverse-item-base-reverse-qa-1")).toBeInTheDocument();
   });
 });
