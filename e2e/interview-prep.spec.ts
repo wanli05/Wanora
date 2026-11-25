@@ -8,6 +8,14 @@ test("board 面接準備 opens prep page with mock questions when 面接未定",
   const creds = await apiSignUp(request, { name: "面接 準備" });
   const { page, context } = await newSignedInPage(browser, creds);
 
+  // Board lives under /progress after left-rail shell.
+  await page
+    .getByTestId("app-sidebar")
+    .getByRole("link", { name: /応募進捗|Applications/ })
+    .click();
+  await expect(page).toHaveURL("/progress");
+  await expect(page.getByRole("heading", { name: "応募進捗" })).toBeVisible();
+
   await page.getByRole("button", { name: "応募を追加" }).first().click();
   await page.getByLabel("会社").fill("準備テスト株式会社");
   await page.getByLabel("職種").fill("バックエンドエンジニア");
@@ -61,7 +69,13 @@ test("board 面接準備 opens prep page with mock questions when 面接未定",
   expect(jobCalls).toEqual([]);
 
   await page.getByTestId("prep-back").click();
+  // prep-back still href="/" (product unchanged this round); re-enter board via rail.
   await expect(page).toHaveURL(/\/$/);
+  await page
+    .getByTestId("app-sidebar")
+    .getByRole("link", { name: /応募進捗|Applications/ })
+    .click();
+  await expect(page).toHaveURL("/progress");
   await expect(page.getByRole("heading", { name: "応募進捗" })).toBeVisible();
 
   await context.close();

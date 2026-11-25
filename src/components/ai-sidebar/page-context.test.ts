@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { pageContextFromPath } from "./page-context";
 
 describe("pageContextFromPath", () => {
-  it("maps home to board and profile to my_career", () => {
-    expect(pageContextFromPath("/ja")).toMatchObject({ area: "board" });
-    expect(pageContextFromPath("/ja/")).toMatchObject({ area: "board" });
+  it("maps home to other, progress to board, profile to my_career", () => {
+    expect(pageContextFromPath("/ja")).toMatchObject({ area: "other" });
+    expect(pageContextFromPath("/ja/")).toMatchObject({ area: "other" });
+    expect(pageContextFromPath("/progress")).toMatchObject({ area: "board" });
+    expect(pageContextFromPath("/ja/progress")).toMatchObject({
+      area: "board",
+    });
     expect(pageContextFromPath("/zh-CN/profile")).toMatchObject({
       area: "my_career",
     });

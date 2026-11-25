@@ -216,7 +216,7 @@ test.describe("multifield module refine", () => {
     await clickExactSaveAndWaitAction(form2, page);
     await page.reload({ waitUntil: "networkidle" });
     await page
-      .locator("aside.mc-side")
+      .getByTestId("mc-module-tabs")
       .getByRole("button", { name: "プロジェクト" })
       .click();
     await page

@@ -29,7 +29,7 @@ test.describe("A8 AI Sidebar (enabled)", () => {
 
   test("A8-01 opens and closes the global sidebar", async ({ request }) => {
     await expectAiStatus(request, true);
-    await page.goto("/");
+    await page.goto("/progress");
     await expect(page.getByTestId("ai-sidebar-toggle")).toBeVisible();
     await openAiSidebar(page);
     await closeAiSidebar(page);
@@ -40,7 +40,7 @@ test.describe("A8 AI Sidebar (enabled)", () => {
 
   test("A8-02 mock multi-turn chat via Job/Worker", async ({ request }) => {
     await expectAiStatus(request, true);
-    await page.goto("/");
+    await page.goto("/progress");
     await openAiSidebar(page);
 
     // Free chat: no Target required (PR #24 UX).
@@ -70,7 +70,7 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     request,
   }) => {
     await expectAiStatus(request, true);
-    await page.goto("/");
+    await page.goto("/progress");
     await openAiSidebar(page);
     await page.getByTestId("ai-new-conversation").click();
 
@@ -164,7 +164,7 @@ test.describe("A8 AI Sidebar (enabled)", () => {
     request,
   }) => {
     await expectAiStatus(request, true);
-    await page.goto("/");
+    await page.goto("/progress");
     await openAiSidebar(page);
     await page.getByTestId("ai-new-conversation").click();
 

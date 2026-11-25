@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { apiSignUp, newSignedInPage } from "./ai-helpers";
 
-test("signed-in home is the progress board", async ({ browser, request }) => {
+test("signed-in progress page is the application board", async ({
+  browser,
+  request,
+}) => {
   const creds = await apiSignUp(request, { name: "山田 太郎" });
   const { page, context } = await newSignedInPage(browser, creds);
 
+  await page.goto("/progress");
   await expect(page.getByRole("heading", { name: "応募進捗" })).toBeVisible();
   await expect(page.getByTestId("board-empty")).toBeVisible();
 

@@ -234,8 +234,8 @@ test.describe("QA-13～22 lifecycle", () => {
     await refineOnce(page, "ai-refine-profile-module");
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
 
-    // Nav chrome label is「進捗ボード」(ja); older specs used「応募進捗」(AiSidebar.pageBoard).
-    await domClick(page.getByRole("link", { name: /進捗ボード|応募進捗/ }));
+    // Nav chrome label is「応募進捗」(left rail).
+    await domClick(page.getByRole("link", { name: /応募進捗|Applications/ }));
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("ai-apply-to-draft")).toHaveCount(0);
     await closeSidebarIfOpen(page);
@@ -353,7 +353,7 @@ test.describe("QA-13～22 lifecycle", () => {
     await expect(page.getByTestId("ai-apply-to-draft")).toBeVisible();
 
     await domClick(
-      page.locator("aside.mc-side").getByRole("button", { name: "職歴" }),
+      page.getByTestId("mc-module-tabs").getByRole("button", { name: "職歴" }),
     );
     await expect(page.getByTestId("ai-apply-to-draft")).toHaveCount(0);
     await closeSidebarIfOpen(page);

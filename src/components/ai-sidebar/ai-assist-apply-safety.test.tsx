@@ -30,6 +30,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next-intl", () => ({
+  useLocale: () => "ja",
   useTranslations: () => (key: string, values?: Record<string, string>) => {
     if (key === "targetCurrent") return `現在の焦点：${values?.label ?? ""}`;
     if (key === "referencePage") return `参照：${values?.page ?? ""}`;
@@ -55,7 +56,16 @@ vi.mock("next-intl", () => ({
       applyOverwriteConfirm: "上書きしますか？",
       applyExtractFailed: "抽出不可",
       applyRejectedStale: "対象が変わったため反映できません",
-      selectConversation: "会話を選択",
+              viewChat: "チャット",
+        viewHistory: "会話履歴",
+        newChat: "＋ 新しいチャット",
+        historyEmpty: "会話はまだありません",
+        historySourceProfile: "プロフィール",
+        historySourceProject: "プロジェクト",
+        historySourceEmployer: "職歴",
+        historySourceGeneral: "一般",
+        conversationMenu: "会話メニュー",
+        selectConversation: "会話を選択",
       untitled: "無題の会話",
       archivedPrefix: "［アーカイブ］",
       new: "新規",

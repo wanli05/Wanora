@@ -35,9 +35,11 @@ test("sign up, sign out, and sign back in", async ({ page, context }) => {
   expect(signedUp, "sign-up/email did not succeed after retries").toBe(true);
 
   await expect(page).toHaveURL("/");
-  // Header shows profile/session name + photo chip — never the account email.
+  // Left-rail account chip — never the account email.
   await expect(page.getByTestId("signed-in-as")).toContainText("山田 太郎");
 
+  // Logout lives in the account menu (not always visible in the rail).
+  await page.getByTestId("signed-in-as").click();
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(page.getByRole("link", { name: "ログイン" })).toBeVisible();
 

@@ -5,13 +5,56 @@
   "Nav": {
     "language": "界面语言",
     "primary": "主导航",
-    "progress": "进度板",
+    "home": "首页",
+    "progress": "应聘进度",
     "recruiters": "猎头",
     "profile": "个人资料",
-    "myCareer": "My Career"
+    "myCareer": "我的职业档案",
+    "version": "版本信息",
+    "contact": "联系我们",
+    "settings": "设置",
+    "collapseNav": "收起导航",
+    "expandNav": "展开导航",
+    "openNav": "打开菜单",
+    "closeNav": "关闭菜单"
   },
   "Home": {
-    "tagline": "面向在日本求职者的投递进度管理应用"
+    "tagline": "面向在日本求职者的投递进度管理应用",
+    "welcomeTitle": "首页",
+    "welcomeBody": "可从我的职业档案或应聘进度继续推进求职。",
+    "linkCareer": "整理简历、职历与技能",
+    "linkProgress": "管理选考阶段与面试"
+  },
+  "VersionPage": {
+    "title": "版本信息",
+    "subtitle": "Wanora 当前版本与主要更新。",
+    "currentVersion": "当前版本",
+    "changelogTitle": "主要更新",
+    "updateSkillsTable": "技能表分类单元格合并与行菜单删除",
+    "updateCollapsedForms": "技能与职业目标新增表单默认收起",
+    "updateExportSkills": "职务经历书技术技能表与页面一致的分类合并",
+    "updateShellNav": "登录后左侧导航，以及设置、联系与版本页面"
+  },
+  "ContactPage": {
+    "title": "联系我们",
+    "subtitle": "欢迎反馈故障或功能需求。",
+    "topicsTitle": "受理内容",
+    "topicBug": "故障",
+    "topicFeature": "功能需求",
+    "howtoTitle": "填写提示",
+    "howtoBody": "反馈故障时，请尽量提供发生页面、操作步骤，以及看到的错误信息。",
+    "privacyNote": "请勿附上账号密码，或简历中的个人信息。",
+    "channelTitle": "联系渠道",
+    "mailtoCta": "发送邮件咨询",
+    "pending": "咨询窗口准备中"
+  },
+  "SettingsPage": {
+    "title": "设置",
+    "subtitle": "显示相关偏好。",
+    "displayTitle": "显示设置",
+    "sidebarTitle": "侧栏",
+    "sidebarExpanded": "展开",
+    "sidebarCollapsed": "收起"
   },
   "Board": {
     "title": "投递进度",
@@ -461,6 +504,15 @@
     "applyExtractFailed": "修正本文を特定できないため、必要なら手動でコピーしてください",
     "applyRejectedStale": "編集対象が変わったため、この修正案は反映できません",
     "aiUnavailableShort": "AIは現在利用できません",
+    "viewChat": "聊天",
+    "viewHistory": "会话历史",
+    "newChat": "＋ 新建会话",
+    "historyEmpty": "还没有会话",
+    "historySourceProfile": "档案",
+    "historySourceProject": "项目",
+    "historySourceEmployer": "职历",
+    "historySourceGeneral": "一般",
+    "conversationMenu": "会话菜单",
     "selectConversation": "会話を選択",
     "untitled": "無題の会話",
     "archivedPrefix": "［アーカイブ］",

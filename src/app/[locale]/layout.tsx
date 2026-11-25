@@ -6,7 +6,7 @@ import { APP_NAME } from "@/lib/app";
 import { LOCALES } from "@/lib/locale";
 import { AiAssistProvider } from "@/components/ai-sidebar/ai-assist-context";
 import { AiSidebarHost } from "@/components/ai-sidebar/ai-sidebar-host";
-import { SiteHeader } from "./site-header";
+import { SignedInShell } from "./signed-in-shell";
 // Self-hosted via npm — avoids next/font/google + Turbopack fetch failures
 // when fonts.googleapis.com is slow/unreachable (broken virtual font modules).
 import "@fontsource-variable/newsreader";
@@ -36,8 +36,9 @@ export default async function LocaleLayout({
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <AiAssistProvider>
-            <SiteHeader />
-            {children}
+            <Suspense fallback={null}>
+              <SignedInShell>{children}</SignedInShell>
+            </Suspense>
             <Suspense fallback={null}>
               <AiSidebarHost />
             </Suspense>

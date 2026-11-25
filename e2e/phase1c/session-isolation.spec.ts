@@ -126,12 +126,17 @@ test.describe("session-isolation assist slots", () => {
     const second = await activeConversationId(page);
     expect(second).toBeTruthy();
     expect(second).not.toBe(first);
-    const optionValues = await page
-      .locator('[data-testid="ai-conversation-select"] option')
-      .evaluateAll((opts) =>
-        opts.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
+    await page.getByTestId("ai-view-history").click();
+    await expect(page.getByTestId("ai-conversation-history")).toBeVisible();
+    const historyIds = await page
+      .getByTestId("ai-history-item")
+      .evaluateAll((nodes) =>
+        nodes
+          .map((n) => n.getAttribute("data-conversation-id"))
+          .filter((id): id is string => Boolean(id)),
       );
-    expect(optionValues).toEqual(expect.arrayContaining([first, second]));
+    expect(historyIds).toEqual(expect.arrayContaining([first!, second!]));
+    await page.getByTestId("ai-view-chat").click();
 
     await closeSidebarIfOpen(page);
     await context.close();

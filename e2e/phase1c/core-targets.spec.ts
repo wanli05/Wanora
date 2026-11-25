@@ -169,7 +169,7 @@ test.describe("QA-01～12 core targets", () => {
 
     await page.reload({ waitUntil: "networkidle" });
     await page
-      .locator("aside.mc-side")
+      .getByTestId("mc-module-tabs")
       .getByRole("button", { name: "職歴" })
       .click();
     await page
