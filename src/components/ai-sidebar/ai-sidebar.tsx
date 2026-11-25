@@ -16,10 +16,7 @@ import type { AiConversationDto, AiMessageDto } from "@/lib/ai/conversation";
 import type { AiJobDto } from "@/lib/ai/jobs";
 import { useAiAssist } from "@/components/ai-sidebar/ai-assist-context";
 import { formatMultiApplyFieldList } from "@/components/ai-sidebar/apply-confirm";
-import {
-  assistContextLabelKeys,
-  shouldHideFocusAdjuster,
-} from "@/components/ai-sidebar/assist-context-labels";
+import { assistContextLabelKeys } from "@/components/ai-sidebar/assist-context-labels";
 import {
   type ComposerSizeMode,
   composerMaxHeightPx,
@@ -60,11 +57,7 @@ import {
 } from "./ai-api";
 import { jobStatusLabel, isJobTerminal } from "./job-status-label";
 import { pageContextFromPath } from "./page-context";
-import {
-  ADJUSTABLE_TARGET_OPTIONS,
-  suggestionsForPage,
-  targetSelectValue,
-} from "./suggestions";
+import { suggestionsForPage } from "./suggestions";
 import { useJobPolling } from "./use-job-polling";
 
 type AssistSession = {
@@ -93,7 +86,6 @@ export function AiSidebar() {
   const t = useTranslations("AiSidebar");
   const pathname = usePathname() ?? "/";
   const titleId = useId();
-  const adjusterId = useId();
   const pageContext = pageContextFromPath(pathname);
   const {
     registerOpenHandler,
@@ -101,11 +93,10 @@ export function AiSidebar() {
     resolveLegacySlotBinder,
   } = useAiAssist();
   const [open, setOpen] = useState(false);
-  /** Optional field focus; default null so chat can start without picking a Target. */
+  /** Optional send Target from suggestions / conversation pin — not user-picked via UI. */
   const [targetContext, setTargetContext] = useState<AiTargetContext | null>(
     null,
   );
-  const [adjustOpen, setAdjustOpen] = useState(false);
   /** Pure UI height mode; never persisted to conversation/DB. */
   const [composerSizeMode, setComposerSizeMode] =
     useState<ComposerSizeMode>("default");
@@ -173,17 +164,6 @@ export function AiSidebar() {
     conversationsRef.current = conversations;
   }, [conversations]);
 
-  function formatTarget(tgt: AiTargetContext | null): string {
-    if (!tgt) return t("targetNone");
-    if (tgt.type === "career_employer") return t("targetCareerEmployer");
-    if (tgt.type === "career_project") return t("targetCareerProject");
-    const opt = ADJUSTABLE_TARGET_OPTIONS.find(
-      (o) => o.value === targetSelectValue(tgt),
-    );
-    if (opt) return t(opt.labelKey);
-    return tgt.type;
-  }
-
   function pageLabel(): string {
     if (pageContext.area === "board") return t("pageBoard");
     if (pageContext.area === "my_career") return t("pageCareer");
@@ -191,12 +171,7 @@ export function AiSidebar() {
   }
 
   function referenceLabel(): string {
-    const page = pageLabel();
-    if (!targetContext) return t("referencePage", { page });
-    return t("referencePageTarget", {
-      page,
-      target: formatTarget(targetContext),
-    });
+    return t("referencePage", { page: pageLabel() });
   }
 
   const refreshMessages = useCallback(async (conversationId: string) => {
@@ -245,7 +220,6 @@ export function AiSidebar() {
       setActiveId(id);
       writeActiveConversationId(id);
       setError(null);
-      setAdjustOpen(false);
       const conv = (list ?? conversationsRef.current).find((c) => c.id === id);
       const lockedSlot = assistSlotKeyRef.current;
       const convSlot = conv?.assistSlotKey ?? null;
@@ -315,12 +289,7 @@ export function AiSidebar() {
       }
       await refreshMessages(id);
     },
-    [
-      refreshMessages,
-      clearAssistSendContext,
-      setAdjustOpen,
-      resolveLegacySlotBinder,
-    ],
+    [refreshMessages, clearAssistSendContext, resolveLegacySlotBinder],
   );
   useEffect(() => {
     selectConversationRef.current = selectConversation;
@@ -475,7 +444,6 @@ export function AiSidebar() {
       setOpen(true);
       setError(null);
       setApplyNotice(null);
-      setAdjustOpen(false);
       setAssistOpening(true);
       // Always rebind Target for this assist request — never keep a stale pin.
       setTargetContext(input.target);
@@ -579,7 +547,6 @@ export function AiSidebar() {
     sendingRef.current = true;
     setBusy(true);
     setError(null);
-    setAdjustOpen(false);
 
     const conversationId = await ensureConversation();
     if (!conversationId) {
@@ -700,7 +667,6 @@ export function AiSidebar() {
     // Keep AssistSession when creating a new thread in the same refine slot.
     if (!slot) {
       clearAssistSendContext();
-      setAdjustOpen(false);
     } else {
       setAssistSession((prev) =>
         prev
@@ -713,7 +679,6 @@ export function AiSidebar() {
           : null,
       );
       setApplyNotice(null);
-      setAdjustOpen(false);
       if (assistSession) {
         setDraft(
           buildRefinePrompt({
@@ -759,16 +724,10 @@ export function AiSidebar() {
     if (next) await selectConversation(next.id, list);
   }
 
-  function onTargetAdjust(value: string) {
-    const opt = ADJUSTABLE_TARGET_OPTIONS.find((o) => o.value === value);
-    setTargetContext(opt?.target ?? null);
-  }
-
   function applySuggestion(chip: ReturnType<typeof suggestionsForPage>[number]) {
     clearAssistSendContext();
     setDraft(t(chip.promptKey));
     setTargetContext(chip.target);
-    setAdjustOpen(false);
   }
 
   function applyAssistantToDraft(message: AiMessageDto) {
@@ -855,7 +814,6 @@ export function AiSidebar() {
     // Allow next general toggle-open to use unslotted restore (Q7).
     assistTargetLockRef.current = undefined;
     resetComposerSize();
-    setAdjustOpen(false);
     setOpen(false);
   }
 
@@ -1249,8 +1207,7 @@ export function AiSidebar() {
         ) : null}
 
         <div className="ai-sidebar-composer-wrap">
-          {shouldHideFocusAdjuster(assistSession?.fieldKey) &&
-          assistSession ? (
+          {assistSession ? (
             <div
               className="ai-sidebar-assist-context"
               data-testid="ai-assist-context"
@@ -1279,56 +1236,20 @@ export function AiSidebar() {
               </span>
             </div>
           ) : (
-            <>
-              <div className="ai-sidebar-ref-row">
-                <button
-                  type="button"
-                  className="ai-sidebar-ref"
-                  data-testid="ai-context-ref"
-                  aria-expanded={adjustOpen}
-                  aria-controls={adjusterId}
-                  onClick={() => setAdjustOpen((v) => !v)}
-                >
-                  {referenceLabel()}
-                </button>
-                <span
-                  className="ai-sidebar-ref-hint"
-                  data-testid="ai-page-context"
-                >
-                  {pageContext.area ?? "other"}
-                </span>
-              </div>
-
-              {adjustOpen ? (
-                <div
-                  id={adjusterId}
-                  className="ai-sidebar-adjust"
-                  data-testid="ai-context-adjuster"
-                >
-                  <p className="ai-sidebar-adjust-lead">{t("adjustLead")}</p>
-                  <label className="ai-sidebar-adjust-field">
-                    <span>{t("adjustFocus")}</span>
-                    <select
-                      data-testid="ai-target-select"
-                      value={targetSelectValue(targetContext)}
-                      onChange={(e) => onTargetAdjust(e.target.value)}
-                    >
-                      {ADJUSTABLE_TARGET_OPTIONS.map((o) => (
-                        <option key={o.value || "none"} value={o.value}>
-                          {t(o.labelKey)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <p
-                    className="ai-sidebar-target-view"
-                    data-testid="ai-target-context"
-                  >
-                    {t("targetCurrent", { label: formatTarget(targetContext) })}
-                  </p>
-                </div>
-              ) : null}
-            </>
+            <div className="ai-sidebar-ref-row">
+              <span
+                className="ai-sidebar-ref"
+                data-testid="ai-context-ref"
+              >
+                {referenceLabel()}
+              </span>
+              <span
+                className="ai-sidebar-ref-hint"
+                data-testid="ai-page-context"
+              >
+                {pageContext.area ?? "other"}
+              </span>
+            </div>
           )}
 
           <form

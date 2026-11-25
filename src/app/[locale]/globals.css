@@ -1746,57 +1746,15 @@ body {
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ai-sidebar-ref:hover {
-  background: var(--ai-soft);
-}
 .ai-sidebar-ref-hint {
   font-size: 11px;
   color: var(--ai-muted);
   flex-shrink: 0;
-}
-.ai-sidebar-adjust {
-  border: 1px solid var(--ai-line);
-  border-radius: 10px;
-  padding: 10px;
-  background: #fbfefc;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.ai-sidebar-adjust-lead {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ai-muted);
-}
-.ai-sidebar-adjust-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ai-ink);
-}
-.ai-sidebar-adjust-field select {
-  width: 100%;
-  border: 1px solid var(--ai-line);
-  border-radius: 8px;
-  padding: 6px 8px;
-  font: inherit;
-  font-weight: 400;
-  background: #fff;
-  color: var(--ai-ink);
-}
-.ai-sidebar-target-view {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--ai-muted);
 }
 .ai-sidebar-msg {
   border-radius: 10px;

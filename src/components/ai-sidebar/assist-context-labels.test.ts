@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  assistContextLabelKeys,
-  shouldHideFocusAdjuster,
-} from "./assist-context-labels";
+import { assistContextLabelKeys } from "./assist-context-labels";
 
 describe("assistContextLabelKeys", () => {
   it("maps profile module to profile scope", () => {
@@ -42,15 +39,5 @@ describe("assistContextLabelKeys", () => {
       referenceKey: "assistRefLegacyProfile",
       scopeKey: "assistScopeLegacyJobSummary",
     });
-  });
-});
-
-describe("shouldHideFocusAdjuster", () => {
-  it("hides for any My Career assist field, keeps general chat", () => {
-    expect(shouldHideFocusAdjuster("profile_module")).toBe(true);
-    expect(shouldHideFocusAdjuster("project_module")).toBe(true);
-    expect(shouldHideFocusAdjuster("narrative_ja")).toBe(true);
-    expect(shouldHideFocusAdjuster(null)).toBe(false);
-    expect(shouldHideFocusAdjuster(undefined)).toBe(false);
   });
 });

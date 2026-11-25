@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestionsForPage, targetSelectValue } from "./suggestions";
+import { suggestionsForPage } from "./suggestions";
 
 describe("suggestionsForPage", () => {
   it("returns My Career chips without claiming field reads", () => {
@@ -16,14 +16,5 @@ describe("suggestionsForPage", () => {
   it("returns board chips with null targets", () => {
     const chips = suggestionsForPage({ area: "board" });
     expect(chips.every((c) => c.target === null)).toBe(true);
-  });
-});
-
-describe("targetSelectValue", () => {
-  it("maps null and profile sections", () => {
-    expect(targetSelectValue(null)).toBe("");
-    expect(
-      targetSelectValue({ type: "profile", section: "job_summary" }),
-    ).toBe("profile:job_summary");
   });
 });
