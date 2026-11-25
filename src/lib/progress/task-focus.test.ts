@@ -50,10 +50,13 @@ describe("task-focus", () => {
     );
   });
 
-  it("counts overlap from conflict", () => {
-    expect(
-      countTaskFocus([base({ conflict: true })], Date.parse("2026-11-14T00:00:00Z"))
-        .overlap,
-    ).toBe(1);
+  it("still flags overlap for conflict badges without counting it in summary", () => {
+    const now = Date.parse("2026-11-14T00:00:00Z");
+    expect(appTaskFlags(base({ conflict: true }), now).overlap).toBe(true);
+    expect(countTaskFocus([base({ conflict: true })], now)).toEqual({
+      interview: 0,
+      waiting: 1,
+      overdue: 0,
+    });
   });
 });

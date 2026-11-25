@@ -1,19 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { OccupancyWindow } from "@/lib/progress/conflicts";
 import {
+  applyDragRange,
   cellRange,
+  draftCoversRange,
+  draftOverlapsRange,
   occupancyAt,
+  rangeFromCellIndices,
+  removeDraftSlot,
   sameSlot,
   slotStarts,
-  toggleDraftSlot,
   type DraftSlot,
 } from "@/lib/progress/slots";
 import {
   addDays,
   formatDateKeyShort,
+  formatTokyoShort,
   mondayContaining,
   tokyoTodayKey,
   weekDateKeys,
@@ -34,6 +39,7 @@ export function SlotGrid({
   appId,
   company,
   drafts,
+  baseline = [],
   onChange,
   onConflict,
 }: {
@@ -41,6 +47,8 @@ export function SlotGrid({
   appId: string;
   company: string;
   drafts: DraftSlot[];
+  /** Saved slots when the editor opened — painted as 登録済み. */
+  baseline?: DraftSlot[];
   onChange: (next: DraftSlot[]) => void;
   onConflict: (message: string) => void;
 }) {
@@ -51,6 +59,7 @@ export function SlotGrid({
     from: number;
     to: number;
   } | null>(null);
+  const dragMoved = useRef(false);
   const days = useMemo(() => weekDateKeys(monday), [monday]);
   const starts = slotStarts();
 
@@ -61,52 +70,47 @@ export function SlotGrid({
     return t("slotConflictProposed");
   }
 
-  function tryToggle(day: string, index: number) {
-    const cell = starts[index];
-    if (!cell) return;
-    const range = cellRange(day, cell.hour, cell.minute);
-    const result = toggleDraftSlot(drafts, range, occupancy, appId);
-    if (result.blocked) {
-      onConflict(conflictText(result.blocked.kind));
-      return;
-    }
-    onChange(result.drafts);
-  }
-
   function commitDrag(day: string, from: number, to: number) {
-    if (from === to) {
-      tryToggle(day, from);
-      return;
-    }
-    const lo = Math.min(from, to);
-    const aligned = starts[lo];
-    if (!aligned) return;
-    const range = cellRange(day, aligned.hour, aligned.minute);
-    const result = toggleDraftSlot(drafts, range, occupancy, appId);
+    const single = from === to && !dragMoved.current;
+    const range = rangeFromCellIndices(day, starts, from, to);
+    if (!range) return;
+    const result = applyDragRange(drafts, range, occupancy, appId, single);
     if (result.blocked) onConflict(conflictText(result.blocked.kind));
     else onChange(result.drafts);
   }
 
+  function isRegistered(draft: DraftSlot) {
+    return baseline.some((item) => sameSlot(item, draft));
+  }
+
+  const blocksOnWeek = drafts.filter((draft) =>
+    days.some((day) => {
+      const dayStart = `${day}T00:00:00+09:00`;
+      const dayEnd = `${day}T23:59:59+09:00`;
+      return draftOverlapsRange(draft, { start: dayStart, end: dayEnd });
+    }),
+  );
+
   return (
-    <div data-testid="slot-grid" className="flex flex-col gap-3">
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+    <div data-testid="slot-grid" className="flex min-h-0 flex-1 flex-col gap-3">
+      <p className="text-sm text-[var(--pb-muted)]">
         {t("slotGridHint")}
         <span lang="ja">{` ${company}`}</span>
       </p>
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--pb-amber-bg)] ring-1 ring-[var(--pb-amber)]" />
+          {t("slotRegistered")}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--pb-teal)]" />
+          {t("slotYours")}
+        </span>
+        <span className="inline-flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-sm bg-emerald-700" />
           {t("calConfirmed")}
         </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm border border-dashed border-amber-700 bg-amber-200" />
-          {t("calProposed")}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm bg-sky-600" />
-          {t("slotYours")}
-        </span>
-        <span className={drafts.length < 3 ? "text-amber-700" : "text-zinc-500"}>
+        <span className={drafts.length < 3 ? "text-amber-700" : "text-[var(--pb-muted)]"}>
           {t("slotPicked", { count: drafts.length })}
           {drafts.length < 3 ? ` · ${t("slotPickedWarn")}` : ""}
         </span>
@@ -114,7 +118,7 @@ export function SlotGrid({
       <div className="flex items-center justify-between text-sm">
         <button
           type="button"
-          className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700"
+          className="rounded border border-[var(--pb-line)] px-2 py-1"
           onClick={() => setMonday(addDays(monday, -7))}
         >
           {t("slotWeekPrev")}
@@ -124,36 +128,35 @@ export function SlotGrid({
         </p>
         <button
           type="button"
-          className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700"
+          className="rounded border border-[var(--pb-line)] px-2 py-1"
           onClick={() => setMonday(addDays(monday, 7))}
         >
           {t("slotWeekNext")}
         </button>
       </div>
       <div
-        className="max-h-[28rem] overflow-auto"
+        className="min-h-0 flex-1 overflow-auto"
         onPointerUp={() => {
           if (drag) {
             commitDrag(drag.day, drag.from, drag.to);
             setDrag(null);
+            dragMoved.current = false;
           }
         }}
-        onPointerLeave={() => {
-          if (drag) {
-            commitDrag(drag.day, drag.from, drag.to);
-            setDrag(null);
-          }
+        onPointerCancel={() => {
+          setDrag(null);
+          dragMoved.current = false;
         }}
       >
-        <div className="grid min-w-[48rem] grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] gap-px rounded-lg border border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800">
-          <div className="bg-zinc-50 dark:bg-zinc-900" />
+        <div className="grid min-w-[42rem] grid-cols-[3rem_repeat(7,minmax(0,1fr))] gap-px rounded-lg border border-[var(--pb-line)] bg-[var(--pb-line)]">
+          <div className="bg-[var(--pb-card)]" />
           {days.map((day, index) => (
             <div
               key={day}
-              className="bg-zinc-50 px-1 py-1.5 text-center text-xs font-medium dark:bg-zinc-900"
+              className="bg-[var(--pb-card)] px-1 py-1.5 text-center text-[11px] font-medium"
             >
               <div>{t(WEEKDAY_KEYS[index]!)}</div>
-              <div className="text-zinc-500">{formatDateKeyShort(day)}</div>
+              <div className="text-[var(--pb-muted)]">{formatDateKeyShort(day)}</div>
             </div>
           ))}
           {starts.map((cell, index) => (
@@ -165,34 +168,43 @@ export function SlotGrid({
               occupancy={occupancy}
               appId={appId}
               drafts={drafts}
+              baseline={baseline}
               drag={drag}
               onPointerDown={(day, cellIndex) => {
-                const start = starts[cellIndex];
-                if (!start) return;
-                const range = cellRange(day, start.hour, start.minute);
-                const blocked = occupancyAt(
-                  occupancy,
-                  range.start,
-                  range.end,
-                  appId,
-                );
-                if (blocked && !drafts.some((draft) => sameSlot(draft, range))) {
-                  tryToggle(day, cellIndex);
-                  return;
-                }
+                dragMoved.current = false;
                 setDrag({ day, from: cellIndex, to: cellIndex });
               }}
               onPointerEnter={(day, cellIndex) => {
-                setDrag((current) =>
-                  current && current.day === day
-                    ? { ...current, to: cellIndex }
-                    : current,
-                );
+                setDrag((current) => {
+                  if (!current || current.day !== day) return current;
+                  if (current.to !== cellIndex) dragMoved.current = true;
+                  return { ...current, to: cellIndex };
+                });
               }}
             />
           ))}
         </div>
       </div>
+      {blocksOnWeek.length > 0 ? (
+        <ul className="space-y-1 text-xs text-[var(--pb-ink-soft)]" lang="ja">
+          {blocksOnWeek.map((draft) => (
+            <li key={`${draft.start}-list`} className="flex items-center justify-between gap-2">
+              <span>
+                {isRegistered(draft) ? `${t("slotRegistered")} · ` : ""}
+                {`${formatTokyoShort(draft.start)}–${formatTokyoShort(draft.end).split(" ")[1] ?? ""}`}
+              </span>
+              <button
+                type="button"
+                className="text-[var(--pb-red)]"
+                aria-label={t("slotRemoveBlock")}
+                onClick={() => onChange(removeDraftSlot(drafts, draft))}
+              >
+                {t("slotRemoveGlyph")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -204,6 +216,7 @@ function CellRow({
   occupancy,
   appId,
   drafts,
+  baseline,
   drag,
   onPointerDown,
   onPointerEnter,
@@ -214,31 +227,45 @@ function CellRow({
   occupancy: OccupancyWindow[];
   appId: string;
   drafts: DraftSlot[];
+  baseline: DraftSlot[];
   drag: { day: string; from: number; to: number } | null;
   onPointerDown: (day: string, index: number) => void;
   onPointerEnter: (day: string, index: number) => void;
 }) {
-  const lo = drag ? Math.min(drag.from, drag.to) : -1;
+  const dragLo = drag ? Math.min(drag.from, drag.to) : -1;
+  const dragHi = drag ? Math.max(drag.from, drag.to) : -1;
   return (
     <>
-      <div className="bg-zinc-50 px-1 py-1 text-right text-[11px] text-zinc-500 dark:bg-zinc-900">
+      <div className="bg-[var(--pb-card)] px-1 py-1 text-right text-[11px] leading-[1.75rem] text-[var(--pb-muted)]">
         {cell.label}
       </div>
       {days.map((day) => {
         const range = cellRange(day, cell.hour, cell.minute);
         const hit = occupancyAt(occupancy, range.start, range.end, appId);
-        const picked = drafts.some((draft) => sameSlot(draft, range));
-        const dragging = drag?.day === day && index === lo;
-        let className = "min-h-7 cursor-pointer bg-white dark:bg-zinc-950";
+        const picked = drafts.some((draft) => draftCoversRange(draft, range));
+        const registered =
+          picked &&
+          baseline.some(
+            (base) =>
+              draftCoversRange(base, range) &&
+              drafts.some((draft) => sameSlot(draft, base)),
+          );
+        const dragging = drag?.day === day && index >= dragLo && index <= dragHi;
+        let className =
+          "relative z-0 min-h-[1.75rem] cursor-pointer bg-white";
         if (hit?.kind === "confirmed") {
-          className = "min-h-7 cursor-not-allowed bg-emerald-700 text-white";
+          className = "min-h-[1.75rem] cursor-not-allowed bg-emerald-700/80";
         } else if (hit?.kind === "proposed") {
           className =
-            "min-h-7 cursor-not-allowed bg-[repeating-linear-gradient(45deg,#fbbf24,#fbbf24_4px,#fff7ed_4px,#fff7ed_8px)]";
+            "min-h-[1.75rem] cursor-not-allowed bg-[repeating-linear-gradient(45deg,#fbbf24,#fbbf24_4px,#fff7ed_4px,#fff7ed_8px)]";
         } else if (hit?.kind === "busy") {
-          className = "min-h-7 cursor-not-allowed bg-zinc-300 dark:bg-zinc-700";
-        } else if (picked || dragging) {
-          className = "min-h-7 cursor-pointer bg-sky-600 text-white";
+          className = "min-h-[1.75rem] cursor-not-allowed bg-zinc-300";
+        } else if (dragging) {
+          className = "min-h-[1.75rem] cursor-pointer bg-[var(--pb-teal)]/40";
+        } else if (registered) {
+          className = "min-h-[1.75rem] cursor-pointer bg-[#e8d9c0]";
+        } else if (picked) {
+          className = "min-h-[1.75rem] cursor-pointer bg-[var(--pb-teal-soft)]";
         }
         return (
           <button
@@ -250,6 +277,7 @@ function CellRow({
             className={className}
             onPointerDown={(event) => {
               event.preventDefault();
+              if (hit && hit.kind !== "own") return;
               onPointerDown(day, index);
             }}
             onPointerEnter={() => onPointerEnter(day, index)}
