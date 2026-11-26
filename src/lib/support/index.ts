@@ -19,6 +19,11 @@ export {
 } from "@/lib/support/notify";
 export { supportRateLimitKey } from "@/lib/support/rate-limit-key";
 export {
+  createClientSubmissionId,
+  isUuidString,
+} from "@/lib/support/client-submission-id";
+export { detectBrowserInfo } from "@/lib/support/browser-info";
+export {
   retrySupportNotify,
   submitSupportReport,
   type SubmitSupportReportResult,

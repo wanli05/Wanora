@@ -41,7 +41,10 @@ import {
   type ProfilePageInitial,
 } from "@/components/profile-page-form";
 import { ExportSheets } from "@/components/my-career/export-sheets";
-import { ReportIssueButton } from "@/components/support/report-issue-dialog";
+import {
+  ErrorDiagnosticDetails,
+  ReportIssueButton,
+} from "@/components/support/report-issue-dialog";
 import {
   confirmPendingProjectAction,
   deleteCareerEmployerAction,
@@ -358,16 +361,22 @@ function Feedback({
   if (state.error === "saveFailed") {
     return (
       <div className="text-sm text-red-700" role="alert">
-        {labels.errors[state.error]}
-        <ReportIssueButton
-          context={{
-            module: "my_career",
-            operation,
-            routeId: "profile",
-            errorCode: state.errorCode ?? "unknown",
-            faultId: state.faultId,
-            source: "server",
-          }}
+        <div>
+          {labels.errors[state.error]}
+          <ReportIssueButton
+            context={{
+              module: "my_career",
+              operation,
+              routeId: "profile",
+              errorCode: state.errorCode ?? "unknown",
+              faultId: state.faultId,
+              source: "server",
+            }}
+          />
+        </div>
+        <ErrorDiagnosticDetails
+          errorCode={state.errorCode}
+          faultId={state.faultId}
         />
       </div>
     );

@@ -34,4 +34,30 @@ describe("submitSupportReportBodySchema", () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  it("accepts optional browserName/browserVersion whitelist fields", () => {
+    const parsed = submitSupportReportBodySchema.safeParse({
+      clientSubmissionId: "11111111-1111-4111-8111-111111111111",
+      category: "bug_report",
+      message: "ボタンが反応しません",
+      diagnostic: {
+        module: "general",
+        operation: "manual_bug_report",
+        routeId: "contact",
+        source: "manual",
+        browserName: "Chrome",
+        browserVersion: "120.0.0.0",
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects non-UUID clientSubmissionId", () => {
+    const parsed = submitSupportReportBodySchema.safeParse({
+      clientSubmissionId: "sub_123_abc",
+      category: "other_inquiry",
+      message: "質問です",
+    });
+    expect(parsed.success).toBe(false);
+  });
 });

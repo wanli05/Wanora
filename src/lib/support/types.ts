@@ -52,6 +52,9 @@ export const supportDiagnosticSchema = z
     /** Incident id: server fault id, AI job id, or client_request_id. */
     faultId: z.string().trim().min(1).max(128).optional(),
     appVersion: z.string().trim().min(1).max(32).optional(),
+    /** Best-effort browser name (whitelist; never raw UA string). */
+    browserName: z.string().trim().min(1).max(32).optional(),
+    browserVersion: z.string().trim().min(1).max(32).optional(),
     /** How the diagnostic was obtained. */
     source: z.enum(["server", "client_observed", "manual"]).default("manual"),
   })
