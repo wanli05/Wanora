@@ -29,7 +29,8 @@ import { defaultFreeSlots, type DraftSlot } from "@/lib/progress/slots";
 import {
   appTaskFlags,
   countTaskFocus,
-  feedbackPendingAlert,
+  listTaskDetails,
+  type TaskDetailItem,
   type TaskFocus,
 } from "@/lib/progress/task-focus";
 import {
@@ -41,6 +42,7 @@ import {
   tokyoTodayKey,
 } from "@/lib/progress/tokyo";
 import type { BoardFeedbackQaItem } from "@/lib/progress/dto";
+import { ConfirmSlotDrawer } from "./confirm-slot-drawer";
 import { MonthCalendar } from "./month-calendar";
 import { SlotGrid } from "./slot-grid";
 
@@ -102,8 +104,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [editingApp, setEditingApp] = useState<BoardApplication | null>(null);
   const [addingRecruiter, setAddingRecruiter] = useState(false);
   const [interviewFor, setInterviewFor] = useState<string | null>(null);
+  const [confirmFor, setConfirmFor] = useState<string | null>(null);
   const [feedbackFor, setFeedbackFor] = useState<FeedbackTarget | null>(null);
   const [draftSlots, setDraftSlots] = useState<DraftSlot[]>([]);
+  const [slotBaseline, setSlotBaseline] = useState<DraftSlot[]>([]);
+  const [savingSlots, setSavingSlots] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [conflictMsg, setConflictMsg] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [nowMs] = useState(() => Date.now());
@@ -118,11 +125,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   function closePagePanels() {
     setCalendarOpen(false);
     setInterviewFor(null);
+    setConfirmFor(null);
     setFeedbackFor(null);
   }
 
   function openCalendar() {
     setInterviewFor(null);
+    setConfirmFor(null);
     setFeedbackFor(null);
     setCalendarOpen((open) => !open);
   }
@@ -203,9 +212,9 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     () => countTaskFocus(apps, nowMs),
     [apps, nowMs],
   );
-  const alertApp = useMemo(
-    () => feedbackPendingAlert(apps, nowMs),
-    [apps, nowMs],
+  const taskDetails = useMemo(
+    () => listTaskDetails(apps, nowMs, taskFocus),
+    [apps, nowMs, taskFocus],
   );
   const inProgressExists = apps.some((app) => !isClosed(app.outcome, app.offerDecision));
   const showClosedEmpty =
@@ -376,13 +385,54 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
     setConflictMsg(null);
     setCalendarOpen(false);
     setFeedbackFor(null);
+    setConfirmFor(null);
     setInterviewFor(appId);
     const existing = apps.find((app) => app.id === appId)?.proposal?.slots ?? [];
-    setDraftSlots(
+    const seeded =
       existing.length > 0
         ? existing.map((slot) => ({ start: slot.start, end: slot.end }))
-        : defaultFreeSlots(board.occupancy, appId),
-    );
+        : defaultFreeSlots(board.occupancy, appId);
+    setDraftSlots(seeded);
+    setSlotBaseline(existing.map((slot) => ({ start: slot.start, end: slot.end })));
+  }
+
+  function openConfirmSlots(appId: string) {
+    setConflictMsg(null);
+    setConfirmError(null);
+    setCalendarOpen(false);
+    setFeedbackFor(null);
+    setInterviewFor(null);
+    setConfirmFor(appId);
+  }
+
+  function handleTaskDetailAction(item: TaskDetailItem) {
+    const app = apps.find((row) => row.id === item.appId);
+    if (!app) return;
+    const action = item.action;
+    if (action.type === "open_confirm") {
+      openConfirmSlots(action.appId);
+      return;
+    }
+    if (action.type === "open_edit_slots") {
+      openProposeSlots(action.appId);
+      return;
+    }
+    if (action.type === "open_app_detail") {
+      setConflictMsg(null);
+      setEditingApp(app);
+      setEditSection(action.section ?? "basic");
+      return;
+    }
+    if (action.type === "open_feedback") {
+      const interview = app.stageInterviews.find((iv) => iv.id === action.interviewId);
+      if (!interview) return;
+      openFeedback({
+        appId: app.id,
+        company: app.company,
+        interview,
+        editing: null,
+      });
+    }
   }
 
   async function persistFeedback(
@@ -472,11 +522,12 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   }
 
   async function onAddSlots(status: "draft" | "sent") {
-    if (!interviewFor) return;
+    if (!interviewFor || savingSlots) return;
     if (draftSlots.length === 0) {
       setConflictMsg(t("slotNeedOne"));
       return;
     }
+    setSavingSlots(true);
     try {
       const payload = await readJson(
         await fetch(`/api/board/applications/${interviewFor}/slots`, {
@@ -487,6 +538,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       );
       await refreshFrom(payload);
       setInterviewFor(null);
+      setSlotBaseline([]);
       setConflictMsg(null);
     } catch (error) {
       const details = (error as { body?: { details?: { otherCompany: string; otherStart: string } } })
@@ -499,30 +551,59 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             })
           : t("errorGeneric"),
       );
+    } finally {
+      setSavingSlots(false);
     }
   }
 
   async function onConfirmSlot(appId: string, slotId: string) {
+    if (confirmBusy) return;
+    setConfirmBusy(true);
+    setConfirmError(null);
+    const app = apps.find((row) => row.id === appId);
+    const slot = app?.proposal?.slots.find((row) => row.id === slotId);
     try {
-      const payload = await readJson(
-        await fetch(`/api/board/applications/${appId}/slots`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ confirmSlotId: slotId }),
-        }),
-      );
-      await refreshFrom(payload);
+      if (app?.interview && slot) {
+        // Reschedule atomically — update existing interview; keep old booking on failure.
+        const payload = await readJson(
+          await fetch(`/api/board/applications/${appId}/interviews`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              interviewId: app.interview.id,
+              start: slot.start,
+              end: slot.end,
+              mode: app.interview.mode,
+              meetingUrl: app.interview.meetingUrl ?? undefined,
+            }),
+          }),
+        );
+        await refreshFrom(payload);
+      } else {
+        const payload = await readJson(
+          await fetch(`/api/board/applications/${appId}/slots`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ confirmSlotId: slotId }),
+          }),
+        );
+        await refreshFrom(payload);
+      }
+      setConfirmFor(null);
+      setConflictMsg(null);
     } catch (error) {
       const details = (error as { body?: { details?: { otherCompany: string; otherStart: string } } })
         .body?.details;
-      setConflictMsg(
-        details
-          ? `${t("conflictBlock")} ${t("conflictWith", {
-              company: details.otherCompany,
-              when: formatTokyoShort(details.otherStart),
-            })}`
-          : t("conflictBlock"),
-      );
+      const message = details
+        ? `${t("conflictBlock")} ${t("conflictWith", {
+            company: details.otherCompany,
+            when: formatTokyoShort(details.otherStart),
+          })}`
+        : t("conflictBlock");
+      setConfirmError(message);
+      setConflictMsg(message);
+    } finally {
+      setConfirmBusy(false);
     }
   }
 
@@ -648,6 +729,91 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         </section>
       ) : (
         <>
+      <section
+        className="pb-summary-card"
+        aria-label={t("taskSummaryTitle")}
+        data-testid="task-bar"
+      >
+        <h2 className="pb-summary-title">{t("taskSummaryTitle")}</h2>
+        <div className="pb-task-stats pb-task-stats--3">
+          {(
+            [
+              ["interview", "taskInterview", "taskEmptyInterview"],
+              ["waiting", "taskWaiting", "taskEmptyWaiting"],
+              ["overdue", "taskOverdue", "taskEmptyOverdue"],
+            ] as const
+          ).map(([key, labelKey]) => (
+            <button
+              key={key}
+              type="button"
+              className="pb-stat"
+              data-testid={`task-stat-${key}`}
+              data-active={taskFocus === key ? "true" : "false"}
+              onClick={() =>
+                setTaskFocus((current) => (current === key ? null : key))
+              }
+            >
+              <div className="pb-label">{t(labelKey)}</div>
+              <div
+                className="pb-num"
+                data-danger={key === "overdue" && taskCounts[key] > 0 ? "true" : "false"}
+              >
+                {taskCounts[key]}
+              </div>
+              <div className="pb-unit">{t("taskUnit")}</div>
+            </button>
+          ))}
+        </div>
+        <div className="pb-task-checklist" data-testid="task-checklist">
+          <h3 className="pb-checklist-title">{t("taskChecklistTitle")}</h3>
+          {taskDetails.length === 0 ? (
+            <p className="pb-checklist-empty" data-testid="task-checklist-empty">
+              {t(
+                taskFocus === "waiting"
+                  ? "taskEmptyWaiting"
+                  : taskFocus === "overdue"
+                    ? "taskEmptyOverdue"
+                    : taskFocus === "interview"
+                      ? "taskEmptyInterview"
+                      : "taskAlertNone",
+              )}
+            </p>
+          ) : (
+            <ul className="pb-checklist-list">
+              {taskDetails.map((item) => (
+                <li key={item.id} className="pb-checklist-item" data-severity={item.severity}>
+                  <span
+                    className="pb-checklist-icon"
+                    aria-hidden="true"
+                    data-severity={item.severity}
+                  >
+                    {item.severity === "warning"
+                      ? t("checklistWarnGlyph")
+                      : t("checklistInfoGlyph")}
+                  </span>
+                  <div className="pb-checklist-copy" lang="ja">
+                    <span className="font-semibold">{item.company}</span>
+                    {" — "}
+                    {t(item.messageKey as Parameters<TBoard>[0])}
+                  </div>
+                  <button
+                    type="button"
+                    className="pb-checklist-action"
+                    data-testid={`task-detail-${item.id}`}
+                    onClick={() => handleTaskDetailAction(item)}
+                  >
+                    {t(item.actionLabelKey as Parameters<TBoard>[0])}
+                    {" >"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section className="pb-stage-section" data-testid="stage-section">
+        <h2 className="pb-stage-title">{t("stageSectionTitle")}</h2>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <div className="flex overflow-hidden rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)]">
           <button
@@ -719,64 +885,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         </label>
       </div>
 
-      <section className="pb-task-bar" aria-label={t("title")} data-testid="task-bar">
-        <div className="pb-task-stats">
-          {(
-            [
-              ["interview", "taskInterview"],
-              ["waiting", "taskWaiting"],
-              ["overdue", "taskOverdue"],
-              ["overlap", "taskOverlap"],
-            ] as const
-          ).map(([key, labelKey]) => (
-            <button
-              key={key}
-              type="button"
-              className="pb-stat"
-              data-testid={`task-stat-${key}`}
-              data-active={taskFocus === key ? "true" : "false"}
-              onClick={() =>
-                setTaskFocus((current) => (current === key ? null : key))
-              }
-            >
-              <div className="pb-label">{t(labelKey)}</div>
-              <div
-                className="pb-num"
-                data-danger={key === "overdue" && taskCounts[key] > 0 ? "true" : "false"}
-              >
-                {taskCounts[key]}
-              </div>
-              <div className="pb-unit">{t("taskUnit")}</div>
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="pb-task-alert"
-          data-testid="task-alert"
-          onClick={() => {
-            if (alertApp) {
-              setTaskFocus("interview");
-              setConflictMsg(null);
-              setEditingApp(alertApp);
-              setEditSection("history");
-            } else {
-              setTaskFocus("interview");
-            }
-          }}
-        >
-          <span className="pb-bang" aria-hidden="true">
-            {t("taskAlertBang")}
-          </span>
-          <span lang="ja">
-            {alertApp
-              ? t("taskAlertFeedback", { company: alertApp.company })
-              : t("taskAlertNone")}
-          </span>
-        </button>
-      </section>
-
-      {conflictMsg && !interviewFor ? (
+      {conflictMsg && !interviewFor && !confirmFor ? (
         <p role="alert" className="text-sm text-red-700">
           {conflictMsg}
         </p>
@@ -860,7 +969,14 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
                           void patchApp(app.id, { action: "undo" });
                         }}
                         onProposeSlots={() => openProposeSlots(app.id)}
-                        onConfirmSlot={(slotId) => onConfirmSlot(app.id, slotId)}
+                        onOpenConfirm={() => openConfirmSlots(app.id)}
+                        onChangeTime={() => {
+                          if (app.proposal && app.proposal.slots.length > 0) {
+                            openConfirmSlots(app.id);
+                          } else {
+                            openProposeSlots(app.id);
+                          }
+                        }}
                       />
                     );
                   })}
@@ -881,6 +997,7 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
           }}
         />
       )}
+      </section>
         </>
       )}
       </div>
@@ -985,65 +1102,116 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
             type="button"
             data-testid="slot-grid-backdrop"
             aria-label={t("cancel")}
-            className="fixed inset-0 z-10 bg-black/30"
+            className="fixed inset-0 z-[60] bg-black/20"
             onClick={() => {
+              if (savingSlots) return;
               setInterviewFor(null);
               setConflictMsg(null);
             }}
           />
-          <div
+          <aside
+            className="pb-schedule-drawer pb-schedule-drawer--edit"
+            data-testid="edit-slots-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label={t("proposeSlots")}
-            className="relative z-20 rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+            aria-label={t("editCandidateSlotsTitle")}
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">{t("proposeSlots")}</h2>
+            <header className="pb-schedule-drawer-head">
+              <div>
+                <h2 className="m-0 text-base font-bold text-[var(--pb-teal-deep)]">
+                  {t("editCandidateSlotsTitle")}
+                </h2>
+                <p className="m-0 mt-0.5 text-sm text-[var(--pb-muted)]" lang="ja">
+                  {apps.find((app) => app.id === interviewFor)?.company ?? ""}
+                </p>
+              </div>
               <button
                 type="button"
-                className="text-sm text-zinc-500"
+                className="text-lg leading-none text-[var(--pb-muted)]"
+                aria-label={t("cancel")}
+                disabled={savingSlots}
                 onClick={() => {
                   setInterviewFor(null);
                   setConflictMsg(null);
                 }}
               >
-                {t("cancel")}
+                {t("drawerClose")}
               </button>
+            </header>
+            <div className="pb-schedule-drawer-body">
+              <SlotGrid
+                key={interviewFor}
+                occupancy={board.occupancy}
+                appId={interviewFor}
+                company={apps.find((app) => app.id === interviewFor)?.company ?? ""}
+                drafts={draftSlots}
+                baseline={slotBaseline}
+                onChange={(next) => {
+                  setConflictMsg(null);
+                  setDraftSlots(next);
+                }}
+                onConflict={setConflictMsg}
+              />
             </div>
-            <SlotGrid
-              key={interviewFor}
-              occupancy={board.occupancy}
-              appId={interviewFor}
-              company={apps.find((app) => app.id === interviewFor)?.company ?? ""}
-              drafts={draftSlots}
-              onChange={(next) => {
-                setConflictMsg(null);
-                setDraftSlots(next);
-              }}
-              onConflict={setConflictMsg}
-            />
-            {conflictMsg ? (
-              <p role="alert" className="mt-3 text-sm text-red-700">
-                {conflictMsg}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
-                onClick={() => onAddSlots("draft")}
-              >
-                {t("saveDraftSlots")}
-              </button>
-              <button
-                type="button"
-                className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
-                onClick={() => onAddSlots("sent")}
-              >
-                {t("saveSlots")}
-              </button>
-            </div>
-          </div>
+            <footer className="pb-schedule-drawer-foot">
+              {conflictMsg ? (
+                <p role="alert" className="mb-2 text-sm text-red-700">
+                  {conflictMsg}
+                </p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="pb-btn pb-btn-ghost pb-btn-sm"
+                  disabled={savingSlots}
+                  onClick={() => {
+                    setInterviewFor(null);
+                    setConflictMsg(null);
+                  }}
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="pb-btn pb-btn-sm"
+                  disabled={savingSlots}
+                  data-testid="save-slot-changes"
+                  onClick={() => void onAddSlots("sent")}
+                >
+                  {t("saveSlotChanges")}
+                </button>
+              </div>
+            </footer>
+          </aside>
+        </>
+      ) : null}
+
+      {confirmFor && apps.some((app) => app.id === confirmFor) ? (
+        <>
+          <button
+            type="button"
+            data-testid="confirm-slot-backdrop"
+            aria-label={t("cancel")}
+            className="fixed inset-0 z-[60] bg-black/20"
+            onClick={() => {
+              if (confirmBusy) return;
+              setConfirmFor(null);
+              setConfirmError(null);
+            }}
+          />
+          <ConfirmSlotDrawer
+            app={apps.find((app) => app.id === confirmFor)!}
+            slots={apps.find((app) => app.id === confirmFor)?.proposal?.slots ?? []}
+            currentInterview={apps.find((app) => app.id === confirmFor)?.interview}
+            busy={confirmBusy}
+            error={confirmError}
+            onClose={() => {
+              setConfirmFor(null);
+              setConfirmError(null);
+            }}
+            onEditSlots={() => openProposeSlots(confirmFor)}
+            onConfirm={(slotId) => void onConfirmSlot(confirmFor, slotId)}
+          />
         </>
       ) : null}
 
@@ -2084,7 +2252,8 @@ function ApplicationCard({
   onDecline,
   onUndo,
   onProposeSlots,
-  onConfirmSlot,
+  onOpenConfirm,
+  onChangeTime,
 }: {
   app: BoardApplication;
   platformLabel: string;
@@ -2102,7 +2271,8 @@ function ApplicationCard({
   onDecline: () => void;
   onUndo: () => void;
   onProposeSlots: () => void;
-  onConfirmSlot: (slotId: string) => void;
+  onOpenConfirm: () => void;
+  onChangeTime: () => void;
 }) {
   const interview = app.interview;
   const modeLabel = interview ? interviewModeLabel(interview.mode) : "";
@@ -2230,30 +2400,59 @@ function ApplicationCard({
 
       <div className="mt-2.5 flex flex-col gap-1.5 border-t border-dashed border-[var(--pb-line)] pt-2.5 text-[12.5px] text-[var(--pb-ink-soft)]">
         {interview ? (
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 text-[11px] font-semibold text-[var(--pb-muted)]">
-              {t("cardIconWhen")}
-            </span>
-            <span>{formatTokyoShort(interview.start)}</span>
-            {interview.meetingUrl ? (
-              <a
-                href={interview.meetingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded bg-[var(--pb-teal)] px-2 py-0.5 text-[11px] font-medium text-white"
-              >
-                {t("join")}
-              </a>
-            ) : null}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[11px] font-semibold text-[var(--pb-muted)]">
+                {t("cardIconWhen")}
+              </span>
+              <span>
+                {`${formatTokyoShort(interview.start)}–${formatTokyoShort(interview.end).split(" ")[1] ?? ""}`}
+              </span>
+              {interview.meetingUrl ? (
+                <a
+                  href={interview.meetingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded bg-[var(--pb-teal)] px-2 py-0.5 text-[11px] font-medium text-white"
+                >
+                  {t("join")}
+                </a>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="self-start text-[11px] font-semibold text-[var(--pb-teal-deep)] underline"
+              data-testid={`change-time-${app.id}`}
+              onClick={onChangeTime}
+            >
+              {t("changeInterviewTime")}
+            </button>
           </div>
-        ) : !app.proposal ? (
+        ) : app.proposal && app.proposal.slots.length > 0 ? (
+          <div className="rounded-lg bg-[var(--pb-amber-bg)] px-2.5 py-2">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--pb-amber)]">
+              <span aria-hidden="true">{t("schedulingClockGlyph")}</span>
+              {t("schedulingInProgress")}
+            </div>
+            <button
+              type="button"
+              className="mt-1 text-[12px] font-semibold text-[var(--pb-teal-deep)] underline"
+              data-testid={`view-slots-${app.id}`}
+              onClick={
+                app.proposal.status === "sent" ? onOpenConfirm : onProposeSlots
+              }
+            >
+              {t("viewCandidateSlots", { count: app.proposal.slots.length })}
+            </button>
+          </div>
+        ) : (
           <div className="flex items-center gap-2 text-[var(--pb-muted)]">
             <span className="shrink-0 text-[11px] font-semibold">
               {t("cardIconWhen")}
             </span>
             <span>{t("unscheduled")}</span>
           </div>
-        ) : null}
+        )}
         {modeLabel ? (
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-[11px] font-semibold text-[var(--pb-muted)]">
@@ -2275,34 +2474,10 @@ function ApplicationCard({
               : platformLabel}
           </span>
         </div>
-        {app.proposal?.status === "sent" && !interview ? (
-          <span className="rounded bg-[var(--pb-amber-bg)] px-1.5 py-0.5 text-[11px] text-[var(--pb-amber)]">
-            {t("slotCount", { count: app.proposal.slots.length })}
-          </span>
-        ) : null}
         {app.conflict ? (
           <span className="font-medium text-[var(--pb-red)]">{t("conflict")}</span>
         ) : null}
       </div>
-
-      {app.proposal && app.proposal.slots.length > 0 && !interview ? (
-        <ul className="mt-2 space-y-1 text-xs" lang="ja">
-          {app.proposal.slots.map((slot) => (
-            <li key={slot.id} className="flex items-center justify-between gap-1">
-              <span>{`${formatTokyoShort(slot.start)}–${formatTokyoShort(slot.end).split(" ")[1] ?? ""}`}</span>
-              {app.proposal?.status === "sent" ? (
-                <button
-                  type="button"
-                  className="underline"
-                  onClick={() => onConfirmSlot(slot.id)}
-                >
-                  {t("confirmSlot")}
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         {app.hasJobPosting ? (

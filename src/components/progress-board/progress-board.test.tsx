@@ -670,8 +670,9 @@ describe("ProgressBoard", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "添加投递" })).not.toBeInTheDocument();
     });
-    expect(screen.getByText("日立製作所")).toBeInTheDocument();
-    expect(screen.getAllByText("日立製作所")).toHaveLength(1);
+    expect(screen.getAllByText("日立製作所").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("card-app-new")).toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^card-app-/)).toHaveLength(1);
     vi.unstubAllGlobals();
   });
 

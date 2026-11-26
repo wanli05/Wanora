@@ -1,19 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { OccupancyWindow } from "@/lib/progress/conflicts";
 import {
+  applyDragRange,
   cellRange,
+  draftCoversRange,
+  draftOverlapsRange,
   occupancyAt,
+  rangeFromCellIndices,
+  removeDraftSlot,
   sameSlot,
   slotStarts,
-  toggleDraftSlot,
   type DraftSlot,
 } from "@/lib/progress/slots";
 import {
   addDays,
   formatDateKeyShort,
+  formatTokyoShort,
   mondayContaining,
   tokyoTodayKey,
   weekDateKeys,
@@ -34,23 +39,33 @@ export function SlotGrid({
   appId,
   company,
   drafts,
+  baseline = [],
   onChange,
   onConflict,
+  initialMonday,
 }: {
   occupancy: OccupancyWindow[];
   appId: string;
   company: string;
   drafts: DraftSlot[];
+  /** Saved slots when the editor opened — painted as 登録済み. */
+  baseline?: DraftSlot[];
   onChange: (next: DraftSlot[]) => void;
   onConflict: (message: string) => void;
+  /** Pin the visible week (harness / tests). Defaults to the week containing today (Tokyo). */
+  initialMonday?: string;
 }) {
   const t = useTranslations("Board");
-  const [monday, setMonday] = useState(() => mondayContaining(tokyoTodayKey()));
+  const [monday, setMonday] = useState(
+    () => initialMonday ?? mondayContaining(tokyoTodayKey()),
+  )
   const [drag, setDrag] = useState<{
     day: string;
     from: number;
     to: number;
   } | null>(null);
+  const dragMoved = useRef(false);
+  const ignoreNextCommit = useRef(false);
   const days = useMemo(() => weekDateKeys(monday), [monday]);
   const starts = slotStarts();
 
@@ -61,60 +76,59 @@ export function SlotGrid({
     return t("slotConflictProposed");
   }
 
-  function tryToggle(day: string, index: number) {
-    const cell = starts[index];
-    if (!cell) return;
-    const range = cellRange(day, cell.hour, cell.minute);
-    const result = toggleDraftSlot(drafts, range, occupancy, appId);
-    if (result.blocked) {
-      onConflict(conflictText(result.blocked.kind));
-      return;
-    }
-    onChange(result.drafts);
-  }
-
   function commitDrag(day: string, from: number, to: number) {
-    if (from === to) {
-      tryToggle(day, from);
+    if (ignoreNextCommit.current) {
+      ignoreNextCommit.current = false;
       return;
     }
-    const lo = Math.min(from, to);
-    const aligned = starts[lo];
-    if (!aligned) return;
-    const range = cellRange(day, aligned.hour, aligned.minute);
-    const result = toggleDraftSlot(drafts, range, occupancy, appId);
+    const single = from === to && !dragMoved.current;
+    const range = rangeFromCellIndices(day, starts, from, to);
+    if (!range) return;
+    const result = applyDragRange(drafts, range, occupancy, appId, single);
     if (result.blocked) onConflict(conflictText(result.blocked.kind));
     else onChange(result.drafts);
   }
 
+  function isRegistered(draft: DraftSlot) {
+    return baseline.some((item) => sameSlot(item, draft));
+  }
+
+  const blocksOnWeek = drafts.filter((draft) =>
+    days.some((day) => {
+      const dayStart = `${day}T00:00:00+09:00`;
+      const dayEnd = `${day}T23:59:59+09:00`;
+      return draftOverlapsRange(draft, { start: dayStart, end: dayEnd });
+    }),
+  );
+
   return (
-    <div data-testid="slot-grid" className="flex flex-col gap-3">
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+    <div data-testid="slot-grid" className="flex min-h-0 flex-1 flex-col gap-2">
+      <p className="text-xs text-[var(--pb-muted)]">
         {t("slotGridHint")}
         <span lang="ja">{` ${company}`}</span>
       </p>
-      <div className="flex flex-wrap items-center gap-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--pb-amber-bg)] ring-1 ring-[var(--pb-amber)]" />
+          {t("slotRegistered")}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--pb-teal)]" />
+          {t("slotYours")}
+        </span>
         <span className="inline-flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-sm bg-emerald-700" />
           {t("calConfirmed")}
         </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm border border-dashed border-amber-700 bg-amber-200" />
-          {t("calProposed")}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm bg-sky-600" />
-          {t("slotYours")}
-        </span>
-        <span className={drafts.length < 3 ? "text-amber-700" : "text-zinc-500"}>
+        <span className={drafts.length < 3 ? "text-amber-700" : "text-[var(--pb-muted)]"}>
           {t("slotPicked", { count: drafts.length })}
           {drafts.length < 3 ? ` · ${t("slotPickedWarn")}` : ""}
         </span>
       </div>
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between text-xs">
         <button
           type="button"
-          className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700"
+          className="rounded border border-[var(--pb-line)] px-2 py-1"
           onClick={() => setMonday(addDays(monday, -7))}
         >
           {t("slotWeekPrev")}
@@ -124,36 +138,54 @@ export function SlotGrid({
         </p>
         <button
           type="button"
-          className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700"
+          className="rounded border border-[var(--pb-line)] px-2 py-1"
           onClick={() => setMonday(addDays(monday, 7))}
         >
           {t("slotWeekNext")}
         </button>
       </div>
       <div
-        className="max-h-[28rem] overflow-auto"
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+        data-testid="slot-grid-scroll"
         onPointerUp={() => {
           if (drag) {
             commitDrag(drag.day, drag.from, drag.to);
             setDrag(null);
+            dragMoved.current = false;
           }
         }}
-        onPointerLeave={() => {
-          if (drag) {
-            commitDrag(drag.day, drag.from, drag.to);
-            setDrag(null);
-          }
+        onPointerCancel={() => {
+          setDrag(null);
+          dragMoved.current = false;
+          ignoreNextCommit.current = false;
         }}
       >
-        <div className="grid min-w-[48rem] grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] gap-px rounded-lg border border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800">
-          <div className="bg-zinc-50 dark:bg-zinc-900" />
+        {/*
+          Fit time axis + 7 days inside ~480px drawer content width.
+          Every cell uses explicit gridColumn/gridRow so draft chrome
+          (also explicitly placed) cannot auto-flow-shift half-hour buttons.
+          Time rows are fixed 1.5rem so chrome content cannot grow tracks.
+        */}
+        <div
+          className="pb-slot-week-grid relative grid w-full grid-cols-[2rem_repeat(7,minmax(0,1fr))] gap-px rounded-lg border border-[var(--pb-line)] bg-[var(--pb-line)]"
+          data-testid="slot-week-grid"
+          data-week-monday={monday}
+          style={{
+            gridTemplateRows: `auto repeat(${starts.length}, 1.5rem)`,
+          }}
+        >
+          <div
+            className="bg-[var(--pb-card)]"
+            style={{ gridColumn: 1, gridRow: 1 }}
+          />
           {days.map((day, index) => (
             <div
               key={day}
-              className="bg-zinc-50 px-1 py-1.5 text-center text-xs font-medium dark:bg-zinc-900"
+              className="bg-[var(--pb-card)] px-0.5 py-1 text-center text-[10px] font-medium leading-tight"
+              style={{ gridColumn: index + 2, gridRow: 1 }}
             >
               <div>{t(WEEKDAY_KEYS[index]!)}</div>
-              <div className="text-zinc-500">{formatDateKeyShort(day)}</div>
+              <div className="text-[var(--pb-muted)]">{formatDateKeyShort(day)}</div>
             </div>
           ))}
           {starts.map((cell, index) => (
@@ -161,38 +193,136 @@ export function SlotGrid({
               key={cell.label}
               cell={cell}
               index={index}
+              row={index + 2}
               days={days}
               occupancy={occupancy}
               appId={appId}
               drafts={drafts}
+              baseline={baseline}
               drag={drag}
               onPointerDown={(day, cellIndex) => {
-                const start = starts[cellIndex];
-                if (!start) return;
-                const range = cellRange(day, start.hour, start.minute);
-                const blocked = occupancyAt(
-                  occupancy,
-                  range.start,
-                  range.end,
-                  appId,
-                );
-                if (blocked && !drafts.some((draft) => sameSlot(draft, range))) {
-                  tryToggle(day, cellIndex);
-                  return;
-                }
+                dragMoved.current = false;
                 setDrag({ day, from: cellIndex, to: cellIndex });
               }}
               onPointerEnter={(day, cellIndex) => {
-                setDrag((current) =>
-                  current && current.day === day
-                    ? { ...current, to: cellIndex }
-                    : current,
-                );
+                setDrag((current) => {
+                  if (!current || current.day !== day) return current;
+                  if (current.to !== cellIndex) dragMoved.current = true;
+                  return { ...current, to: cellIndex };
+                });
+              }}
+            />
+          ))}
+          {/*
+            Chrome lives in the same grid with explicit placement only —
+            out of auto-flow — so underlying cell coordinates stay stable.
+          */}
+          {blocksOnWeek.map((draft) => (
+            <DraftBlockChrome
+              key={`${draft.start}-${draft.end}`}
+              draft={draft}
+              days={days}
+              starts={starts}
+              registered={isRegistered(draft)}
+              registeredLabel={t("slotRegistered")}
+              removeLabel={t("slotRemoveBlock")}
+              removeGlyph={t("slotRemoveGlyph")}
+              onRemove={() => {
+                ignoreNextCommit.current = true;
+                setDrag(null);
+                dragMoved.current = false;
+                onChange(removeDraftSlot(drafts, draft));
               }}
             />
           ))}
         </div>
       </div>
+      {blocksOnWeek.length > 0 ? (
+        <ul className="space-y-1 text-[11px] text-[var(--pb-ink-soft)]" lang="ja">
+          {blocksOnWeek.map((draft) => (
+            <li key={`${draft.start}-list`} data-testid={`slot-block-list-${draft.start}`}>
+              {isRegistered(draft) ? `${t("slotRegistered")} · ` : ""}
+              {`${formatTokyoShort(draft.start)}–${formatTokyoShort(draft.end).split(" ")[1] ?? ""}`}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function DraftBlockChrome({
+  draft,
+  days,
+  starts,
+  registered,
+  registeredLabel,
+  removeLabel,
+  removeGlyph,
+  onRemove,
+}: {
+  draft: DraftSlot;
+  days: string[];
+  starts: { hour: number; minute: number; label: string }[];
+  registered: boolean;
+  registeredLabel: string;
+  removeLabel: string;
+  removeGlyph: string;
+  onRemove: () => void;
+}) {
+  const dayIndex = days.findIndex((day) => {
+    const dayStart = `${day}T00:00:00+09:00`;
+    const dayEnd = `${day}T23:59:59+09:00`;
+    return draftOverlapsRange(draft, { start: dayStart, end: dayEnd });
+  });
+  if (dayIndex < 0) return null;
+  const day = days[dayIndex]!;
+  let first = -1;
+  let last = -1;
+  starts.forEach((cell, index) => {
+    const range = cellRange(day, cell.hour, cell.minute);
+    if (draftOverlapsRange(draft, range)) {
+      if (first < 0) first = index;
+      last = index;
+    }
+  });
+  if (first < 0 || last < 0) return null;
+  // Header row is 1; time rows start at 2.
+  const gridColumn = dayIndex + 2;
+  const gridRowStart = first + 2;
+  const gridRowEnd = last + 3;
+  return (
+    <div
+      className={`pointer-events-none z-[2] m-px flex min-h-0 flex-col justify-between overflow-hidden rounded-sm px-0.5 py-0.5 text-[9px] font-semibold leading-tight ${
+        registered
+          ? "bg-[#d9c4a0]/95 text-[#4a3b28]"
+          : "bg-[var(--pb-teal)]/90 text-white"
+      }`}
+      style={{
+        gridColumn,
+        gridRow: `${gridRowStart} / ${gridRowEnd}`,
+      }}
+      data-testid={`slot-block-${draft.start}`}
+      data-registered={registered ? "true" : "false"}
+    >
+      <span className="truncate">{registered ? registeredLabel : ""}</span>
+      <button
+        type="button"
+        className="pointer-events-auto self-end rounded px-0.5 text-[11px] leading-none"
+        data-testid={`slot-block-remove-${draft.start}`}
+        aria-label={removeLabel}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onRemove();
+        }}
+      >
+        {removeGlyph}
+      </button>
     </div>
   );
 }
@@ -200,45 +330,65 @@ export function SlotGrid({
 function CellRow({
   cell,
   index,
+  row,
   days,
   occupancy,
   appId,
   drafts,
+  baseline,
   drag,
   onPointerDown,
   onPointerEnter,
 }: {
   cell: { hour: number; minute: number; label: string };
   index: number;
+  row: number;
   days: string[];
   occupancy: OccupancyWindow[];
   appId: string;
   drafts: DraftSlot[];
+  baseline: DraftSlot[];
   drag: { day: string; from: number; to: number } | null;
   onPointerDown: (day: string, index: number) => void;
   onPointerEnter: (day: string, index: number) => void;
 }) {
-  const lo = drag ? Math.min(drag.from, drag.to) : -1;
+  const dragLo = drag ? Math.min(drag.from, drag.to) : -1;
+  const dragHi = drag ? Math.max(drag.from, drag.to) : -1;
   return (
     <>
-      <div className="bg-zinc-50 px-1 py-1 text-right text-[11px] text-zinc-500 dark:bg-zinc-900">
-        {cell.label}
+      <div
+        className="bg-[var(--pb-card)] px-0.5 py-0 text-right text-[9px] leading-[1.5rem] text-[var(--pb-muted)]"
+        style={{ gridColumn: 1, gridRow: row }}
+      >
+        {cell.minute === 0 ? cell.label : ""}
       </div>
-      {days.map((day) => {
+      {days.map((day, dayIndex) => {
         const range = cellRange(day, cell.hour, cell.minute);
         const hit = occupancyAt(occupancy, range.start, range.end, appId);
-        const picked = drafts.some((draft) => sameSlot(draft, range));
-        const dragging = drag?.day === day && index === lo;
-        let className = "min-h-7 cursor-pointer bg-white dark:bg-zinc-950";
+        const picked = drafts.some((draft) => draftCoversRange(draft, range));
+        const registered =
+          picked &&
+          baseline.some(
+            (base) =>
+              draftCoversRange(base, range) &&
+              drafts.some((draft) => sameSlot(draft, base)),
+          );
+        const dragging = drag?.day === day && index >= dragLo && index <= dragHi;
+        let className =
+          "relative z-0 h-full min-h-0 cursor-pointer bg-white";
         if (hit?.kind === "confirmed") {
-          className = "min-h-7 cursor-not-allowed bg-emerald-700 text-white";
+          className = "h-full min-h-0 cursor-not-allowed bg-emerald-700/80";
         } else if (hit?.kind === "proposed") {
           className =
-            "min-h-7 cursor-not-allowed bg-[repeating-linear-gradient(45deg,#fbbf24,#fbbf24_4px,#fff7ed_4px,#fff7ed_8px)]";
+            "h-full min-h-0 cursor-not-allowed bg-[repeating-linear-gradient(45deg,#fbbf24,#fbbf24_4px,#fff7ed_4px,#fff7ed_8px)]";
         } else if (hit?.kind === "busy") {
-          className = "min-h-7 cursor-not-allowed bg-zinc-300 dark:bg-zinc-700";
-        } else if (picked || dragging) {
-          className = "min-h-7 cursor-pointer bg-sky-600 text-white";
+          className = "h-full min-h-0 cursor-not-allowed bg-zinc-300";
+        } else if (dragging) {
+          className = "h-full min-h-0 cursor-pointer bg-[var(--pb-teal)]/40";
+        } else if (registered) {
+          className = "h-full min-h-0 cursor-pointer bg-[#e8d9c0]";
+        } else if (picked) {
+          className = "h-full min-h-0 cursor-pointer bg-[var(--pb-teal-soft)]";
         }
         return (
           <button
@@ -248,8 +398,10 @@ function CellRow({
             data-occupancy={hit?.kind ?? "free"}
             aria-pressed={picked || dragging}
             className={className}
+            style={{ gridColumn: dayIndex + 2, gridRow: row }}
             onPointerDown={(event) => {
               event.preventDefault();
+              if (hit && hit.kind !== "own") return;
               onPointerDown(day, index);
             }}
             onPointerEnter={() => onPointerEnter(day, index)}
