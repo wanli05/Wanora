@@ -26,17 +26,22 @@ test("board 面接準備 shows seven base themes and AI sidebar entry", async ({
 
   await expect(page).toHaveURL(/\/applications\/[^/]+\/interview-prep$/);
   await expect(page.getByTestId("interview-prep-page")).toBeVisible();
+  await expect(page.getByTestId("prep-page-title")).toHaveText("面接準備");
   await expect(page.getByTestId("prep-company")).toHaveText("準備テスト株式会社");
-  await expect(page.getByTestId("prep-schedule-status")).toContainText("面接未定");
+  await expect(page.getByTestId("prep-schedule-value")).toHaveText("未定");
+  await expect(page.getByTestId("prep-round-select")).not.toContainText("面接未定");
   await expect(page.getByTestId("prep-questions")).toHaveAttribute(
     "data-base-count",
     "7",
   );
+  await expect(page.getByTestId("prep-refer-career")).toHaveCount(0);
+  await page.getByTestId("prep-refer-toggle").click();
   await expect(page.getByTestId("prep-refer-career")).toHaveAttribute(
     "data-status",
     "unused",
   );
   await expect(page.getByText("保存しました")).toHaveCount(0);
+  await expect(page.getByText("Context Resolver")).toHaveCount(0);
 
   const jobCalls: string[] = [];
   page.on("request", (req) => {
@@ -48,6 +53,9 @@ test("board 面接準備 shows seven base themes and AI sidebar entry", async ({
     page.getByTestId("prep-question-details-base-motivation"),
   ).toContainText("準備のポイント");
   await expect(page.getByTestId("prep-generate-base-motivation")).toHaveCount(0);
+  await expect(
+    page.getByTestId("prep-answer-section-base-motivation"),
+  ).toContainText("デモ：入力内容は保存されません");
 
   await page
     .getByTestId("prep-editor-input-base-motivation")

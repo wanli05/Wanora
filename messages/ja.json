@@ -566,12 +566,12 @@
   },
   "InterviewPrep": {
     "title": "面接準備",
-    "backToBoard": "応募進捗に戻る",
+    "backToBoard": "← 応募進捗に戻る",
     "roleUnset": "職種未設定",
     "roundLabel": "面接ラウンド",
     "scheduleUnscheduled": "面接未定",
     "scheduleKnown": "{when} · {mode}",
-    "scheduleHint": "面接日時がなくても準備できます。日程は応募進捗ボードで登録してください。",
+    "scheduleHint": "面接日時がなくても準備できます。",
     "noInterviewStages": "面接段階がまだありません。応募進捗で段階を確認してください。",
     "baseQuestionsHeading": "基本質問",
     "customQuestionsHeading": "追加質問",
@@ -592,7 +592,7 @@
     "collapseDetails": "詳細を閉じる",
     "answerHeading": "自分の回答",
     "openAiAssist": "AIで回答を作成・修正",
-    "aiAssistHint": "サイト共通の AI アシスタントを開きます。応募データの自動参照と質問専用セッションは今後接続します。",
+    "aiAssistHint": "サイト共通の AI アシスタントを開きます。応募データの自動参照は今後接続します。",
     "reflectComingSoon": "「回答欄に反映」は今後追加予定です。いまは手動で転記してください。",
     "editorHint": "デモ：入力内容は保存されません",
     "editorPlaceholder": "ここに自分の回答を書いてください（デモ・未保存）",
@@ -604,7 +604,7 @@
     "removeReverseItem": "削除",
     "reversePlaceholder": "面接官に聞きたいこと",
     "referHeading": "参照情報",
-    "referHint": "Context Resolver 接続前のため、すべて未接続です。データがあっても「参照済み」とは表示しません。",
+    "referHint": "まだ自動参照されていません。接続後に利用状況が表示されます。",
     "referCareer": "職務経歴・プロジェクト",
     "referJob": "応募先の求人情報",
     "referCompany": "企業情報",
@@ -617,6 +617,12 @@
     "signedOutTitle": "ログインが必要です",
     "signedOutBody": "面接準備を見るにはログインしてください。",
     "goSignIn": "ログインへ",
-    "loading": "読み込み中…"
+    "loading": "読み込み中…",
+    "scheduleUnset": "未定",
+    "scheduleDateLabel": "面接日時",
+    "scheduleRegisterLink": "応募進捗で日程を登録",
+    "referExpand": "表示",
+    "referCollapse": "閉じる",
+    "applicationLineSep": " / "
   }
 }

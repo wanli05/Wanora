@@ -566,12 +566,12 @@
   },
   "InterviewPrep": {
     "title": "Interview prep",
-    "backToBoard": "Back to applications",
+    "backToBoard": "← Back to applications",
     "roleUnset": "Role unset",
     "roundLabel": "Interview round",
     "scheduleUnscheduled": "面接未定",
     "scheduleKnown": "{when} · {mode}",
-    "scheduleHint": "You can prepare even without a scheduled interview. Register times on the board.",
+    "scheduleHint": "You can prepare even without a scheduled interview.",
     "noInterviewStages": "No interview stages yet. Check stages on the board.",
     "baseQuestionsHeading": "Core questions",
     "customQuestionsHeading": "Extra questions",
@@ -592,7 +592,7 @@
     "collapseDetails": "Hide details",
     "answerHeading": "Your answer",
     "openAiAssist": "Create / revise with AI",
-    "aiAssistHint": "Opens the shared AI sidebar. Application context and per-question sessions come later.",
+    "aiAssistHint": "Opens the shared AI sidebar. Application auto-context connects later.",
     "reflectComingSoon": "“Apply to answer field” arrives later. Copy manually for now.",
     "editorHint": "デモ：入力内容は保存されません",
     "editorPlaceholder": "Write your answer here (demo · not saved)",
@@ -604,7 +604,7 @@
     "removeReverseItem": "Remove",
     "reversePlaceholder": "What you want to ask",
     "referHeading": "Reference info",
-    "referHint": "All sources stay unused until Context Resolver is wired. Presence of DB data alone never shows “ready”.",
+    "referHint": "Not connected yet. Status will appear after sources are wired.",
     "referCareer": "Career history & projects",
     "referJob": "Job posting",
     "referCompany": "Company info",
@@ -617,6 +617,12 @@
     "signedOutTitle": "Sign in required",
     "signedOutBody": "Sign in to view interview prep.",
     "goSignIn": "Sign in",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "scheduleUnset": "Unset",
+    "scheduleDateLabel": "Interview time",
+    "scheduleRegisterLink": "Register on the board",
+    "referExpand": "Show",
+    "referCollapse": "Hide",
+    "applicationLineSep": " / "
   }
 }

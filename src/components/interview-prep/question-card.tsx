@@ -115,11 +115,11 @@ export function QuestionCard({
           </div>
 
           <div
-            className="space-y-2 rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-3 py-3"
+            className="space-y-2 pt-1"
             data-testid={`prep-answer-section-${theme.id}`}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="m-0 text-xs font-semibold text-[var(--pb-teal-deep)]">
+              <p className="m-0 text-xs font-semibold text-[var(--pb-ink)]">
                 {labels.answerHeading}
               </p>
               <button

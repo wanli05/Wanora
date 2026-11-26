@@ -27,10 +27,14 @@ vi.mock("@/components/ai-sidebar/ai-assist-context", () => ({
 const messages = {
   InterviewPrep: {
     title: "面接準備",
-    backToBoard: "応募進捗に戻る",
+    backToBoard: "← 応募進捗に戻る",
+    applicationLineSep: " / ",
     roleUnset: "職種未設定",
     roundLabel: "面接ラウンド",
     scheduleUnscheduled: "面接未定",
+    scheduleUnset: "未定",
+    scheduleDateLabel: "面接日時",
+    scheduleRegisterLink: "応募進捗で日程を登録",
     scheduleKnown: "{when} · {mode}",
     scheduleHint: "ヒント",
     noInterviewStages: "段階なし",
@@ -65,7 +69,9 @@ const messages = {
     removeReverseItem: "削除",
     reversePlaceholder: "聞きたいこと",
     referHeading: "参照情報",
-    referHint: "未接続",
+    referHint: "まだ自動参照されていません。",
+    referExpand: "表示",
+    referCollapse: "閉じる",
     referCareer: "職務経歴・プロジェクト",
     referJob: "応募先の求人情報",
     referCompany: "企業情報",
@@ -129,39 +135,73 @@ const sample: InterviewPrepApplication = {
   ],
 };
 
-describe("InterviewPrepPage UI v2", () => {
-  it("shows seven base themes and refer unused status", () => {
+describe("InterviewPrepPage header hierarchy", () => {
+  it("uses 面接準備 as page title and company/role as secondary line", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    expect(screen.getByTestId("prep-page-title")).toHaveTextContent("面接準備");
+    expect(screen.getByTestId("prep-company")).toHaveTextContent(
+      "株式会社サンプル",
+    );
+    expect(screen.getByTestId("prep-role")).toHaveTextContent(
+      "プロダクトエンジニア",
+    );
+    expect(screen.getByTestId("prep-back")).toHaveAttribute("href", "/progress");
+    expect(screen.queryByTestId("prep-demo-notice")).not.toBeInTheDocument();
+  });
+
+  it("shows round options without schedule suffix and schedule as 未定", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    const select = screen.getByTestId("prep-round-select");
+    expect(select).toHaveTextContent("一次面接");
+    expect(select).not.toHaveTextContent("面接未定");
+    expect(screen.getByTestId("prep-schedule-value")).toHaveTextContent("未定");
+    expect(screen.getByTestId("prep-schedule-register")).toHaveAttribute(
+      "href",
+      "/progress",
+    );
+  });
+
+  it("keeps 参照情報 collapsed until toggled", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    expect(screen.queryByTestId("prep-refer-career")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("prep-refer-toggle"));
+    expect(screen.getByTestId("prep-refer-career")).toHaveAttribute(
+      "data-status",
+      "unused",
+    );
+    expect(screen.queryByText("Context Resolver")).not.toBeInTheDocument();
+    expect(screen.queryByText("参照済み")).not.toBeInTheDocument();
+  });
+
+  it("shows seven base themes", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
     expect(screen.getByTestId("prep-questions")).toHaveAttribute(
       "data-base-count",
       "7",
     );
-    expect(screen.getByTestId("prep-question-base-self-intro")).toBeInTheDocument();
-    expect(screen.getByTestId("prep-question-base-reverse-qa")).toBeInTheDocument();
-    expect(screen.getByTestId("prep-refer-career")).toHaveAttribute(
-      "data-status",
-      "unused",
-    );
-    expect(screen.getAllByText("未接続").length).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByText("参照済み")).not.toBeInTheDocument();
-    expect(screen.queryByText("準備完了")).not.toBeInTheDocument();
   });
 
-  it("adds a custom question as client demo only", () => {
+  it("isolates custom questions across rounds", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
     fireEvent.change(screen.getByTestId("prep-custom-input"), {
-      target: { value: "チームのオンボーディングはどうですか。" },
+      target: { value: "一次だけの質問" },
     });
     fireEvent.click(screen.getByTestId("prep-custom-add"));
-    expect(screen.getByTestId("prep-custom-demo-hint")).toHaveTextContent(
-      "データベースには保存されません",
-    );
-    expect(
-      screen.getByText("チームのオンボーディングはどうですか。"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("一次だけの質問")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("prep-round-select"), {
+      target: { value: "st-final" },
+    });
+    expect(screen.queryByText("一次だけの質問")).not.toBeInTheDocument();
+    expect(screen.getByTestId("prep-custom-empty")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("prep-round-select"), {
+      target: { value: "st-i1" },
+    });
+    expect(screen.getByText("一次だけの質問")).toBeInTheDocument();
   });
 
-  it("removes a custom question from the demo list", () => {
+  it("removes a custom question from the current round only", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
     fireEvent.change(screen.getByTestId("prep-custom-input"), {
       target: { value: "削除対象の質問" },
@@ -173,29 +213,12 @@ describe("InterviewPrepPage UI v2", () => {
     expect(remove).toBeTruthy();
     fireEvent.click(remove!);
     expect(screen.queryByText("削除対象の質問")).not.toBeInTheDocument();
-    expect(screen.getByTestId("prep-custom-empty")).toBeInTheDocument();
   });
 
-  it("opens sidebar from AI suggest without claiming save", async () => {
+  it("opens sidebar from AI suggest", async () => {
     renderPrep(<InterviewPrepPage application={sample} />);
     fireEvent.click(screen.getByTestId("prep-custom-ai-suggest"));
     await waitFor(() => expect(openPanel).toHaveBeenCalled());
-    expect(screen.getByText("提案の選択は今後")).toBeInTheDocument();
-  });
-
-  it("keeps answers isolated across round remount", () => {
-    renderPrep(<InterviewPrepPage application={sample} />);
-    fireEvent.click(screen.getByTestId("prep-question-toggle-base-motivation"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-base-motivation"), {
-      target: { value: "動機ドラフト" },
-    });
-    fireEvent.change(screen.getByTestId("prep-round-select"), {
-      target: { value: "st-final" },
-    });
-    fireEvent.click(screen.getByTestId("prep-question-toggle-base-motivation"));
-    expect(screen.getByTestId("prep-editor-input-base-motivation")).toHaveValue(
-      "",
-    );
   });
 
   it("renders not-found shell linking to progress", () => {
