@@ -36,6 +36,7 @@ import {
   extractRefinedFields,
   extractRefinedText,
 } from "@/components/ai-sidebar/extract-refined-text";
+import { ReportIssueButton } from "@/components/support/report-issue-dialog";
 import {
   assistSlotKeyForRefineField,
   buildRefinePrompt,
@@ -1341,18 +1342,43 @@ export function AiSidebar() {
               data-testid="ai-job-terminal"
             >
               {jobStatusLabel(jobSnap, t)}
+              <ReportIssueButton
+                context={{
+                  module: "ai",
+                  operation: "job_execute",
+                  routeId: "ai_sidebar",
+                  errorCode: "ai_job_execute_failed",
+                  faultId: jobSnap.id,
+                  source: "server",
+                }}
+              />
             </div>
           ) : null}
         </div>
 
         {error ? (
-          <p
+          <div
             className="ai-sidebar-error"
             data-testid="ai-sidebar-error"
             role="alert"
           >
             {error}
-          </p>
+            {/* Expected limit/unavailable: no one-click report. */}
+            {error !== t("errBudget") &&
+            error !== t("errRate") &&
+            error !== t("errUnavailable") ? (
+              <ReportIssueButton
+                context={{
+                  module: "ai",
+                  operation: "job_enqueue",
+                  routeId: "ai_sidebar",
+                  errorCode: "ai_job_enqueue_failed",
+                  faultId: pending?.clientRequestId,
+                  source: "client_observed",
+                }}
+              />
+            ) : null}
+          </div>
         ) : null}
         {applyNotice ? (
           <p

@@ -9,6 +9,7 @@ import { authErrorMessageKey } from "@/lib/auth-errors";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth-constants";
 import { applyAccountLocale } from "@/lib/locale-actions";
 import { loadPage } from "@/lib/reload";
+import { ReportIssueButton } from "@/components/support/report-issue-dialog";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -21,8 +22,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("Auth");
+  const tNav = useTranslations("Nav");
   const copy = mode === "sign-up" ? "signUp" : "signIn";
   const [error, setError] = useState<string | null>(null);
+  const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   // Next.js keeps visited pages mounted (hidden) via <Activity>; clear
@@ -32,6 +35,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     return () => {
       form?.reset();
       setError(null);
+      setAuthErrorCode(null);
     };
   }, []);
 
@@ -42,6 +46,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     const password = String(form.get("password"));
     setPending(true);
     setError(null);
+    setAuthErrorCode(null);
     const { error } =
       mode === "sign-up"
         ? await authClient.signUp.email({
@@ -53,7 +58,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
         : await authClient.signIn.email({ email, password });
     if (error) {
       setPending(false);
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code ?? "")
+          : "";
+      // Expected credential failures: no one-click report.
+      const expected =
+        code === "INVALID_EMAIL_OR_PASSWORD" ||
+        code === "USER_ALREADY_EXISTS" ||
+        code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL";
       setError(t(authErrorMessageKey(mode, error)));
+      setAuthErrorCode(expected ? null : code || "auth_failed");
       return;
     }
     if (mode === "sign-in" && (await applyAccountLocale())) {
@@ -93,9 +108,23 @@ export function AuthForm({ mode }: { mode: Mode }) {
           }
         />
         {error && (
-          <p role="alert" className="text-sm text-red-600">
+          <div role="alert" className="text-sm text-red-600">
             {error}
-          </p>
+            {authErrorCode ? (
+              <ReportIssueButton
+                context={{
+                  module: "auth",
+                  operation: mode === "sign-up" ? "sign_up" : "sign_in",
+                  routeId: mode,
+                  errorCode:
+                    mode === "sign-up"
+                      ? "auth_sign_up_failed"
+                      : "auth_sign_in_failed",
+                  source: "client_observed",
+                }}
+              />
+            ) : null}
+          </div>
         )}
         <button
           type="submit"
@@ -109,6 +138,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
         {t(`${copy}.switchText`)}{" "}
         <Link href={SWITCH_HREF[mode]} className="underline">
           {t(`${copy}.switchLabel`)}
+        </Link>
+      </p>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <Link href="/contact" className="underline" data-testid="auth-contact-link">
+          {tNav("contact")}
         </Link>
       </p>
     </main>

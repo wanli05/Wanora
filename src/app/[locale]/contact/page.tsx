@@ -1,14 +1,11 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { ContactForm } from "@/components/support/contact-form";
 import { getSessionUser } from "@/lib/session";
 
-/** Optional public contact mailbox — unset means 「準備中」. */
-const CONTACT_EMAIL = process.env.WANORA_CONTACT_EMAIL?.trim() || "";
-
 export default async function ContactPage() {
-  const user = await getSessionUser(await headers());
-  if (!user) redirect("/sign-in");
+  // Public: signed-out users may submit. Session is optional.
+  await getSessionUser(await headers());
   const t = await getTranslations("ContactPage");
 
   return (
@@ -31,23 +28,9 @@ export default async function ContactPage() {
           {t("privacyNote")}
         </p>
       </section>
-      <section className="app-info-card">
+      <section className="app-info-card" data-testid="contact-form-section">
         <h2 className="app-info-card-title">{t("channelTitle")}</h2>
-        {CONTACT_EMAIL ? (
-          <p className="text-sm">
-            <a
-              className="text-[#0d6b63] underline-offset-2 hover:underline"
-              href={`mailto:${CONTACT_EMAIL}`}
-              data-testid="contact-mailto"
-            >
-              {t("mailtoCta")}
-            </a>
-          </p>
-        ) : (
-          <p className="text-sm text-zinc-600" data-testid="contact-pending">
-            {t("pending")}
-          </p>
-        )}
+        <ContactForm />
       </section>
     </main>
   );

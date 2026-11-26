@@ -41,6 +41,7 @@ import {
   type ProfilePageInitial,
 } from "@/components/profile-page-form";
 import { ExportSheets } from "@/components/my-career/export-sheets";
+import { ReportIssueButton } from "@/components/support/report-issue-dialog";
 import {
   confirmPendingProjectAction,
   deleteCareerEmployerAction,
@@ -342,11 +343,35 @@ export function MyCareerCenter(props: Props) {
 function Feedback({
   state,
   labels,
+  operation,
 }: {
   state: CareerSaveState;
   labels: MyCareerLabels;
+  operation:
+    | "save_profile_extras"
+    | "save_employer"
+    | "save_project"
+    | "save_skill"
+    | "save_goal";
 }) {
   if (state.ok) return <p className="text-sm text-teal-800">{labels.saved}</p>;
+  if (state.error === "saveFailed") {
+    return (
+      <div className="text-sm text-red-700" role="alert">
+        {labels.errors[state.error]}
+        <ReportIssueButton
+          context={{
+            module: "my_career",
+            operation,
+            routeId: "profile",
+            errorCode: state.errorCode ?? "unknown",
+            faultId: state.faultId,
+            source: "server",
+          }}
+        />
+      </div>
+    );
+  }
   if (state.error)
     return <p className="text-sm text-red-700">{labels.errors[state.error]}</p>;
   return null;
@@ -831,7 +856,11 @@ function ProfileModule({
               {labels.save}
             </button>
           </div>
-          <Feedback state={state} labels={labels} />
+          <Feedback
+            state={state}
+            labels={labels}
+            operation="save_profile_extras"
+          />
         </form>
       )}
 
@@ -1207,7 +1236,7 @@ function WorkModule({
               閉じる
             </button>
           </div>
-          <Feedback state={state} labels={labels} />
+          <Feedback state={state} labels={labels} operation="save_employer" />
         </form>
       ) : null}
     </div>
@@ -1741,7 +1770,7 @@ function ProjectsModule({
               閉じる
             </button>
           </div>
-          <Feedback state={state} labels={labels} />
+          <Feedback state={state} labels={labels} operation="save_project" />
         </form>
       ) : null}
     </div>
@@ -1863,7 +1892,7 @@ function SkillAddForm({
           {labels.cancel}
         </button>
       </div>
-      <Feedback state={state} labels={labels} />
+      <Feedback state={state} labels={labels} operation="save_skill" />
     </form>
   );
 }
@@ -1913,7 +1942,7 @@ function GoalAddForm({
           {labels.cancel}
         </button>
       </div>
-      <Feedback state={state} labels={labels} />
+      <Feedback state={state} labels={labels} operation="save_goal" />
     </form>
   );
 }
@@ -2511,9 +2540,18 @@ function ExportModule({
         </div>
       </div>
       {error ? (
-        <p className="text-sm text-red-700 mc-no-print" role="alert">
+        <div className="text-sm text-red-700 mc-no-print" role="alert">
           {labels.exportFailed}
-        </p>
+          <ReportIssueButton
+            context={{
+              module: "export",
+              operation: "export_document",
+              routeId: "profile",
+              errorCode: "export_document_failed",
+              source: "client_observed",
+            }}
+          />
+        </div>
       ) : null}
       {doc === "rirekisho" ? (
         <RirekishoPdfPreview
