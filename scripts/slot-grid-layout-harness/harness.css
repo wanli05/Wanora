@@ -1,0 +1,128 @@
+/*
+  Tailwind v4 content detection for the Vite harness root — pull utilities
+  from SlotGrid + harness sources (globals.css alone does not see them).
+*/
+@import "tailwindcss";
+@source "../../src/components/progress-board/**/*.{ts,tsx}";
+@source "../../src/lib/progress/**/*.{ts,tsx}";
+@source "./**/*.{ts,tsx,html}";
+
+/* Standalone shell: 480px edit drawer without the full app chrome. */
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: #e8eeeb;
+}
+
+/* Progress-board tokens (subset of app globals) for the harness. */
+:root {
+  --pb-teal: #0d6b63;
+  --pb-teal-deep: #084f49;
+  --pb-teal-soft: #e3efe9;
+  --pb-ink: #1c2b2a;
+  --pb-ink-soft: #3d4f4c;
+  --pb-muted: #6a7a76;
+  --pb-line: #d5ddd8;
+  --pb-card: #fffdf8;
+  --pb-amber: #9a6b1f;
+  --pb-amber-bg: #f5ebda;
+}
+
+.pb-schedule-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid var(--pb-line);
+  box-shadow: -8px 0 24px rgba(20, 40, 35, 0.12);
+  max-width: 100vw;
+}
+.pb-schedule-drawer--edit {
+  width: min(480px, 100vw);
+}
+.pb-schedule-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 12px 10px;
+  border-bottom: 1px solid var(--pb-line);
+  flex-shrink: 0;
+}
+.pb-schedule-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.pb-slot-week-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2rem repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--pb-line);
+  background: var(--pb-line);
+  position: relative;
+  width: 100%;
+}
+
+.harness-shell {
+  min-height: 100vh;
+  position: relative;
+}
+
+.harness-drawer {
+  /* Override fixed positioning so Playwright viewport = drawer frame. */
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  height: 100vh;
+  margin-left: auto;
+}
+
+.harness-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.harness-controls button {
+  border: 1px solid var(--pb-line);
+  background: #fff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.harness-controls pre {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Fixed height so draft JSON growth never pushes the week grid. */
+  height: 1.25rem;
+  line-height: 1.25rem;
+}
+
+.harness-meta {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  font-size: 11px;
+  color: #567;
+}

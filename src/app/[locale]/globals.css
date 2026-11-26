@@ -1638,6 +1638,9 @@ body {
 .pb-slot-week-grid {
   /* Keep week grid inside the edit drawer content box (≈480px − padding). */
   min-width: 0;
+  display: grid;
+  grid-template-columns: 2rem repeat(7, minmax(0, 1fr));
+  gap: 1px;
 }
 .pb-stat {
   text-align: center;
