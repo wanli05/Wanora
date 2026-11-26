@@ -3,18 +3,27 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { BoardApplication, BoardSlot } from "@/lib/progress/dto";
+import { initialConfirmSlotId } from "@/lib/progress/confirm-slot-selection";
 import {
   formatTokyoDate,
   formatTokyoShort,
   tokyoDateKey,
 } from "@/lib/progress/tokyo";
 
-const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
+const WEEKDAY_KEYS = [
+  "calSun",
+  "calMon",
+  "calTue",
+  "calWed",
+  "calThu",
+  "calFri",
+  "calSat",
+] as const;
 
-function weekdayJa(iso: string): string {
+function weekdayKey(iso: string): (typeof WEEKDAY_KEYS)[number] {
   const key = tokyoDateKey(iso);
   const noon = new Date(`${key}T12:00:00+09:00`);
-  return WEEKDAY_JA[noon.getUTCDay()] ?? "";
+  return WEEKDAY_KEYS[noon.getUTCDay()] ?? "calMon";
 }
 
 function timeRange(start: string, end: string): string {
@@ -43,8 +52,8 @@ export function ConfirmSlotDrawer({
   onEditSlots?: () => void;
 }) {
   const t = useTranslations("Board");
-  const [selectedId, setSelectedId] = useState<string | null>(
-    slots[0]?.id ?? null,
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    initialConfirmSlotId(slots, currentInterview),
   );
 
   const groups = useMemo(() => {
@@ -103,7 +112,7 @@ export function ConfirmSlotDrawer({
               {t("confirmCurrentTime")}
             </div>
             <div lang="ja">
-              {`${formatTokyoDate(currentInterview.start)} (${weekdayJa(currentInterview.start)}) ${timeRange(currentInterview.start, currentInterview.end)}`}
+              {`${formatTokyoDate(currentInterview.start)} (${t(weekdayKey(currentInterview.start))}) ${timeRange(currentInterview.start, currentInterview.end)}`}
             </div>
           </div>
         ) : null}
@@ -112,7 +121,7 @@ export function ConfirmSlotDrawer({
           {groups.map(([dateKey, daySlots]) => (
             <section key={dateKey}>
               <h3 className="m-0 mb-2 text-sm font-bold text-[var(--pb-ink)]">
-                {`${formatTokyoDate(daySlots[0]!.start)} (${weekdayJa(daySlots[0]!.start)})`}
+                {`${formatTokyoDate(daySlots[0]!.start)} (${t(weekdayKey(daySlots[0]!.start))})`}
               </h3>
               <ul className="m-0 flex list-none flex-col gap-2 p-0">
                 {daySlots.map((slot) => {
@@ -165,7 +174,7 @@ export function ConfirmSlotDrawer({
               {t("confirmSelectedLabel")}
             </div>
             <div className="text-sm font-semibold text-[var(--pb-teal-deep)]" lang="ja">
-              {`${formatTokyoDate(selected.start)} (${weekdayJa(selected.start)}) ${timeRange(selected.start, selected.end)}`}
+              {`${formatTokyoDate(selected.start)} (${t(weekdayKey(selected.start))}) ${timeRange(selected.start, selected.end)}`}
             </div>
           </div>
         ) : null}
