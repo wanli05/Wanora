@@ -30,6 +30,8 @@ function setAiEnv() {
   process.env.AI_RATE_LIMIT_PER_MINUTE = "50";
   process.env.AI_DAILY_TOKEN_BUDGET = "100000";
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
+  process.env.AI_DAILY_JOB_LIMIT = "100";
+  process.env.AI_MAX_CONCURRENT_JOBS = "10";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
   process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
   process.env.AI_PRICING_VERSION = "2026-11-17";

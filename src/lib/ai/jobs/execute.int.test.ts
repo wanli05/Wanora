@@ -35,6 +35,8 @@ function setAiEnv(overrides: Record<string, string> = {}) {
   process.env.AI_RATE_LIMIT_PER_MINUTE = "50";
   process.env.AI_DAILY_TOKEN_BUDGET = "100000";
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
+  process.env.AI_DAILY_JOB_LIMIT = "100";
+  process.env.AI_MAX_CONCURRENT_JOBS = "10";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
   process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
   process.env.AI_PRICING_VERSION = "2026-11-17";
@@ -53,6 +55,8 @@ afterEach(() => {
   delete process.env.AI_RATE_LIMIT_PER_MINUTE;
   delete process.env.AI_DAILY_TOKEN_BUDGET;
   delete process.env.AI_DAILY_COST_BUDGET_USD;
+  delete process.env.AI_DAILY_JOB_LIMIT;
+  delete process.env.AI_MAX_CONCURRENT_JOBS;
   delete process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD;
   resetServerEnvCache();
 });
@@ -487,6 +491,57 @@ describe("executeAiJob / worker", () => {
     const budget = await getAiDailyBudgetCounter(db, "user", user.id);
     expect(Number(budget!.reservedUsd)).toBe(0);
     expect(Number(budget!.spentUsd)).toBeGreaterThan(0);
+  });
+
+  it("holds reserved budget when text arrives without usage (unknown cost)", async () => {
+    const db = getDb();
+    const user = newUser();
+    await db.insert(users).values(user);
+    const enq = await enqueueOne(user.id, "未知用量");
+    const [claimed] = await claimAiJobs(db, { workerId: "w-unknown" });
+    const reservedBefore = (
+      await db
+        .select()
+        .from(aiUsageEvents)
+        .where(eq(aiUsageEvents.id, enq.job.usageEventId!))
+    )[0]!.estimatedCostUsd;
+
+    const noUsage: AiProvider = {
+      id: "mock",
+      async complete() {
+        return {
+          text: "添削案です",
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          provider: "mock",
+          model: "mock-v1",
+          latencyMs: 2,
+        };
+      },
+    };
+
+    const result = await executeAiJob(db, {
+      job: claimed,
+      workerId: "w-unknown",
+      provider: noUsage,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("provider_uncertain");
+
+    const job = await getAiJobById(db, enq.job.id);
+    expect(job?.status).toBe("failed");
+    expect(job?.providerOutcome).toBe("uncertain");
+    expect(job?.errorCode).toBe("usage_unknown");
+
+    const [usage] = await db
+      .select()
+      .from(aiUsageEvents)
+      .where(eq(aiUsageEvents.id, enq.job.usageEventId!));
+    // Must remain reserved — never settle as $0 free.
+    expect(usage.status).toBe("reserved");
+    expect(usage.estimatedCostUsd).toBe(reservedBefore);
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBeGreaterThan(0);
   });
 
   it("settles when actual usage cost exceeds the reservation", async () => {

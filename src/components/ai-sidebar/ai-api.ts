@@ -5,6 +5,8 @@ import type { AiPageContext, AiTargetContext } from "@/lib/ai/context/types";
 export type AiApiError = {
   error: string;
   message?: string;
+  /** Structured reject reason (e.g. user_cost | global_cost). Metadata only. */
+  details?: unknown;
 };
 
 async function parseJson<T>(res: Response): Promise<T> {

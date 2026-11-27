@@ -6,7 +6,10 @@ import {
   resolveAiModel,
   type ServerEnv,
 } from "@/lib/env";
-import { ProviderCleanFailure } from "@/lib/ai/provider-errors";
+import {
+  ProviderCleanFailure,
+  ProviderUncertainFailure,
+} from "@/lib/ai/provider-errors";
 import { mapOpenAiError } from "@/lib/ai/providers/openai-errors";
 import { mapMessagesToOpenAiInput } from "@/lib/ai/providers/openai-messages";
 import {
@@ -161,9 +164,20 @@ export function createOpenAiProvider(
         throw mapOpenAiError(err);
       }
 
-      const { mapped: usage, scrubbed } = mapOpenAiUsage(response.usage);
+      const mappedUsage = mapOpenAiUsage(response.usage);
       const text = extractOutputText(response);
       const latencyMs = Math.max(1, Date.now() - started);
+
+      // Vendor omitted usage → unknown cost. Hold budget; never settle as $0 or auto-retry.
+      if (!mappedUsage.present) {
+        throw new ProviderUncertainFailure(
+          "openai returned no usage metadata",
+          "usage_unknown",
+        );
+      }
+
+      const usage = mappedUsage.mapped;
+      const scrubbed = mappedUsage.scrubbed;
       const resultBase = {
         usage,
         provider: OPENAI_PROVIDER_ID,
@@ -182,7 +196,7 @@ export function createOpenAiProvider(
             text,
             ...resultBase,
             rawUsage: { ...scrubbed, response_status: "incomplete" },
-            rejectReason: "incomplete",
+            rejectReason: "incomplete" as const,
           };
         }
         throw new ProviderCleanFailure(
@@ -201,7 +215,7 @@ export function createOpenAiProvider(
               ...scrubbed,
               response_status: String(response.status),
             },
-            rejectReason: "incomplete",
+            rejectReason: "incomplete" as const,
           };
         }
         throw new ProviderCleanFailure(
@@ -222,6 +236,14 @@ export function createOpenAiProvider(
         throw new ProviderCleanFailure(
           "openai returned empty output",
           "invalid_output",
+        );
+      }
+
+      // Completed text with present-but-zero usage: still unknown — do not settle $0.
+      if (!usageLooksPresent(usage)) {
+        throw new ProviderUncertainFailure(
+          "openai returned text without billable usage tokens",
+          "usage_unknown",
         );
       }
 

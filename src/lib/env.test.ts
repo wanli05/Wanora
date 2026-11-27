@@ -74,6 +74,8 @@ describe("parseServerEnv", () => {
     expect(env.AI_ENABLED).toBe(false);
     expect(env.AI_PROVIDER).toBe("mock");
     expect(env.AI_RATE_LIMIT_PER_MINUTE).toBe(10);
+    expect(env.AI_DAILY_JOB_LIMIT).toBe(20);
+    expect(env.AI_MAX_CONCURRENT_JOBS).toBe(1);
     expect(env.AI_DAILY_TOKEN_BUDGET).toBe(100_000);
     expect(env.AI_DAILY_COST_BUDGET_USD).toBe(1);
     expect(env.AI_GLOBAL_DAILY_COST_BUDGET_USD).toBe(20);

@@ -9,6 +9,9 @@ export type AiApiErrorCode =
   | "invalid_assist_binding"
   | "rate_limited"
   | "budget_exceeded"
+  | "global_budget_exceeded"
+  | "daily_limit_exceeded"
+  | "job_in_progress"
   | "ai_unavailable"
   | "conflict";
 

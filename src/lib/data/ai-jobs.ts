@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import {
   aiJobs,
@@ -120,6 +120,41 @@ export async function findAiJobByClientRequestId(
     )
     .limit(1);
   return row ?? null;
+}
+
+/** Open jobs that still occupy a concurrent / daily slot. */
+const OPEN_JOB_STATUSES: AiJobStatus[] = ["queued", "running"];
+
+export async function countOpenAiJobsForUser(db: Db, userId: string) {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(aiJobs)
+    .where(
+      and(
+        eq(aiJobs.userId, userId),
+        inArray(aiJobs.status, OPEN_JOB_STATUSES),
+      ),
+    );
+  return row?.n ?? 0;
+}
+
+/** Successful delivers since `fromInclusive` (caller supplies Tokyo day start). */
+export async function countSucceededAiJobsSince(
+  db: Db,
+  userId: string,
+  fromInclusive: Date,
+) {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(aiJobs)
+    .where(
+      and(
+        eq(aiJobs.userId, userId),
+        eq(aiJobs.status, "succeeded"),
+        gte(aiJobs.createdAt, fromInclusive),
+      ),
+    );
+  return row?.n ?? 0;
 }
 
 /**

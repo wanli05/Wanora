@@ -27,10 +27,15 @@ export { checkAndReserveBudgets, settleBudgets } from "@/lib/ai/budget";
 export { checkUserRateLimit, withUserAiLock } from "@/lib/ai/rate-limit";
 export {
   countAiCallsSince,
+  displayAiUsageCost,
   findAiUsageByRequestId,
+  findAiUsageByRequestIdAnyUser,
   insertAiUsageEvent,
+  serializeAiUsageMeta,
   startOfTokyoDay,
+  summarizeAiUsageForUserDay,
   sumAiTokensForUserSince,
+  tokyoDayBounds,
   updateAiUsageEventStatus,
 } from "@/lib/ai/usage";
 export {
