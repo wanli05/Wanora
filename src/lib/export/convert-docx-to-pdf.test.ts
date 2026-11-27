@@ -4,19 +4,29 @@ import { buildExportSnapshot } from "@/lib/domain/export-snapshot";
 import {
   convertDocxToPdf,
   isDocxToPdfAvailable,
+  listSofficeCandidatesForTest,
 } from "@/lib/export/convert-docx-to-pdf";
 import { fillRirekishoDocx } from "@/lib/export/fill-rirekisho-docx";
 
 describe("convertDocxToPdf", () => {
-  it("lists Windows Program Files soffice paths among candidates on win32", async () => {
-    // Smoke: module loads; availability probe must not throw.
+  it("prefers soffice.com ahead of soffice.exe in candidate list", () => {
+    const list = listSofficeCandidatesForTest();
+    expect(list.length).toBeGreaterThan(0);
+    const com = list.findIndex((p) => /soffice\.com$/i.test(p));
+    const exe = list.findIndex((p) => /soffice\.exe$/i.test(p));
+    if (process.platform === "win32") {
+      expect(com).toBeGreaterThanOrEqual(0);
+      if (exe >= 0 && com >= 0) expect(com).toBeLessThan(exe);
+    }
+  });
+
+  it("lists availability without throwing", async () => {
     await expect(isDocxToPdfAvailable()).resolves.toBeTypeOf("boolean");
   });
 
   it("converts a filled 履歴書 DOCX to a PDF when LibreOffice is available", async () => {
     const available = await isDocxToPdfAvailable();
     if (!available) {
-      // Deploy image installs libreoffice-writer; local CI without it skips.
       expect(available).toBe(false);
       return;
     }

@@ -4,36 +4,65 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
-function windowsSofficeCandidates(): string[] {
+/**
+ * On Windows, CLI must use soffice.com (console). soffice.exe is a GUI
+ * subsystem binary — `--version` / headless convert often hang or produce
+ * no captured stdout when spawned from Node.
+ */
+function expandWindowsBinary(path: string): string[] {
+  if (process.platform !== "win32") return [path];
+  const lower = path.toLowerCase();
+  if (lower.endsWith("soffice.exe")) {
+    const com = `${path.slice(0, -4)}.com`;
+    return [com, path];
+  }
+  if (lower.endsWith("soffice.com")) return [path];
+  // Env may point at the program/ directory.
+  if (lower.endsWith(`${"\\"}program`) || lower.endsWith("/program")) {
+    return [join(path, "soffice.com"), join(path, "soffice.exe")];
+  }
+  return [path];
+}
+
+function windowsInstallDirs(): string[] {
   if (process.platform !== "win32") return [];
   const local = process.env.LOCALAPPDATA;
   const home = homedir();
-  return [
-    join(process.env.ProgramFiles ?? "C:\\Program Files", "LibreOffice", "program", "soffice.exe"),
+  const dirs = [
+    join(process.env.ProgramFiles ?? "C:\\Program Files", "LibreOffice", "program"),
     join(
       process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
       "LibreOffice",
       "program",
-      "soffice.exe",
     ),
-    local
-      ? join(local, "Programs", "LibreOffice", "program", "soffice.exe")
-      : "",
-    join(home, "AppData", "Local", "Programs", "LibreOffice", "program", "soffice.exe"),
+    local ? join(local, "Programs", "LibreOffice", "program") : "",
+    join(home, "AppData", "Local", "Programs", "LibreOffice", "program"),
   ].filter(Boolean);
+  return [...new Set(dirs)];
 }
 
 function sofficeCandidates(): string[] {
-  return [
+  const raw: string[] = [
     process.env.LIBREOFFICE_PATH,
     process.env.SOFFICE_PATH,
-    ...windowsSofficeCandidates(),
+    ...windowsInstallDirs().flatMap((dir) => [
+      join(dir, "soffice.com"),
+      join(dir, "soffice.exe"),
+    ]),
+    "soffice.com",
     "soffice",
     "soffice.exe",
     "libreoffice",
     "/usr/bin/soffice",
     "/usr/bin/libreoffice",
   ].filter((v): v is string => Boolean(v));
+
+  const expanded = raw.flatMap(expandWindowsBinary);
+  return [...new Set(expanded)];
+}
+
+function looksAbsolute(path: string): boolean {
+  return path.includes("/") || path.includes("\\") || /^[a-zA-Z]:/.test(path);
 }
 
 function run(
@@ -46,9 +75,11 @@ function run(
       cwd: opts?.cwd,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
+      // soffice.com is a console shim; shell is not required when path is absolute.
       env: {
         ...process.env,
-        HOME: opts?.cwd ?? process.env.HOME,
+        // Keep user profile for LibreOffice user config, but isolate temp work via cwd.
+        HOME: process.env.HOME ?? homedir(),
       },
     });
     let stdout = "";
@@ -61,7 +92,9 @@ function run(
     });
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      reject(new Error(`docx→pdf timed out after ${opts?.timeoutMs ?? 120_000}ms`));
+      reject(
+        new Error(`docx→pdf timed out after ${opts?.timeoutMs ?? 120_000}ms`),
+      );
     }, opts?.timeoutMs ?? 120_000);
     child.on("error", (err) => {
       clearTimeout(timer);
@@ -74,34 +107,36 @@ function run(
   });
 }
 
+function probeLooksLikeLibreOffice(probe: {
+  code: number;
+  stdout: string;
+  stderr: string;
+}): boolean {
+  const text = `${probe.stdout}\n${probe.stderr}`;
+  if (/LibreOffice|OpenOffice/i.test(text)) return true;
+  // soffice.com --version often returns 0 with a short banner.
+  if (probe.code === 0) return true;
+  return false;
+}
+
 async function resolveSoffice(): Promise<string> {
   const tried: string[] = [];
   for (const candidate of sofficeCandidates()) {
     tried.push(candidate);
-    // Absolute / known install paths: skip spawn if the file is missing.
-    if (
-      (candidate.includes("/") || candidate.includes("\\")) &&
-      !existsSync(candidate)
-    ) {
-      continue;
-    }
+    if (looksAbsolute(candidate) && !existsSync(candidate)) continue;
     try {
-      const probe = await run(candidate, ["--version"], { timeoutMs: 15_000 });
-      if (
-        probe.code === 0 ||
-        probe.stdout.includes("LibreOffice") ||
-        probe.stderr.includes("LibreOffice")
-      ) {
-        return candidate;
-      }
+      // Short probe — hung soffice.exe should not block for 15s each.
+      const probe = await run(candidate, ["--version"], { timeoutMs: 8_000 });
+      if (probeLooksLikeLibreOffice(probe)) return candidate;
     } catch {
       // try next
     }
   }
   throw new Error(
     "LibreOffice (soffice) is not available for DOCX→PDF conversion. " +
-      "Install LibreOffice and restart the dev server, or set LIBREOFFICE_PATH " +
-      'to soffice.exe (e.g. "C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe"). ' +
+      "On Windows install LibreOffice and prefer soffice.com, e.g. set " +
+      'LIBREOFFICE_PATH="C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.com", ' +
+      "then restart the dev server. " +
       `Tried: ${tried.join(", ")}`,
   );
 }
@@ -117,6 +152,9 @@ export async function convertDocxToPdf(docx: Buffer): Promise<Buffer> {
   const outputPath = join(dir, "input.pdf");
   try {
     await writeFile(inputPath, docx);
+    // User profile lock files under %APPDATA%\LibreOffice can block headless runs
+    // when a GUI LibreOffice is already open — use a disposable UserInstallation.
+    const userInstall = join(dir, "user-profile").replace(/\\/g, "/");
     const result = await run(
       soffice,
       [
@@ -125,6 +163,7 @@ export async function convertDocxToPdf(docx: Buffer): Promise<Buffer> {
         "--nolockcheck",
         "--nodefault",
         "--norestore",
+        `-env:UserInstallation=file:///${userInstall}`,
         "--convert-to",
         "pdf",
         "--outdir",
@@ -139,7 +178,10 @@ export async function convertDocxToPdf(docx: Buffer): Promise<Buffer> {
       );
     }
     const pdf = await readFile(outputPath);
-    if (pdf.byteLength < 100 || pdf.subarray(0, 4).toString("utf8") !== "%PDF") {
+    if (
+      pdf.byteLength < 100 ||
+      pdf.subarray(0, 4).toString("utf8") !== "%PDF"
+    ) {
       throw new Error("LibreOffice produced an invalid PDF");
     }
     return pdf;
@@ -155,4 +197,9 @@ export async function isDocxToPdfAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Test helper — exported for unit assertions on Windows path expansion. */
+export function listSofficeCandidatesForTest(): string[] {
+  return sofficeCandidates();
 }
