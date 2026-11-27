@@ -92,7 +92,30 @@ function textOf(el: XmlElement): string {
   return s;
 }
 
-/** Replace all runs in a paragraph with a single run carrying `text`. */
+/** Normalize CRLF / CR to LF so Word soft-breaks map to `w:br`. */
+export function normalizeExportNewlines(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function appendRunPr(run: XmlElement, doc: XmlDocument, rPrClone: XmlElement | null): void {
+  if (rPrClone) {
+    run.appendChild(rPrClone);
+    return;
+  }
+  const rPr = doc.createElementNS(W_NS, "w:rPr");
+  const fonts = doc.createElementNS(W_NS, "w:rFonts");
+  fonts.setAttribute("w:ascii", "ＭＳ 明朝");
+  fonts.setAttribute("w:hAnsi", "ＭＳ 明朝");
+  fonts.setAttribute("w:hint", "eastAsia");
+  rPr.appendChild(fonts);
+  run.appendChild(rPr);
+}
+
+/**
+ * Replace all runs in a paragraph with one run.
+ * Multiline text uses `w:t` + `w:br` (not raw LF inside `w:t`).
+ * Consecutive newlines become empty lines (empty `w:t` between breaks).
+ */
 function setParagraphText(p: XmlElement, doc: XmlDocument, text: string): void {
   const existingRuns = children(p, "r");
   let rPrClone: XmlElement | null = null;
@@ -103,20 +126,18 @@ function setParagraphText(p: XmlElement, doc: XmlDocument, text: string): void {
   for (const r of existingRuns) p.removeChild(r);
   // Drop leftover hyperlinks etc. that only wrap text — keep pPr.
   const run = doc.createElementNS(W_NS, "w:r");
-  if (rPrClone) run.appendChild(rPrClone);
-  else {
-    const rPr = doc.createElementNS(W_NS, "w:rPr");
-    const fonts = doc.createElementNS(W_NS, "w:rFonts");
-    fonts.setAttribute("w:ascii", "ＭＳ 明朝");
-    fonts.setAttribute("w:hAnsi", "ＭＳ 明朝");
-    fonts.setAttribute("w:hint", "eastAsia");
-    rPr.appendChild(fonts);
-    run.appendChild(rPr);
+  appendRunPr(run, doc, rPrClone);
+
+  const lines = normalizeExportNewlines(text).split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) {
+      run.appendChild(doc.createElementNS(W_NS, "w:br"));
+    }
+    const t = doc.createElementNS(W_NS, "w:t");
+    t.setAttribute("xml:space", "preserve");
+    t.textContent = lines[i] ?? "";
+    run.appendChild(t);
   }
-  const t = doc.createElementNS(W_NS, "w:t");
-  t.setAttribute("xml:space", "preserve");
-  t.textContent = text;
-  run.appendChild(t);
   p.appendChild(run);
 }
 
@@ -369,6 +390,49 @@ function insertPageBreakBefore(ref: XmlElement, doc: XmlDocument): void {
   ref.parentNode!.insertBefore(p, ref);
 }
 
+/**
+ * Fill 本人希望記入欄. Empty input leaves the four blank template rows untouched.
+ * Explicit newlines occupy successive exact-height rows; overflow appends matching rows
+ * (same height / borders) so text is not dropped.
+ */
+function fillPersonalHope(
+  tbl: XmlElement,
+  doc: XmlDocument,
+  hope: string,
+): void {
+  if (!hope.trim()) return;
+  const trs = rows(tbl);
+  const dataRows = trs.slice(1);
+  if (dataRows.length === 0) return;
+  const lines = normalizeExportNewlines(hope).split("\n");
+  const sample = dataRows[0]!;
+
+  for (let i = 0; i < lines.length; i++) {
+    let tr = dataRows[i];
+    if (!tr) {
+      tr = sample.cloneNode(true) as XmlElement;
+      for (const tc of cells(tr)) {
+        for (const p of paragraphs(tc)) setParagraphText(p, doc, "");
+      }
+      let trPr = firstChild(tr, "trPr");
+      if (!trPr) {
+        trPr = doc.createElementNS(W_NS, "w:trPr");
+        tr.insertBefore(trPr, tr.firstChild);
+      }
+      let trHeight = firstChild(trPr, "trHeight");
+      if (!trHeight) {
+        trHeight = doc.createElementNS(W_NS, "w:trHeight");
+        trPr.appendChild(trHeight);
+      }
+      trHeight.setAttribute("w:hRule", "exact");
+      trHeight.setAttribute("w:val", "539");
+      tbl.appendChild(tr);
+    }
+    const cs = cells(tr);
+    if (cs[0]) setCellPlainText(cs[0], doc, lines[i] ?? "");
+  }
+}
+
 const MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
 function clearPhotoPlaceholderText(root: XmlElement): void {
@@ -595,19 +659,14 @@ export async function fillRirekishoDocx(
     selfPrTbl.parentNode!.insertBefore(cont, selfPrTbl);
   }
 
-  // 自己PR / 本人希望
+  // 自己PR — multiline via w:br inside the single body cell.
   const selfPrRows = rows(tbls[3]!);
-  if (selfPrRows[1]) {
+  if (selfPrRows[1] && (snapshot.selfPr ?? "").length > 0) {
     setCellPlainText(cells(selfPrRows[1]!)[0]!, doc, snapshot.selfPr ?? "");
   }
-  const hopeRows = rows(tbls[4]!);
-  if (hopeRows[1]) {
-    setCellPlainText(
-      cells(hopeRows[1]!)[0]!,
-      doc,
-      snapshot.personalHope ?? "",
-    );
-  }
+
+  // 本人希望 — empty keeps template blank rows; otherwise fill exact-height rows.
+  fillPersonalHope(tbls[4]!, doc, snapshot.personalHope ?? "");
 
   const hasPhoto = Boolean(photoPrintJpeg?.byteLength);
   replacePhotoWithJpeg(doc, hasPhoto);

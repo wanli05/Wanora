@@ -35,6 +35,11 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
+  const dispositionRaw = url.searchParams.get("disposition");
+  const disposition =
+    dispositionRaw === "inline" || dispositionRaw === "attachment"
+      ? dispositionRaw
+      : "attachment";
 
   const db = getDb();
   const snapshot = await loadExportSnapshotForUser(db, user.id);
@@ -55,7 +60,7 @@ export async function GET(request: Request) {
   return new Response(new Uint8Array(body), {
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(filename)}`,
       "Cache-Control": "no-store",
     },
   });

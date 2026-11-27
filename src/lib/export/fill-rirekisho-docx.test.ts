@@ -233,4 +233,45 @@ describe("fillRirekishoDocx", () => {
     expect(RIREKISHO_FIELDS_NOT_ON_TEMPLATE.length).toBeGreaterThan(3);
     expect(RIREKISHO_FIELDS_NOT_ON_TEMPLATE.join()).toContain("在留");
   });
+
+  it("encodes 自己PR multiline as w:br (not raw LF) and preserves blank lines", async () => {
+    const snap = fictionSnapshot();
+    snap.selfPr = "一行目\r\n\r\n三行目\n四行目";
+    snap.personalHope = "希望A\r\n希望B";
+    const xml = await readDocxEntry(await fillRirekishoDocx(snap), "word/document.xml");
+    expect(xml).toContain(">一行目</w:t>");
+    expect(xml).toContain("<w:br/>");
+    expect(xml).toContain(">三行目</w:t>");
+    expect(xml).toContain(">四行目</w:t>");
+    // Sequence: 一行目, br, empty t (blank line), br, 三行目, br, 四行目
+    const prIdx = xml.indexOf(">一行目</w:t>");
+    const prChunk = xml.slice(prIdx, prIdx + 400);
+    expect(prChunk).toMatch(
+      />一行目<\/w:t><w:br\/><w:t xml:space="preserve"\s*\/>\s*<w:br\/><w:t[^>]*>三行目<\/w:t><w:br\/><w:t[^>]*>四行目<\/w:t>/,
+    );
+    // Raw LF must not appear inside those w:t payloads.
+    expect(prChunk.includes("一行目\n")).toBe(false);
+    expect(joinedText(xml)).toContain("希望A");
+    expect(joinedText(xml)).toContain("希望B");
+  });
+
+  it("leaves 本人希望 template blank when hope is empty", async () => {
+    const snap = fictionSnapshot();
+    snap.personalHope = "";
+    const xml = await readDocxEntry(await fillRirekishoDocx(snap), "word/document.xml");
+    // Header label remains; no invented hope body.
+    expect(joinedText(xml)).toContain("本人希望記入欄");
+    expect(joinedText(xml)).not.toContain("勤務地は首都圏");
+  });
+
+  it("spreads long 本人希望 across exact-height rows without dropping lines", async () => {
+    const snap = fictionSnapshot();
+    snap.personalHope = ["L1", "L2", "L3", "L4", "L5", "L6"].join("\n");
+    const xml = await readDocxEntry(await fillRirekishoDocx(snap), "word/document.xml");
+    for (const line of ["L1", "L2", "L3", "L4", "L5", "L6"]) {
+      expect(joinedText(xml)).toContain(line);
+    }
+    // Extra rows keep exact 539 twips from the template hope grid.
+    expect(xml).toContain('w:hRule="exact" w:val="539"');
+  });
 });

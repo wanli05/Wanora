@@ -93,9 +93,22 @@ describe("GET /api/profile/export", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/pdf");
+    expect(res.headers.get("Content-Disposition")).toContain("attachment");
     expect(res.headers.get("Content-Disposition")).toContain(
       encodeURIComponent("職務経歴書.pdf"),
     );
+    expect(buildExportPdf).toHaveBeenCalledOnce();
+  });
+
+  it("streams an inline pdf for preview", async () => {
+    const { GET } = await import("./route");
+    const res = await GET(
+      new Request(
+        "http://localhost/api/profile/export?doc=rirekisho&format=pdf&disposition=inline",
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Disposition")).toMatch(/^inline;/);
     expect(buildExportPdf).toHaveBeenCalledOnce();
   });
 });

@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type MutableRefObject,
 } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -109,6 +110,10 @@ export type MyCareerLabels = {
   exportShokumu: string;
   exportDocx: string;
   exportPdf: string;
+  exportPrint: string;
+  exportRetry: string;
+  exportPreviewLoading: string;
+  exportPreviewFailed: string;
   exportDownloading: string;
   exportFailed: string;
   residence: string;
@@ -2316,6 +2321,79 @@ function TimelineModule({
   );
 }
 
+function RirekishoPdfPreview({
+  labels,
+  reloadToken,
+  onRetry,
+  printRef,
+  onReadyChange,
+}: {
+  labels: MyCareerLabels;
+  reloadToken: number;
+  onRetry: () => void;
+  printRef: MutableRefObject<HTMLIFrameElement | null>;
+  onReadyChange: (ready: boolean) => void;
+}) {
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">(
+    "loading",
+  );
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/profile/export?doc=rirekisho&format=pdf&disposition=inline`,
+        );
+        if (!res.ok) throw new Error(`preview ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        createdUrl = URL.createObjectURL(blob);
+        setUrl(createdUrl);
+        setStatus("ready");
+        onReadyChange(true);
+      } catch {
+        if (!cancelled) {
+          setStatus("failed");
+          onReadyChange(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [reloadToken, onReadyChange]);
+
+  return (
+    <div className="mc-rk-pdf-preview">
+      {status === "loading" ? (
+        <p className="mc-rk-pdf-status mc-no-print" role="status">
+          {labels.exportPreviewLoading}
+        </p>
+      ) : null}
+      {status === "failed" ? (
+        <div className="mc-rk-pdf-status mc-no-print" role="alert">
+          <p>{labels.exportPreviewFailed}</p>
+          <button type="button" className="mc-btn" onClick={onRetry}>
+            {labels.exportRetry}
+          </button>
+        </div>
+      ) : null}
+      {url ? (
+        <iframe
+          ref={printRef}
+          className="mc-rk-pdf-frame"
+          title={labels.exportRireki}
+          src={url}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function ExportModule({
   labels,
   snapshot,
@@ -2331,6 +2409,13 @@ function ExportModule({
 }) {
   const [busy, setBusy] = useState<"docx" | "pdf" | null>(null);
   const [error, setError] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [previewReady, setPreviewReady] = useState(false);
+  const previewRef = useRef<HTMLIFrameElement | null>(null);
+  const onReadyChange = useMemo(
+    () => (ready: boolean) => setPreviewReady(ready),
+    [],
+  );
 
   async function download(format: "docx" | "pdf") {
     setBusy(format);
@@ -2360,6 +2445,13 @@ function ExportModule({
     }
   }
 
+  function printRirekisho() {
+    const frame = previewRef.current;
+    if (!frame?.contentWindow || !previewReady) return;
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+
   return (
     <div className="mc-stack">
       <div className="mc-sec-head">
@@ -2367,12 +2459,15 @@ function ExportModule({
           <h2>{labels.modules.export}</h2>
           <p>{labels.exportSub}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 mc-no-print">
           <button
             type="button"
             className={`mc-btn ${doc === "rirekisho" ? "" : "mc-btn-ghost"}`}
             aria-pressed={doc === "rirekisho"}
-            onClick={() => setDoc("rirekisho")}
+            onClick={() => {
+              setPreviewReady(false);
+              setDoc("rirekisho");
+            }}
           >
             {labels.exportRireki}
           </button>
@@ -2380,7 +2475,10 @@ function ExportModule({
             type="button"
             className={`mc-btn ${doc === "shokumu" ? "" : "mc-btn-ghost"}`}
             aria-pressed={doc === "shokumu"}
-            onClick={() => setDoc("shokumu")}
+            onClick={() => {
+              setPreviewReady(false);
+              setDoc("shokumu");
+            }}
           >
             {labels.exportShokumu}
           </button>
@@ -2400,14 +2498,38 @@ function ExportModule({
           >
             {busy === "pdf" ? labels.exportDownloading : labels.exportPdf}
           </button>
+          {doc === "rirekisho" ? (
+            <button
+              type="button"
+              className="mc-btn mc-btn-ghost"
+              disabled={!previewReady}
+              onClick={() => printRirekisho()}
+            >
+              {labels.exportPrint}
+            </button>
+          ) : null}
         </div>
       </div>
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-red-700 mc-no-print" role="alert">
           {labels.exportFailed}
         </p>
       ) : null}
-      <ExportSheets snapshot={snapshot} doc={doc} photoUrl={photoUrl} />
+      {doc === "rirekisho" ? (
+        <RirekishoPdfPreview
+          key={previewKey}
+          labels={labels}
+          reloadToken={previewKey}
+          onRetry={() => {
+            setPreviewReady(false);
+            setPreviewKey((k) => k + 1);
+          }}
+          printRef={previewRef}
+          onReadyChange={onReadyChange}
+        />
+      ) : (
+        <ExportSheets snapshot={snapshot} doc={doc} photoUrl={photoUrl} />
+      )}
     </div>
   );
 }

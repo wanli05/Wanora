@@ -26,14 +26,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
-# Headless Chromium + CJK fonts for Playwright PDF export (M5+).
+# Headless Chromium (職務経歴書 HTML→PDF) + LibreOffice (履歴書 DOCX→PDF) + CJK fonts.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     chromium \
+    libreoffice-writer \
     fonts-noto-cjk \
     fonts-noto-cjk-extra \
   && rm -rf /var/lib/apt/lists/*
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV LIBREOFFICE_PATH=/usr/bin/soffice
 
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 --ingroup nodejs nextjs
