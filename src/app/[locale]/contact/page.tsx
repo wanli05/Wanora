@@ -1,11 +1,11 @@
-import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { ContactForm } from "@/components/support/contact-form";
-import { getSessionUser } from "@/lib/session";
 
+/**
+ * Public contact page — no session lookup.
+ * Avoid getSessionUser/headers() here so the route can prerender / navigate instantly.
+ */
 export default async function ContactPage() {
-  // Public: signed-out users may submit. Session is optional.
-  await getSessionUser(await headers());
   const t = await getTranslations("ContactPage");
 
   return (
