@@ -3,23 +3,48 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useAiAssistOptional } from "@/components/ai-sidebar/ai-assist-context";
 import { formatTokyoShort } from "@/lib/progress/tokyo";
 import { interviewModeLabel } from "@/lib/progress/next-prep";
-import { mockQuestionsForStage } from "@/lib/interview-prep/mock-pack";
+import { prepBaseThemes, type PrepBaseTheme } from "@/lib/interview-prep/base-themes";
 import { summarizeRoundSchedule } from "@/lib/interview-prep/rounds";
 import type { InterviewPrepApplication } from "@/lib/interview-prep/types";
-import { QuestionCard } from "./question-card";
+import { QuestionCard, type QuestionCardLabels } from "./question-card";
 import { RoundSelector } from "./round-selector";
 
 type Props = {
   application: InterviewPrepApplication;
 };
 
+type CustomQuestion = {
+  id: string;
+  title: string;
+  guidance: string;
+  answerKind: "text";
+};
+
+type ReferStatus = "unused" | "missing" | "unavailable";
+
 export function InterviewPrepPage({ application }: Props) {
   const t = useTranslations("InterviewPrep");
+  const assist = useAiAssistOptional();
   const [roundId, setRoundId] = useState<string | null>(
     application.initialRoundId,
   );
+  const [aiFocusedQuestionId, setAiFocusedQuestionId] = useState<string | null>(
+    null,
+  );
+  /** Demo custom questions keyed by stage id (round isolation, no DB). */
+  const [customByRound, setCustomByRound] = useState<
+    Record<string, CustomQuestion[]>
+  >({});
+  const [draftTitle, setDraftTitle] = useState("");
+  const [addHint, setAddHint] = useState<string | null>(null);
+  const [aiSuggestError, setAiSuggestError] = useState(false);
+  const [referOpen, setReferOpen] = useState(false);
+
+  const roundKey = roundId ?? "none";
+  const customQuestions = customByRound[roundKey] ?? [];
 
   const selected = useMemo(
     () => application.rounds.find((round) => round.stageId === roundId) ?? null,
@@ -31,87 +56,162 @@ export function InterviewPrepPage({ application }: Props) {
     selected?.interviews.find((item) => item.id === schedule.interviewId) ??
     null;
 
-  const questions = useMemo(
-    () => mockQuestionsForStage(selected?.stageKind ?? null),
-    [selected?.stageKind],
-  );
+  const baseThemes = prepBaseThemes();
+  const roleLabel = application.role?.trim()
+    ? application.role
+    : t("roleUnset");
 
-  const questionLabels = {
-    intent: t("intentLabel"),
-    points: t("pointsLabel"),
+  const questionLabels: QuestionCardLabels = {
     expand: t("expandDetails"),
     collapse: t("collapseDetails"),
-    generate: t("generateSample"),
-    generating: t("generatingSample"),
-    retry: t("retrySample"),
-    regenerate: t("regenerateSample"),
-    sampleHeading: t("sampleHeading"),
-    generateError: t("generateError"),
-    demoBadge: t("demoBadge"),
-    editAnswer: t("editAnswer"),
-    finishEdit: t("finishEdit"),
-    cancelEdit: t("cancelEdit"),
-    draftHeading: t("draftHeading"),
+    guidanceLabel: t("guidanceLabel"),
+    answerHeading: t("answerHeading"),
+    openAiAssist: t("openAiAssist"),
+    aiAssistHint: t("aiAssistHint"),
+    reflectComingSoon: t("reflectComingSoon"),
     editorHint: t("editorHint"),
     editorPlaceholder: t("editorPlaceholder"),
+    aiUnavailable: t("aiUnavailable"),
+    successLabel: t("successLabel"),
+    failureLabel: t("failureLabel"),
+    reverseItemLabel: t("reverseItemLabel"),
+    addReverseItem: t("addReverseItem"),
+    removeReverseItem: t("removeReverseItem"),
+    reversePlaceholder: t("reversePlaceholder"),
   };
+
+  function onRoundChange(next: string) {
+    setRoundId(next);
+    setAiFocusedQuestionId(null);
+    setDraftTitle("");
+    setAddHint(null);
+  }
+
+  function addCustomQuestion() {
+    const title = draftTitle.trim();
+    if (!title) {
+      setAddHint(t("customEmptyHint"));
+      return;
+    }
+    const id = `custom-${Date.now()}`;
+    setCustomByRound((prev) => ({
+      ...prev,
+      [roundKey]: [
+        ...(prev[roundKey] ?? []),
+        {
+          id,
+          title,
+          guidance: t("customGuidance"),
+          answerKind: "text",
+        },
+      ],
+    }));
+    setDraftTitle("");
+    setAddHint(t("customDemoHint"));
+  }
+
+  function removeCustomQuestion(id: string) {
+    setCustomByRound((prev) => ({
+      ...prev,
+      [roundKey]: (prev[roundKey] ?? []).filter((item) => item.id !== id),
+    }));
+    if (aiFocusedQuestionId === id) {
+      setAiFocusedQuestionId(null);
+    }
+  }
+
+  async function openAiSuggest() {
+    setAiFocusedQuestionId("custom-suggest");
+    if (!assist) {
+      setAiSuggestError(true);
+      return;
+    }
+    const ok = await assist.openPanel();
+    setAiSuggestError(!ok);
+  }
+
+  const referRows: { key: string; label: string; status: ReferStatus }[] = [
+    { key: "career", label: t("referCareer"), status: "unused" },
+    { key: "job", label: t("referJob"), status: "unused" },
+    { key: "company", label: t("referCompany"), status: "unused" },
+    { key: "history", label: t("referHistory"), status: "unused" },
+  ];
+
+  function referStatusLabel(status: ReferStatus) {
+    if (status === "missing") return t("referStatusMissing");
+    if (status === "unavailable") return t("referStatusUnavailable");
+    return t("referStatusUnused");
+  }
 
   return (
     <main
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6"
+      className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 px-4 py-6 sm:gap-4 sm:px-6 lg:max-w-6xl"
       data-testid="interview-prep-page"
     >
-      <div className="pb-shell overflow-hidden rounded-2xl border border-[#cfdad3] p-4 sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <Link
-            href="/"
-            className="pb-btn pb-btn-ghost pb-btn-sm"
-            data-testid="prep-back"
-          >
-            {t("backToBoard")}
-          </Link>
-        </div>
+      <Link
+        href="/progress"
+        className="inline-flex w-fit items-center text-sm text-[var(--pb-ink-soft)] underline-offset-2 hover:text-[var(--pb-teal-deep)] hover:underline"
+        data-testid="prep-back"
+      >
+        {t("backToBoard")}
+      </Link>
 
-        <header className="mb-5">
-          <p className="m-0 text-xs font-semibold tracking-wide text-[var(--pb-muted)]">
-            {t("title")}
-          </p>
+      <div className="pb-shell overflow-hidden rounded-2xl border border-[#cfdad3] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+        <header className="mb-5" data-testid="prep-header">
           <h1
-            className="mt-1 text-2xl font-semibold text-[var(--pb-teal-deep)]"
-            lang="ja"
-            data-testid="prep-company"
+            className="m-0 text-2xl font-semibold tracking-tight text-[var(--pb-teal-deep)] sm:text-3xl"
+            data-testid="prep-page-title"
           >
-            {application.company}
+            {t("title")}
           </h1>
           <p
-            className="mt-1 text-sm text-[var(--pb-ink-soft)]"
-            lang="ja"
-            data-testid="prep-role"
+            className="mt-2 m-0 text-base leading-snug sm:text-lg"
+            data-testid="prep-application-line"
           >
-            {application.role?.trim() ? application.role : t("roleUnset")}
+            <span
+              className="font-medium text-[var(--pb-ink)]"
+              lang="ja"
+              data-testid="prep-company"
+            >
+              {application.company}
+            </span>
+            <span className="text-[var(--pb-muted)]" aria-hidden>
+              {t("applicationLineSep")}
+            </span>
+            <span
+              className="text-[var(--pb-ink-soft)]"
+              lang="ja"
+              data-testid="prep-role"
+            >
+              {roleLabel}
+            </span>
           </p>
         </header>
 
-        <section className="mb-5 flex flex-col gap-3">
-          <RoundSelector
-            rounds={application.rounds}
-            value={roundId}
-            onChange={setRoundId}
-            label={t("roundLabel")}
-            unscheduledHint={t("scheduleUnscheduled")}
-            emptyLabel={t("noInterviewStages")}
-          />
+        <section
+          className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-8"
+          data-testid="prep-meta"
+        >
+          <div className="min-w-0 flex-1 sm:max-w-xs">
+            <RoundSelector
+              rounds={application.rounds}
+              value={roundId}
+              onChange={onRoundChange}
+              label={t("roundLabel")}
+              emptyLabel={t("noInterviewStages")}
+            />
+          </div>
 
-          <div
-            className="rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-3 py-3 text-sm"
-            data-testid="prep-schedule-status"
-          >
-            {schedule.kind === "unscheduled" ? (
-              <p className="m-0 font-medium text-[var(--pb-amber)]">
-                {t("scheduleUnscheduled")}
-              </p>
-            ) : scheduleInterview ? (
-              <p className="m-0 text-[var(--pb-ink-soft)]" lang="ja">
+          <div className="min-w-0 flex-1" data-testid="prep-schedule-status">
+            <p className="m-0 text-xs font-medium text-[var(--pb-muted)]">
+              {t("scheduleDateLabel")}
+            </p>
+            {schedule.kind !== "unscheduled" && scheduleInterview ? (
+              <p
+                className="mt-1 m-0 text-sm text-[var(--pb-ink)]"
+                lang="ja"
+                data-testid="prep-schedule-value"
+              >
                 {t("scheduleKnown", {
                   when: formatTokyoShort(scheduleInterview.start),
                   mode:
@@ -120,41 +220,164 @@ export function InterviewPrepPage({ application }: Props) {
                 })}
               </p>
             ) : (
-              <p className="m-0 font-medium text-[var(--pb-amber)]">
-                {t("scheduleUnscheduled")}
+              <p
+                className="mt-1 m-0 text-sm text-[var(--pb-ink-soft)]"
+                data-testid="prep-schedule-value"
+              >
+                {t("scheduleUnset")}
               </p>
             )}
-            <p className="mt-1 m-0 text-xs text-[var(--pb-muted)]">
-              {t("scheduleHint")}
-            </p>
+            <Link
+              href="/progress"
+              className="mt-1 inline-flex text-xs text-[var(--pb-teal-deep)] underline-offset-2 hover:underline"
+              data-testid="prep-schedule-register"
+            >
+              {t("scheduleRegisterLink")}
+            </Link>
           </div>
         </section>
 
-        <p
-          className="mb-3 m-0 text-xs text-[var(--pb-muted)]"
-          data-testid="prep-demo-notice"
-        >
-          {t("demoNotice")}
-        </p>
+        <section className="mb-6" data-testid="prep-refer-info">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium text-[var(--pb-ink)]"
+            data-testid="prep-refer-toggle"
+            aria-expanded={referOpen}
+            onClick={() => setReferOpen((value) => !value)}
+          >
+            <span>{t("referHeading")}</span>
+            <span className="text-xs font-normal text-[var(--pb-muted)]">
+              {referOpen ? t("referCollapse") : t("referExpand")}
+            </span>
+          </button>
+          {referOpen ? (
+            <div className="mt-2 border-t border-[var(--pb-line)] pt-3">
+              <p className="m-0 text-xs text-[var(--pb-muted)]">{t("referHint")}</p>
+              <ul className="mt-3 mb-0 grid list-none gap-x-8 gap-y-2 p-0 sm:grid-cols-2">
+                {referRows.map((row) => (
+                  <li
+                    key={row.key}
+                    className="flex items-center justify-between gap-2 text-sm"
+                    data-testid={`prep-refer-${row.key}`}
+                    data-status={row.status}
+                  >
+                    <span lang="ja">{row.label}</span>
+                    <span className="shrink-0 text-xs text-[var(--pb-muted)]">
+                      {referStatusLabel(row.status)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
 
         <section
-          className="rounded-xl border border-[var(--pb-line)] bg-[var(--pb-card)] px-4 py-2"
+          className="mb-8"
           data-testid="prep-questions"
           data-stage-kind={selected?.stageKind ?? "fallback"}
+          data-ai-focused-question={aiFocusedQuestionId ?? ""}
+          data-base-count={baseThemes.length}
+          data-round-id={roundKey}
         >
-          <h2 className="m-0 border-b border-[var(--pb-line)] py-3 text-sm font-semibold text-[var(--pb-teal-deep)]">
-            {t("questionsHeading")}
+          <h2 className="m-0 border-b border-[var(--pb-line)] pb-2 text-sm font-semibold text-[var(--pb-ink)]">
+            {t("baseQuestionsHeading")}
           </h2>
-          {questions.length === 0 ? (
-            <p className="py-4 text-sm text-[var(--pb-muted)]">{t("questionsEmpty")}</p>
+          {baseThemes.map((theme) => (
+            <QuestionCard
+              key={`${roundKey}:${theme.id}`}
+              theme={theme}
+              labels={questionLabels}
+              aiFocused={aiFocusedQuestionId === theme.id}
+              onAiFocus={setAiFocusedQuestionId}
+            />
+          ))}
+        </section>
+
+        <section data-testid="prep-custom-questions" data-round-id={roundKey}>
+          <h2 className="m-0 text-sm font-semibold text-[var(--pb-ink)]">
+            {t("customQuestionsHeading")}
+          </h2>
+          <p className="mt-1 m-0 text-xs text-[var(--pb-muted)]">
+            {t("customQuestionsHint")}
+          </p>
+
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              className="w-full flex-1 rounded-lg border border-[var(--pb-line)] bg-white px-3 py-2 text-sm"
+              lang="ja"
+              value={draftTitle}
+              placeholder={t("customInputPlaceholder")}
+              data-testid="prep-custom-input"
+              onChange={(event) => setDraftTitle(event.target.value)}
+            />
+            <button
+              type="button"
+              className="pb-btn pb-btn-ink pb-btn-sm shrink-0"
+              data-testid="prep-custom-add"
+              onClick={addCustomQuestion}
+            >
+              {t("addQuestion")}
+            </button>
+            <button
+              type="button"
+              className="pb-btn pb-btn-ghost pb-btn-sm shrink-0"
+              data-testid="prep-custom-ai-suggest"
+              onClick={() => {
+                void openAiSuggest();
+              }}
+            >
+              {t("aiSuggestQuestions")}
+            </button>
+          </div>
+          {addHint ? (
+            <p
+              className="mt-2 m-0 text-xs text-[var(--pb-amber)]"
+              data-testid="prep-custom-demo-hint"
+            >
+              {addHint}
+            </p>
+          ) : null}
+          <p className="mt-2 m-0 text-xs text-[var(--pb-muted)]">
+            {t("aiSuggestPending")}
+          </p>
+          {aiSuggestError || assist?.bridgeError === "ai_unavailable" ? (
+            <p
+              role="alert"
+              className="mt-2 m-0 text-xs text-[var(--pb-red)]"
+              data-testid="prep-custom-ai-unavailable"
+            >
+              {t("aiUnavailable")}
+            </p>
+          ) : null}
+
+          {customQuestions.length === 0 ? (
+            <p
+              className="mt-3 m-0 text-sm text-[var(--pb-muted)]"
+              data-testid="prep-custom-empty"
+            >
+              {t("customEmpty")}
+            </p>
           ) : (
-            questions.map((question) => (
-              <QuestionCard
-                key={`${selected?.stageId ?? "none"}:${question.id}`}
-                question={question}
-                labels={questionLabels}
-              />
-            ))
+            customQuestions.map((item) => {
+              const theme: PrepBaseTheme = {
+                id: item.id,
+                title: item.title,
+                guidance: item.guidance,
+                answerKind: "text",
+              };
+              return (
+                <QuestionCard
+                  key={`${roundKey}:${item.id}`}
+                  theme={theme}
+                  labels={questionLabels}
+                  aiFocused={aiFocusedQuestionId === item.id}
+                  onAiFocus={setAiFocusedQuestionId}
+                  removeLabel={t("removeCustomQuestion")}
+                  onRemove={() => removeCustomQuestion(item.id)}
+                />
+              );
+            })
           )}
         </section>
       </div>
@@ -170,7 +393,7 @@ export function InterviewPrepUnavailable({ kind }: ShellProps) {
   const t = useTranslations("InterviewPrep");
   return (
     <main
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6"
+      className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 px-4 py-6 sm:px-6 lg:max-w-6xl"
       data-testid={
         kind === "not_found" ? "interview-prep-not-found" : "interview-prep-signed-out"
       }
@@ -183,8 +406,8 @@ export function InterviewPrepUnavailable({ kind }: ShellProps) {
           {kind === "not_found" ? t("notFoundBody") : t("signedOutBody")}
         </p>
         <Link
-          href={kind === "signed_out" ? "/sign-in" : "/"}
-          className="pb-btn pb-btn-ink pb-btn-sm mt-4 inline-flex"
+          href={kind === "signed_out" ? "/sign-in" : "/progress"}
+          className="mt-4 inline-flex text-sm text-[var(--pb-teal-deep)] underline-offset-2 hover:underline"
           data-testid="prep-fallback-link"
         >
           {kind === "signed_out" ? t("goSignIn") : t("backToBoard")}

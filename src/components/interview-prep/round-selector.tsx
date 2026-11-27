@@ -7,16 +7,17 @@ type Props = {
   value: string | null;
   onChange: (stageId: string) => void;
   label: string;
-  unscheduledHint: string;
   emptyLabel: string;
 };
 
+/**
+ * Round picker — option text is the round label only (no schedule suffix).
+ */
 export function RoundSelector({
   rounds,
   value,
   onChange,
   label,
-  unscheduledHint,
   emptyLabel,
 }: Props) {
   if (rounds.length === 0) {
@@ -28,19 +29,17 @@ export function RoundSelector({
   }
 
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-[var(--pb-teal-deep)]">{label}</span>
+    <label className="flex min-w-0 flex-col gap-1 text-sm">
+      <span className="text-xs font-medium text-[var(--pb-muted)]">{label}</span>
       <select
-        className="rounded-lg border border-[var(--pb-line)] bg-[var(--pb-card)] px-3 py-2 text-sm text-[var(--pb-ink)]"
+        className="w-full rounded-lg border border-[var(--pb-line)] bg-white px-3 py-2 text-sm text-[var(--pb-ink)]"
         data-testid="prep-round-select"
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
       >
         {rounds.map((round) => (
           <option key={round.stageId} value={round.stageId} lang="ja">
-            {round.schedulePending
-              ? `${round.label}（${unscheduledHint}）`
-              : round.label}
+            {round.label}
           </option>
         ))}
       </select>

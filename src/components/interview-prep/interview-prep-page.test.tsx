@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import type { InterviewPrepApplication } from "@/lib/interview-prep/types";
 import {
@@ -7,41 +7,82 @@ import {
   InterviewPrepUnavailable,
 } from "./interview-prep-page";
 
+const openPanel = vi.fn().mockResolvedValue(true);
+
+vi.mock("@/components/ai-sidebar/ai-assist-context", () => ({
+  useAiAssistOptional: () => ({
+    openPanel,
+    openWithAssist: vi.fn(),
+    invalidateAssistApply: vi.fn(),
+    registerOpenHandler: () => () => {},
+    registerPanelOpener: () => () => {},
+    registerInvalidateHandler: () => () => {},
+    registerLegacySlotBinder: () => () => {},
+    resolveLegacySlotBinder: () => null,
+    bridgeError: null,
+    clearBridgeError: vi.fn(),
+  }),
+}));
+
 const messages = {
   InterviewPrep: {
     title: "面接準備",
-    backToBoard: "応募進捗に戻る",
+    backToBoard: "← 応募進捗に戻る",
+    applicationLineSep: " / ",
     roleUnset: "職種未設定",
     roundLabel: "面接ラウンド",
     scheduleUnscheduled: "面接未定",
+    scheduleUnset: "未定",
+    scheduleDateLabel: "面接日時",
+    scheduleRegisterLink: "応募進捗で日程を登録",
     scheduleKnown: "{when} · {mode}",
-    scheduleHint: "面接日時がなくても準備できます。看板で日程を登録してください。",
-    noInterviewStages: "面接段階がまだありません。",
-    questionsComing: "想定質問は次の更新で追加されます。",
-    questionsHeading: "想定質問（デモ）",
-    questionsEmpty: "このラウンドの想定質問はまだありません。",
-    demoNotice: "表示内容はデモ用の固定例です。求人や履歴に基づく個別分析ではありません。",
-    demoBadge: "デモ",
-    intentLabel: "質問の意図",
-    pointsLabel: "回答のポイント",
+    scheduleHint: "ヒント",
+    noInterviewStages: "段階なし",
+    baseQuestionsHeading: "基本質問",
+    customQuestionsHeading: "追加質問",
+    customQuestionsHint: "追加ヒント",
+    customEmpty: "まだ追加質問はありません。",
+    customEmptyHint: "質問文を入力してください。",
+    customDemoHint: "デモ：この追加は画面上のみです。データベースには保存されません。",
+    customGuidance: "この質問への回答を整理します。",
+    customInputPlaceholder: "追加したい質問を入力",
+    addQuestion: "質問を追加",
+    removeCustomQuestion: "削除",
+    aiSuggestQuestions: "AIで質問を提案",
+    aiSuggestPending: "提案の選択は今後",
+    demoNotice: "デモ通知",
+    roundSwitchHint: "ラウンド切替で失われます",
+    guidanceLabel: "準備のポイント",
     expandDetails: "詳細を開く",
     collapseDetails: "詳細を閉じる",
-    generateSample: "AI回答例を生成",
-    generatingSample: "生成中…",
-    retrySample: "再試行",
-    regenerateSample: "回答例を再生成",
-    sampleHeading: "回答例（デモ）",
-    generateError: "回答例を表示できませんでした。",
-    editAnswer: "回答を編集",
-    finishEdit: "編集を完了（デモ）",
-    cancelEdit: "編集をやめる",
-    draftHeading: "あなたの回答（デモ）",
+    answerHeading: "自分の回答",
+    openAiAssist: "AIで回答を作成・修正",
+    aiAssistHint: "サイドバー",
+    reflectComingSoon: "反映は今後",
     editorHint: "デモ：入力内容は保存されません",
-    editorPlaceholder: "ここに自分の回答を書いてください",
+    editorPlaceholder: "回答",
+    aiUnavailable: "開けません",
+    successLabel: "成功体験",
+    failureLabel: "失敗体験",
+    reverseItemLabel: "逆質問",
+    addReverseItem: "質問を追加",
+    removeReverseItem: "削除",
+    reversePlaceholder: "聞きたいこと",
+    referHeading: "参照情報",
+    referHint: "まだ自動参照されていません。",
+    referExpand: "表示",
+    referCollapse: "閉じる",
+    referCareer: "職務経歴・プロジェクト",
+    referJob: "応募先の求人情報",
+    referCompany: "企業情報",
+    referHistory: "過去の面接記録・フィードバック",
+    referStatusUnused: "未接続",
+    referStatusMissing: "資料不足",
+    referStatusUnavailable: "取得失敗",
     notFoundTitle: "応募が見つかりません",
-    notFoundBody: "この応募は存在しないか、アクセスできません。",
+    notFoundBody: "ない",
     signedOutTitle: "ログインが必要です",
-    signedOutBody: "面接準備を見るにはログインしてください。",
+    signedOutBody: "ログイン",
     goSignIn: "ログインへ",
     loading: "読み込み中…",
   },
@@ -94,104 +135,97 @@ const sample: InterviewPrepApplication = {
   ],
 };
 
-describe("InterviewPrepPage", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("shows company, 面接未定, demo notice, and mock questions", () => {
+describe("InterviewPrepPage header hierarchy", () => {
+  it("uses 面接準備 as page title and company/role as secondary line", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
-
-    expect(screen.getByTestId("interview-prep-page")).toBeInTheDocument();
+    expect(screen.getByTestId("prep-page-title")).toHaveTextContent("面接準備");
     expect(screen.getByTestId("prep-company")).toHaveTextContent(
       "株式会社サンプル",
     );
-    expect(screen.getByTestId("prep-schedule-status")).toHaveTextContent(
-      "面接未定",
+    expect(screen.getByTestId("prep-role")).toHaveTextContent(
+      "プロダクトエンジニア",
     );
-    expect(screen.getByTestId("prep-demo-notice")).toBeInTheDocument();
-    expect(screen.getByTestId("prep-questions")).toBeInTheDocument();
-    expect(screen.getByTestId("prep-question-common-motivation")).toBeInTheDocument();
-    expect(screen.queryByTestId("prep-questions-placeholder")).not.toBeInTheDocument();
+    expect(screen.getByTestId("prep-back")).toHaveAttribute("href", "/progress");
+    expect(screen.queryByTestId("prep-demo-notice")).not.toBeInTheDocument();
   });
 
-  it("expands details and generates only the selected question sample", () => {
+  it("shows round options without schedule suffix and schedule as 未定", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
-
-    fireEvent.click(screen.getByTestId("prep-question-toggle-common-motivation"));
-    expect(
-      screen.getByTestId("prep-question-details-common-motivation"),
-    ).toHaveTextContent("質問の意図");
-
-    fireEvent.click(screen.getByTestId("prep-generate-common-motivation"));
-    expect(
-      screen.getByTestId("prep-question-common-motivation"),
-    ).toHaveAttribute("data-answer-state", "loading");
-
-    act(() => {
-      vi.runAllTimers();
-    });
-
-    expect(
-      screen.getByTestId("prep-sample-common-motivation"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("prep-sample-common-self-pr"),
-    ).not.toBeInTheDocument();
+    const select = screen.getByTestId("prep-round-select");
+    expect(select).toHaveTextContent("一次面接");
+    expect(select).not.toHaveTextContent("面接未定");
+    expect(screen.getByTestId("prep-schedule-value")).toHaveTextContent("未定");
+    expect(screen.getByTestId("prep-schedule-register")).toHaveAttribute(
+      "href",
+      "/progress",
+    );
   });
 
-  it("switches mock pack when changing rounds", () => {
+  it("keeps 参照情報 collapsed until toggled", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    expect(screen.queryByTestId("prep-refer-career")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("prep-refer-toggle"));
+    expect(screen.getByTestId("prep-refer-career")).toHaveAttribute(
+      "data-status",
+      "unused",
+    );
+    expect(screen.queryByText("Context Resolver")).not.toBeInTheDocument();
+    expect(screen.queryByText("参照済み")).not.toBeInTheDocument();
+  });
+
+  it("shows seven base themes", () => {
     renderPrep(<InterviewPrepPage application={sample} />);
     expect(screen.getByTestId("prep-questions")).toHaveAttribute(
-      "data-stage-kind",
-      "interview_1",
+      "data-base-count",
+      "7",
     );
-    expect(screen.queryByTestId("prep-question-final-offer")).not.toBeInTheDocument();
+  });
+
+  it("isolates custom questions across rounds", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    fireEvent.change(screen.getByTestId("prep-custom-input"), {
+      target: { value: "一次だけの質問" },
+    });
+    fireEvent.click(screen.getByTestId("prep-custom-add"));
+    expect(screen.getByText("一次だけの質問")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("prep-round-select"), {
       target: { value: "st-final" },
     });
-    expect(screen.getByTestId("prep-questions")).toHaveAttribute(
-      "data-stage-kind",
-      "interview_final",
-    );
-    expect(screen.getByTestId("prep-question-final-offer")).toBeInTheDocument();
-  });
-
-  it("keeps drafts isolated per question and clears them when remounting on round change", () => {
-    renderPrep(<InterviewPrepPage application={sample} />);
-
-    fireEvent.click(screen.getByTestId("prep-generate-common-motivation"));
-    act(() => {
-      vi.runAllTimers();
-    });
-    fireEvent.click(screen.getByTestId("prep-edit-common-motivation"));
-    fireEvent.change(screen.getByTestId("prep-editor-input-common-motivation"), {
-      target: { value: "動機ドラフト" },
-    });
-    fireEvent.click(screen.getByTestId("prep-editor-finish-common-motivation"));
-    expect(screen.getByTestId("prep-draft-common-motivation")).toHaveTextContent(
-      "動機ドラフト",
-    );
-
-    fireEvent.click(screen.getByTestId("prep-generate-common-self-pr"));
-    act(() => {
-      vi.runAllTimers();
-    });
-    expect(screen.queryByTestId("prep-draft-common-self-pr")).not.toBeInTheDocument();
+    expect(screen.queryByText("一次だけの質問")).not.toBeInTheDocument();
+    expect(screen.getByTestId("prep-custom-empty")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("prep-round-select"), {
-      target: { value: "st-final" },
+      target: { value: "st-i1" },
     });
-    expect(screen.queryByTestId("prep-draft-common-motivation")).not.toBeInTheDocument();
+    expect(screen.getByText("一次だけの質問")).toBeInTheDocument();
   });
 
-  it("renders not-found shell", () => {
+  it("removes a custom question from the current round only", () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    fireEvent.change(screen.getByTestId("prep-custom-input"), {
+      target: { value: "削除対象の質問" },
+    });
+    fireEvent.click(screen.getByTestId("prep-custom-add"));
+    const remove = document.querySelector(
+      '[data-testid^="prep-custom-remove-custom-"]',
+    );
+    expect(remove).toBeTruthy();
+    fireEvent.click(remove!);
+    expect(screen.queryByText("削除対象の質問")).not.toBeInTheDocument();
+  });
+
+  it("opens sidebar from AI suggest", async () => {
+    renderPrep(<InterviewPrepPage application={sample} />);
+    fireEvent.click(screen.getByTestId("prep-custom-ai-suggest"));
+    await waitFor(() => expect(openPanel).toHaveBeenCalled());
+  });
+
+  it("renders not-found shell linking to progress", () => {
     renderPrep(<InterviewPrepUnavailable kind="not_found" />);
-    expect(screen.getByTestId("interview-prep-not-found")).toBeInTheDocument();
-    expect(screen.getByTestId("prep-fallback-link")).toHaveAttribute("href", "/");
+    expect(screen.getByTestId("prep-fallback-link")).toHaveAttribute(
+      "href",
+      "/progress",
+    );
   });
 });
