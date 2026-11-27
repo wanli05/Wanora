@@ -1131,3 +1131,66 @@ export const aiJobs = pgTable(
   ],
 );
 
+/** User-submitted お問い合わせ / 不具合 reports (independent of AI jobs). */
+export const SUPPORT_REPORT_CATEGORIES = [
+  "bug_report",
+  "other_inquiry",
+] as const;
+export type SupportReportCategory = (typeof SUPPORT_REPORT_CATEGORIES)[number];
+
+export const SUPPORT_NOTIFY_STATUSES = [
+  "pending",
+  "sent",
+  "failed",
+] as const;
+export type SupportNotifyStatus = (typeof SUPPORT_NOTIFY_STATUSES)[number];
+
+export const supportReports = pgTable(
+  "support_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** User-facing acceptance number, e.g. WR-20261126-A1B2C3. */
+    acceptanceNumber: text("acceptance_number").notNull(),
+    /** Client idempotency key — UNIQUE; retries return the same report. */
+    clientSubmissionId: text("client_submission_id").notNull(),
+    category: text("category").notNull(),
+    /** User free-text; never log or put in notifications. */
+    message: text("message").notNull(),
+    /** Optional reply email; never log or put in notifications. */
+    replyEmail: text("reply_email"),
+    /** Null when submitted while signed out. */
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    /**
+     * Whitelisted diagnostic snapshot only:
+     * module, operation, routeId, occurredAt, errorCode, faultId?, appVersion, source.
+     */
+    diagnostic: jsonb("diagnostic").notNull().default({}),
+    notifyStatus: text("notify_status").notNull().default("pending"),
+    notifyAttempts: integer("notify_attempts").notNull().default(0),
+    notifyLastError: text("notify_last_error"),
+    notifySentAt: timestamp("notify_sent_at", { withTimezone: true }),
+    /** Coarse rate-limit bucket (hashed IP or user id); no raw IP stored. */
+    rateLimitKey: text("rate_limit_key").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "support_reports_category_check",
+      inListCheck(t.category.name, SUPPORT_REPORT_CATEGORIES),
+    ),
+    check(
+      "support_reports_notify_status_check",
+      inListCheck(t.notifyStatus.name, SUPPORT_NOTIFY_STATUSES),
+    ),
+    unique("support_reports_acceptance_number_uidx").on(t.acceptanceNumber),
+    unique("support_reports_client_submission_uidx").on(t.clientSubmissionId),
+    index("support_reports_created_idx").on(t.createdAt),
+    index("support_reports_notify_status_idx").on(t.notifyStatus, t.createdAt),
+    index("support_reports_rate_limit_created_idx").on(
+      t.rateLimitKey,
+      t.createdAt,
+    ),
+    index("support_reports_user_created_idx").on(t.userId, t.createdAt),
+  ],
+);
+

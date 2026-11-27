@@ -20,9 +20,10 @@ test("board 面接準備 opens prep page with mock questions when 面接未定",
   await page.getByLabel("会社").fill("準備テスト株式会社");
   await page.getByLabel("職種").fill("バックエンドエンジニア");
   await page.getByRole("button", { name: "応募を保存" }).click();
-  await expect(page.getByText("準備テスト株式会社")).toBeVisible();
-
+  // Company also appears in task-checklist; scope to the board card.
   const card = page.getByTestId(/^card-/).first();
+  await expect(card).toBeVisible();
+  await expect(card.getByText("準備テスト株式会社")).toBeVisible();
   await card.getByRole("button", { name: "面接準備" }).click();
 
   await expect(page).toHaveURL(/\/applications\/[^/]+\/interview-prep$/);

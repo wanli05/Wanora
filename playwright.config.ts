@@ -28,7 +28,12 @@ export default defineConfig({
   // Phase 1C-QA suite requires Testcontainers isolation via
   // scripts/phase1c-qa-e2e-runner.mts + playwright.phase1c-qa.config.ts.
   // Never run it against the shared CI DATABASE_URL (.../wanora).
-  testIgnore: ["**/ai-sidebar-disabled.spec.ts", "**/phase1c/**"],
+  // slot-grid-layout has its own config (`pnpm test:e2e:slot-grid-layout`).
+  testIgnore: [
+    "**/ai-sidebar-disabled.spec.ts",
+    "**/phase1c/**",
+    "**/slot-grid-layout.spec.ts",
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

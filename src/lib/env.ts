@@ -87,6 +87,30 @@ const serverEnvSchema = z
       .default(24),
     /** Shared secret for externally scheduled chat hard-delete / reconcile. */
     AI_PURGE_SECRET: z.string().min(1).optional(),
+
+    // --- Support / お問い合わせ (independent of AI) ---
+    /** Master switch for in-app support report submission. Default on for local/CI. */
+    SUPPORT_REPORTS_ENABLED: boolFromEnv(true),
+    SUPPORT_REPORT_RATE_LIMIT_PER_HOUR: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10),
+    /**
+     * Maintainer notify provider:
+     * - log: console only (default; CI / local without webhook)
+     * - webhook: POST JSON to SUPPORT_NOTIFY_WEBHOOK_URL
+     */
+    SUPPORT_NOTIFY_PROVIDER: z.enum(["log", "webhook"]).default("log"),
+    SUPPORT_NOTIFY_WEBHOOK_URL: z.url().optional(),
+    SUPPORT_NOTIFY_WEBHOOK_TOKEN: z.string().min(1).optional(),
+    SUPPORT_NOTIFY_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
+    /**
+     * Test-only fault injection for My Career project save.
+     * Allowed values: empty | career_project_save
+     * Ignored when NODE_ENV=production.
+     */
+    SUPPORT_INJECT_FAULT: z.string().optional(),
   })
   .refine(
     (env) => !!env.AUTH_GOOGLE_CLIENT_ID === !!env.AUTH_GOOGLE_CLIENT_SECRET,
@@ -140,6 +164,16 @@ const serverEnvSchema = z
       message:
         "AI_WORKER_LEASE_MS must be greater than AI_OPENAI_TIMEOUT_MS + AI_WORKER_SETTLE_SLACK_MS",
       path: ["AI_WORKER_LEASE_MS"],
+    },
+  )
+  .refine(
+    (env) =>
+      env.SUPPORT_NOTIFY_PROVIDER !== "webhook" ||
+      Boolean(env.SUPPORT_NOTIFY_WEBHOOK_URL),
+    {
+      message:
+        "SUPPORT_NOTIFY_WEBHOOK_URL is required when SUPPORT_NOTIFY_PROVIDER=webhook",
+      path: ["SUPPORT_NOTIFY_WEBHOOK_URL"],
     },
   );
 

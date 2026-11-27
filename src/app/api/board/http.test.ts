@@ -14,4 +14,18 @@ describe("progressResponse", () => {
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toMatchObject({ error: "conflict" });
   });
+
+  it("maps unexpected errors to 500 with faultId (no throw)", async () => {
+    const res = progressResponse(new Error("boom"), {
+      operation: "application_create",
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      error: "internal",
+      errorCode: "board_generic_failed",
+    });
+    expect(typeof body.faultId).toBe("string");
+    expect(body.faultId.length).toBeGreaterThan(4);
+  });
 });

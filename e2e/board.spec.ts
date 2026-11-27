@@ -16,10 +16,10 @@ test("signed-in progress page is the application board", async ({
   await page.getByLabel("会社").fill("株式会社テスト");
   await page.getByLabel("職種").fill("ソフトウェアエンジニア");
   await page.getByRole("button", { name: "応募を保存" }).click();
-  await expect(page.getByText("株式会社テスト")).toBeVisible();
-  // Redesigned card shows stage chip + detail/prep CTAs (not nextPrep body text).
+  // Company also appears in task-checklist; scope to the board card.
   const card = page.getByTestId(/^card-/).first();
   await expect(card).toBeVisible();
+  await expect(card.getByText("株式会社テスト")).toBeVisible();
   await expect(card.getByText("書類選考")).toBeVisible();
   await expect(card.getByText("ソフトウェアエンジニア")).toBeVisible();
   await expect(card.getByRole("button", { name: "詳細を見る" })).toBeVisible();

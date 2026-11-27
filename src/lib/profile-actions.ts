@@ -25,6 +25,7 @@ import {
 } from "@/lib/data/work-history-entries";
 import { parseDateInput, yearMonthFromInputValue, compareYearMonthDates } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
+import { logServerFault } from "@/lib/support/fault";
 import {
   japaneseTextFromForm,
   optionalJapaneseFromForm,
@@ -65,6 +66,8 @@ export type ProfileSaveError =
 export type ProfileSaveState = {
   ok?: boolean;
   error?: ProfileSaveError;
+  errorCode?: string;
+  faultId?: string;
 };
 
 async function requireUserId(): Promise<string | null> {
@@ -138,7 +141,13 @@ export async function saveProfileAction(
     if (e instanceof z.ZodError) {
       return { error: "invalidDateFormat" };
     }
-    return { error: "saveFailed" };
+    const faultId = logServerFault({
+      errorCode: "profile_save_failed",
+      module: "my_career",
+      operation: "save_profile",
+      err: e,
+    });
+    return { error: "saveFailed", errorCode: "profile_save_failed", faultId };
   }
 }
 
@@ -306,7 +315,13 @@ export async function saveFullProfileAction(
     if (e instanceof z.ZodError) {
       return { error: "invalidDateFormat" };
     }
-    return { error: "saveFailed" };
+    const faultId = logServerFault({
+      errorCode: "profile_save_failed",
+      module: "my_career",
+      operation: "save_resume_entries",
+      err: e,
+    });
+    return { error: "saveFailed", errorCode: "profile_save_failed", faultId };
   }
 }
 

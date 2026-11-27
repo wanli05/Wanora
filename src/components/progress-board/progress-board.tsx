@@ -42,6 +42,11 @@ import {
   tokyoTodayKey,
 } from "@/lib/progress/tokyo";
 import type { BoardFeedbackQaItem } from "@/lib/progress/dto";
+import {
+  ErrorDiagnosticDetails,
+  ReportIssueButton,
+} from "@/components/support/report-issue-dialog";
+import type { ReportIssueContext } from "@/lib/support/types";
 import { ConfirmSlotDrawer } from "./confirm-slot-drawer";
 import { MonthCalendar } from "./month-calendar";
 import { SlotGrid } from "./slot-grid";
@@ -112,6 +117,8 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [conflictMsg, setConflictMsg] = useState<string | null>(null);
+  const [reportContext, setReportContext] =
+    useState<ReportIssueContext | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [nowMs] = useState(() => Date.now());
   const nowParts = tokyoNowParts(new Date(nowMs));
@@ -121,6 +128,37 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
   const [passConfirm, setPassConfirm] = useState<BoardApplication | null>(null);
   const [taskFocus, setTaskFocus] = useState<TaskFocus | null>(null);
   const [editSection, setEditSection] = useState<EditSection>("basic");
+
+  function clearBoardError() {
+    setConflictMsg(null);
+    setReportContext(null);
+  }
+
+  function setSystemBoardError(
+    message: string,
+    operation: string,
+    error?: unknown,
+  ) {
+    setConflictMsg(message);
+    const body =
+      error && typeof error === "object" && "body" in error
+        ? (error as { body?: Record<string, unknown> }).body
+        : undefined;
+    const faultId =
+      typeof body?.faultId === "string" ? body.faultId : undefined;
+    const errorCode =
+      typeof body?.errorCode === "string"
+        ? (body.errorCode as ReportIssueContext["errorCode"])
+        : "board_generic_failed";
+    setReportContext({
+      module: "board",
+      operation,
+      routeId: "board",
+      errorCode,
+      faultId,
+      source: faultId ? "server" : "client_observed",
+    });
+  }
 
   function closePagePanels() {
     setCalendarOpen(false);
@@ -289,8 +327,13 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       );
       await refreshFrom(payload);
       setAddingApp(false);
-    } catch {
-      setConflictMsg(t("errorGeneric"));
+      clearBoardError();
+    } catch (error) {
+      setSystemBoardError(
+        t("errorGeneric"),
+        "application_create",
+        error,
+      );
     } finally {
       addAppInFlight.current = false;
       setAddingAppBusy(false);
@@ -351,18 +394,21 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         await refreshFrom(payload);
       }
       setEditingApp(null);
-      setConflictMsg(null);
+      clearBoardError();
     } catch (error) {
       const details = (error as { body?: { details?: { otherCompany: string; otherStart: string } } })
         .body?.details;
-      setConflictMsg(
-        details
-          ? `${t("conflictBlock")} ${t("conflictWith", {
-              company: details.otherCompany,
-              when: formatTokyoShort(details.otherStart),
-            })}`
-          : t("errorGeneric"),
-      );
+      if (details) {
+        setConflictMsg(
+          `${t("conflictBlock")} ${t("conflictWith", {
+            company: details.otherCompany,
+            when: formatTokyoShort(details.otherStart),
+          })}`,
+        );
+        setReportContext(null);
+      } else {
+        setSystemBoardError(t("errorGeneric"), "application_update", error);
+      }
     }
   }
 
@@ -376,8 +422,17 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         }),
       );
       await refreshFrom(payload);
-    } catch {
-      setConflictMsg(t("errorGeneric"));
+      clearBoardError();
+    } catch (error) {
+      setSystemBoardError(
+        t("errorGeneric"),
+        typeof body === "object" &&
+          body &&
+          "advance" in (body as object)
+          ? "stage_advance"
+          : "application_update",
+        error,
+      );
     }
   }
 
@@ -474,10 +529,10 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
         attachLatestFeedback: creating,
       });
       if (opts.close) setFeedbackFor(null);
-      setConflictMsg(null);
+      clearBoardError();
       return true;
-    } catch {
-      setConflictMsg(t("errorGeneric"));
+    } catch (error) {
+      setSystemBoardError(t("errorGeneric"), "feedback_save", error);
       return false;
     }
   }
@@ -886,9 +941,20 @@ export function ProgressBoard({ initial }: { initial: BoardPayload }) {
       </div>
 
       {conflictMsg && !interviewFor && !confirmFor ? (
-        <p role="alert" className="text-sm text-red-700">
-          {conflictMsg}
-        </p>
+        <div role="alert" className="text-sm text-red-700">
+          <div>
+            {conflictMsg}
+            {reportContext ? (
+              <ReportIssueButton context={reportContext} />
+            ) : null}
+          </div>
+          {reportContext ? (
+            <ErrorDiagnosticDetails
+              errorCode={reportContext.errorCode}
+              faultId={reportContext.faultId}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {visible.length === 0 ? (

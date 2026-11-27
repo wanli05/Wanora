@@ -1,5 +1,6 @@
 import { ProgressError } from "@/lib/progress/errors";
 import { getSessionUser } from "@/lib/session";
+import { logServerFault } from "@/lib/support/fault";
 
 export const unauthorized = () =>
   Response.json({ error: "unauthorized" }, { status: 401 });
@@ -19,7 +20,10 @@ function isUniqueViolation(error: unknown): boolean {
   return Boolean(cause && "code" in cause && String(cause.code) === "23505");
 }
 
-export function progressResponse(error: unknown) {
+export function progressResponse(
+  error: unknown,
+  meta?: { operation?: string },
+) {
   if (error instanceof ProgressError) {
     const status =
       error.code === "not_found"
@@ -43,5 +47,20 @@ export function progressResponse(error: unknown) {
       { status: 409 },
     );
   }
-  throw error;
+  const operation = meta?.operation ?? "board_request";
+  const faultId = logServerFault({
+    errorCode: "board_generic_failed",
+    module: "board",
+    operation,
+    err: error,
+  });
+  return Response.json(
+    {
+      error: "internal",
+      message: "internal error",
+      faultId,
+      errorCode: "board_generic_failed",
+    },
+    { status: 500 },
+  );
 }

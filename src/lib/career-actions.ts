@@ -37,13 +37,43 @@ import { parseDateInput, yearMonthFromInputValue } from "@/lib/domain/dates";
 import type { LocalizedText } from "@/lib/domain/localized-text";
 import { optionalJapaneseFromForm } from "@/lib/domain/localized-text";
 import { getSessionUser } from "@/lib/session";
+import { logServerFault } from "@/lib/support/fault";
+import type { SupportErrorCode } from "@/lib/support/types";
+import { getServerEnv } from "@/lib/env";
 
 export type CareerSaveState = {
   ok?: boolean;
   /** Saved row id (create or update) — used for AI assist slot rebind. */
   id?: string;
   error?: "unauthenticated" | "invalid" | "saveFailed";
+  /** Stable business error category when saveFailed. */
+  errorCode?: SupportErrorCode;
+  /** Concrete incident id correlating to server logs. */
+  faultId?: string;
 };
+
+function shouldInjectCareerProjectFault(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  try {
+    return getServerEnv().SUPPORT_INJECT_FAULT === "career_project_save";
+  } catch {
+    return process.env.SUPPORT_INJECT_FAULT === "career_project_save";
+  }
+}
+
+function saveFailed(
+  errorCode: SupportErrorCode,
+  operation: string,
+  err?: unknown,
+): CareerSaveState {
+  const faultId = logServerFault({
+    errorCode,
+    module: "my_career",
+    operation,
+    err,
+  });
+  return { error: "saveFailed", errorCode, faultId };
+}
 
 async function requireUserId(): Promise<string | null> {
   const user = await getSessionUser(await headers());
@@ -129,8 +159,8 @@ export async function saveCareerProfileExtrasAction(
     });
     revalidateCareer();
     return { ok: true };
-  } catch {
-    return { error: "saveFailed" };
+  } catch (err) {
+    return saveFailed("career_profile_save_failed", "save_profile_extras", err);
   }
 }
 
@@ -166,8 +196,8 @@ export async function saveCareerEmployerAction(
     const created = await createCareerEmployer(db, userId, input);
     revalidateCareer();
     return { ok: true, id: created.id };
-  } catch {
-    return { error: "saveFailed" };
+  } catch (err) {
+    return saveFailed("career_employer_save_failed", "save_employer", err);
   }
 }
 
@@ -208,6 +238,9 @@ export async function saveCareerProjectAction(
       status,
       sortOrder: optionalInt(formData.get("sortOrder")) ?? 0,
     };
+    if (shouldInjectCareerProjectFault()) {
+      throw new Error("support_inject_fault:career_project_save");
+    }
     const id = formData.get("id")?.toString() || "";
     const db = getDb();
     if (id) {
@@ -218,8 +251,8 @@ export async function saveCareerProjectAction(
     const created = await createCareerProject(db, userId, input);
     revalidateCareer();
     return { ok: true, id: created.id };
-  } catch {
-    return { error: "saveFailed" };
+  } catch (err) {
+    return saveFailed("career_project_save_failed", "save_project", err);
   }
 }
 
@@ -282,8 +315,8 @@ export async function saveCareerSkillAction(
     else await createCareerSkill(db, userId, input);
     revalidateCareer();
     return { ok: true };
-  } catch {
-    return { error: "saveFailed" };
+  } catch (err) {
+    return saveFailed("career_skill_save_failed", "save_skill", err);
   }
 }
 
@@ -315,8 +348,8 @@ export async function saveCareerGoalAction(
     else await createCareerGoal(db, userId, input);
     revalidateCareer();
     return { ok: true };
-  } catch {
-    return { error: "saveFailed" };
+  } catch (err) {
+    return saveFailed("career_goal_save_failed", "save_goal", err);
   }
 }
 

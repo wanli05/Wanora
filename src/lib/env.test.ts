@@ -53,6 +53,22 @@ describe("parseServerEnv", () => {
     ).toThrow(/S3_/);
   });
 
+  it("defaults support report flags safely when unset", () => {
+    const env = parseServerEnv(base);
+    expect(env.SUPPORT_REPORTS_ENABLED).toBe(true);
+    expect(env.SUPPORT_NOTIFY_PROVIDER).toBe("log");
+    expect(env.SUPPORT_REPORT_RATE_LIMIT_PER_HOUR).toBe(10);
+  });
+
+  it("requires webhook URL when notify provider is webhook", () => {
+    expect(() =>
+      parseServerEnv({
+        ...base,
+        SUPPORT_NOTIFY_PROVIDER: "webhook",
+      }),
+    ).toThrow(/SUPPORT_NOTIFY_WEBHOOK_URL/);
+  });
+
   it("defaults AI flags safely when unset", () => {
     const env = parseServerEnv(base);
     expect(env.AI_ENABLED).toBe(false);

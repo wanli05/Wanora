@@ -20,6 +20,7 @@
     "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.mts",
     "ai:worker": "tsx --env-file-if-exists=.env.local scripts/ai-worker.mts",
     "ai:purge": "tsx --env-file-if-exists=.env.local scripts/ai-purge.mts",
+    "support:lookup": "tsx --env-file-if-exists=.env.local scripts/support-report-lookup.mts",
     "test:e2e:slot-grid-layout": "playwright test -c playwright.slot-grid-layout.config.ts"
   },
   "dependencies": {
