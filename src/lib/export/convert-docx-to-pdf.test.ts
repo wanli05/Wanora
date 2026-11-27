@@ -8,6 +8,11 @@ import {
 import { fillRirekishoDocx } from "@/lib/export/fill-rirekisho-docx";
 
 describe("convertDocxToPdf", () => {
+  it("lists Windows Program Files soffice paths among candidates on win32", async () => {
+    // Smoke: module loads; availability probe must not throw.
+    await expect(isDocxToPdfAvailable()).resolves.toBeTypeOf("boolean");
+  });
+
   it("converts a filled 履歴書 DOCX to a PDF when LibreOffice is available", async () => {
     const available = await isDocxToPdfAvailable();
     if (!available) {

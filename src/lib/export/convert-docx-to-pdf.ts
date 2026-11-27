@@ -1,16 +1,40 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
-const SOFFICE_CANDIDATES = [
-  process.env.LIBREOFFICE_PATH,
-  process.env.SOFFICE_PATH,
-  "soffice",
-  "libreoffice",
-  "/usr/bin/soffice",
-  "/usr/bin/libreoffice",
-].filter((v): v is string => Boolean(v));
+function windowsSofficeCandidates(): string[] {
+  if (process.platform !== "win32") return [];
+  const local = process.env.LOCALAPPDATA;
+  const home = homedir();
+  return [
+    join(process.env.ProgramFiles ?? "C:\\Program Files", "LibreOffice", "program", "soffice.exe"),
+    join(
+      process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+      "LibreOffice",
+      "program",
+      "soffice.exe",
+    ),
+    local
+      ? join(local, "Programs", "LibreOffice", "program", "soffice.exe")
+      : "",
+    join(home, "AppData", "Local", "Programs", "LibreOffice", "program", "soffice.exe"),
+  ].filter(Boolean);
+}
+
+function sofficeCandidates(): string[] {
+  return [
+    process.env.LIBREOFFICE_PATH,
+    process.env.SOFFICE_PATH,
+    ...windowsSofficeCandidates(),
+    "soffice",
+    "soffice.exe",
+    "libreoffice",
+    "/usr/bin/soffice",
+    "/usr/bin/libreoffice",
+  ].filter((v): v is string => Boolean(v));
+}
 
 function run(
   command: string,
@@ -21,6 +45,7 @@ function run(
     const child = spawn(command, args, {
       cwd: opts?.cwd,
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
       env: {
         ...process.env,
         HOME: opts?.cwd ?? process.env.HOME,
@@ -50,10 +75,23 @@ function run(
 }
 
 async function resolveSoffice(): Promise<string> {
-  for (const candidate of SOFFICE_CANDIDATES) {
+  const tried: string[] = [];
+  for (const candidate of sofficeCandidates()) {
+    tried.push(candidate);
+    // Absolute / known install paths: skip spawn if the file is missing.
+    if (
+      (candidate.includes("/") || candidate.includes("\\")) &&
+      !existsSync(candidate)
+    ) {
+      continue;
+    }
     try {
       const probe = await run(candidate, ["--version"], { timeoutMs: 15_000 });
-      if (probe.code === 0 || probe.stdout.includes("LibreOffice")) {
+      if (
+        probe.code === 0 ||
+        probe.stdout.includes("LibreOffice") ||
+        probe.stderr.includes("LibreOffice")
+      ) {
         return candidate;
       }
     } catch {
@@ -62,7 +100,9 @@ async function resolveSoffice(): Promise<string> {
   }
   throw new Error(
     "LibreOffice (soffice) is not available for DOCX→PDF conversion. " +
-      "Install libreoffice-writer or set LIBREOFFICE_PATH.",
+      "Install LibreOffice and restart the dev server, or set LIBREOFFICE_PATH " +
+      'to soffice.exe (e.g. "C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe"). ' +
+      `Tried: ${tried.join(", ")}`,
   );
 }
 
