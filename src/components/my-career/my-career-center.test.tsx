@@ -99,6 +99,10 @@ const labels: MyCareerLabels = {
   exportShokumu: "職務経歴書",
   exportDocx: "docx",
   exportPdf: "pdf",
+  exportPrint: "print",
+  exportRetry: "retry",
+  exportPreviewLoading: "preview loading",
+  exportPreviewFailed: "preview failed",
   exportDownloading: "busy",
   exportFailed: "fail export",
   residence: "在留",
@@ -309,7 +313,13 @@ describe("MyCareerCenter", () => {
     expect(document.querySelector(".mc-resume-wrap")).not.toBeNull();
   });
 
-  it("opens 書類出力 with Word/PDF downloads and no print button", () => {
+  it("opens 書類出力 with Word/PDF downloads and 履歴書 print control", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(["%PDF-1.4"], { type: "application/pdf" }),
+    } as Response);
+
     renderCareer(
       <MyCareerCenter
         labels={labels}
@@ -431,7 +441,14 @@ describe("MyCareerCenter", () => {
     fireEvent.click(screen.getByRole("button", { name: /書類出力/ }));
     expect(screen.getByRole("button", { name: "docx" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "pdf" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /print|印刷/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "print" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.querySelector("iframe.mc-rk-pdf-frame")).not.toBeNull();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("doc=rirekisho&format=pdf&disposition=inline"),
+    );
+    fetchMock.mockRestore();
   });
 
   it("renders same-month timeline events side by side and opens work card detail", () => {
