@@ -1,33 +1,38 @@
 /**
  * Local CLI: inspect AI usage / Provider-call metadata (no prompt / resume / secrets).
  *
- * Examples (PowerShell / bash):
- *   pnpm ai:usage -- --request-id <clientRequestId>
- *   pnpm ai:usage -- --user-id <uuid> --date 2026-11-28
+ * Examples (PowerShell):
+ *   pnpm run ai:usage -- --recent
+ *   pnpm run ai:usage -- --recent --user-id <uuid>
+ *   pnpm run ai:usage -- --request-id <clientRequestId>
+ *   pnpm run ai:usage -- --user-id <uuid> --date 2026-11-28
  *
- * Timezone for --date: Asia/Tokyo (YYYY-MM-DD).
+ * Timezone for --date / --recent times: Asia/Tokyo.
  * Requires DATABASE_URL (loads .env.local when present).
- *
- * --request-id returns job + usage + inferred Provider calls for one 添削.
- * Note: ai_jobs.attempt = Worker claims; providerCallsInferred = actual Provider entry (0|1).
- * Day summary `callsWithTokens` ≠ Provider call count (see field docs / notes).
  */
 import { getDb } from "../src/db";
 import { getServerEnv } from "../src/lib/env";
 import { summarizeAiUsageForUserDay } from "../src/lib/ai/usage";
 import { inspectAiRequestByClientRequestId } from "../src/lib/ai/usage-inspect";
+import {
+  AI_USAGE_RECENT_DEFAULT_LIMIT,
+  formatRecentAiUsageReport,
+  listRecentAiUsageRequests,
+} from "../src/lib/ai/usage-recent";
 
 function usage() {
   console.error(`Usage:
-  pnpm ai:usage -- --request-id <clientRequestId>
-  pnpm ai:usage -- --user-id <uuid> --date YYYY-MM-DD
+  pnpm run ai:usage -- --recent
+  pnpm run ai:usage -- --recent --user-id <uuid>
+  pnpm run ai:usage -- --request-id <clientRequestId>
+  pnpm run ai:usage -- --user-id <uuid> --date YYYY-MM-DD
 
 Notes:
+  - pnpm needs "--" before flags so they reach this script
+  - --recent: newest ${AI_USAGE_RECENT_DEFAULT_LIMIT} jobs (Asia/Tokyo times)
   - --date is an Asia/Tokyo calendar day
   - Output is metadata only (tokens, cost estimate, status); never message bodies
-  - estimatedCostUsd uses catalog pricing (not the vendor invoice)
-  - workerClaimAttempts ≠ Provider calls; see inference.notes
-  - callsWithTokens counts usage rows with tokens > 0, not Provider HTTP calls
+  - cost column: "$x.xxxxxx settled" | "$x.xxxxxx reserved" | "unknown (reason)"
 `);
 }
 
@@ -54,6 +59,7 @@ const args = parseArgs(process.argv.slice(2));
 const requestId = args["request-id"]?.trim();
 const userId = args["user-id"]?.trim();
 const day = args.date?.trim();
+const recent = args.recent === "true";
 
 if (args.help || args.h) {
   usage();
@@ -62,7 +68,14 @@ if (args.help || args.h) {
 
 const db = getDb();
 
-if (requestId) {
+if (recent) {
+  const rows = await listRecentAiUsageRequests(db, {
+    userId,
+    limit: AI_USAGE_RECENT_DEFAULT_LIMIT,
+  });
+  console.log(formatRecentAiUsageReport(rows));
+  if (rows.length === 0) process.exitCode = 0;
+} else if (requestId) {
   const inspect = await inspectAiRequestByClientRequestId(db, requestId);
   console.log(
     JSON.stringify(

@@ -47,6 +47,13 @@ export {
   type ProviderCallInference,
 } from "@/lib/ai/usage-inspect";
 export {
+  AI_USAGE_RECENT_DEFAULT_LIMIT,
+  formatRecentAiUsageReport,
+  listRecentAiUsageRequests,
+  selectRecentAiUsageRows,
+  type RecentAiUsageRow,
+} from "@/lib/ai/usage-recent";
+export {
   applyPageNavigation,
   createMyCareerContextSource,
   MY_CAREER_DENIED_PROFILE_FIELDS,
