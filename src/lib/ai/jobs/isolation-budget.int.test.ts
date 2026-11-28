@@ -1,5 +1,6 @@
 /**
- * Brief coverage: dual-account isolation + success counts once + duplicate replay.
+ * Brief coverage: dual-account isolation + success counts once + duplicate replay
+ * + Provider-call inspection (claim attempts ≠ Provider calls).
  */
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -9,9 +10,17 @@ import { aiJobs, aiUsageEvents, users } from "@/db/schema";
 import { enqueueAiJob } from "@/lib/ai/jobs/enqueue";
 import { executeAiJob } from "@/lib/ai/jobs/execute";
 import { drainAiWorker } from "@/lib/ai/jobs/worker";
+import { inspectAiRequestByClientRequestId } from "@/lib/ai/usage-inspect";
 import { createAiConversation } from "@/lib/data/ai-conversations";
-import { claimAiJobs, getAiJob } from "@/lib/data/ai-jobs";
+import {
+  claimAiJobs,
+  forceAiJobLeaseExpiry,
+  getAiJob,
+  getAiJobById,
+} from "@/lib/data/ai-jobs";
 import { upsertProfile } from "@/lib/data/profiles";
+import { recoverExpiredAiJobLeases } from "@/lib/ai/jobs/recover";
+import type { AiProvider } from "@/lib/ai/types";
 import { resetServerEnvCache } from "@/lib/env";
 
 function newUser(name: string) {
@@ -152,5 +161,183 @@ describe("dual-account isolation + usage semantics", () => {
       .where(eq(aiUsageEvents.userId, user.id));
     const okUsages = usages.filter((u) => u.status === "ok");
     expect(okUsages).toHaveLength(1);
+  });
+});
+
+describe("inspect Provider calls by clientRequestId", () => {
+  it("budget reject → zero Provider calls (no job / inspect found=false)", async () => {
+    const db = getDb();
+    const user = newUser("BudgetZero");
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "bz" });
+    setAiEnv({ AI_DAILY_COST_BUDGET_USD: "0" });
+
+    const clientRequestId = randomUUID();
+    const result = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId,
+      content: "予算拒否の添削",
+      feature: "self_pr_refine",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("budget_exceeded");
+
+    // Enqueue budget reject creates no job → Provider complete is unreachable.
+    const jobs = await db
+      .select()
+      .from(aiJobs)
+      .where(eq(aiJobs.userId, user.id));
+    expect(jobs).toHaveLength(0);
+
+    const inspect = await inspectAiRequestByClientRequestId(
+      db,
+      clientRequestId,
+    );
+    expect(inspect.found).toBe(false);
+    expect(inspect.inference.providerCallsInferred).toBe(0);
+    expect(inspect.inference.workerClaimAttempts).toBe(0);
+  });
+
+  it("call made with unknown usage → providerCallsInferred=1, cost not $0", async () => {
+    const db = getDb();
+    const user = newUser("UnknownUsage");
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "unk" });
+    const clientRequestId = randomUUID();
+
+    const enq = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId,
+      content: "用量未知添削",
+      feature: "self_pr_refine",
+    });
+    expect(enq.ok).toBe(true);
+    if (!enq.ok) return;
+
+    const [claimed] = await claimAiJobs(db, {
+      workerId: "iso-unknown",
+      limit: 1,
+    });
+    expect(claimed?.id).toBe(enq.job.id);
+
+    let providerCompleteCalls = 0;
+    const noUsage: AiProvider = {
+      id: "mock",
+      async complete() {
+        providerCompleteCalls += 1;
+        return {
+          text: "添削案です",
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          provider: "mock",
+          model: "mock-v1",
+          latencyMs: 2,
+        };
+      },
+    };
+
+    const executed = await executeAiJob(db, {
+      job: claimed!,
+      workerId: "iso-unknown",
+      provider: noUsage,
+    });
+    expect(executed.ok).toBe(false);
+    if (!executed.ok) expect(executed.reason).toBe("provider_uncertain");
+    expect(providerCompleteCalls).toBe(1);
+
+    const inspect = await inspectAiRequestByClientRequestId(
+      db,
+      clientRequestId,
+    );
+    expect(inspect.found).toBe(true);
+    expect(inspect.inference.providerCallsInferred).toBe(1);
+    expect(inspect.inference.workerClaimAttempts).toBe(1);
+    expect(inspect.inference.providerCalls[0]?.status).toBe(
+      "uncertain_tokens_unknown",
+    );
+    expect(inspect.usage?.status).toBe("reserved");
+    expect(inspect.usage?.costDisplay.kind).toBe("reserved");
+    expect(Number(inspect.usage?.estimatedCostUsd)).toBeGreaterThan(0);
+  });
+
+  it("before_provider reclaim raises attempt but Provider calls stay 0 until entry", async () => {
+    const db = getDb();
+    const user = newUser("ClaimVsCall");
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "cv" });
+    const clientRequestId = randomUUID();
+
+    const enq = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId,
+      content: "领取≠调用",
+      feature: "job_summary_refine",
+    });
+    expect(enq.ok).toBe(true);
+    if (!enq.ok) return;
+
+    const [firstClaim] = await claimAiJobs(db, {
+      workerId: "dead-claim",
+      leaseMs: 60_000,
+    });
+    expect(firstClaim.attempt).toBe(1);
+
+    await forceAiJobLeaseExpiry(
+      db,
+      enq.job.id,
+      new Date(Date.now() - 1000),
+    );
+    await recoverExpiredAiJobLeases(db);
+
+    const mid = await inspectAiRequestByClientRequestId(db, clientRequestId);
+    expect(mid.inference.providerCallsInferred).toBe(0);
+    expect(mid.job?.executionPhase).toBe("before_provider");
+
+    const [secondClaim] = await claimAiJobs(db, {
+      workerId: "alive-claim",
+      leaseMs: 60_000,
+    });
+    expect(secondClaim.id).toBe(enq.job.id);
+    expect(secondClaim.attempt).toBeGreaterThanOrEqual(2);
+
+    const beforeExec = await inspectAiRequestByClientRequestId(
+      db,
+      clientRequestId,
+    );
+    expect(beforeExec.inference.workerClaimAttempts).toBeGreaterThanOrEqual(2);
+    expect(beforeExec.inference.providerCallsInferred).toBe(0);
+
+    let providerCompleteCalls = 0;
+    const provider: AiProvider = {
+      id: "mock",
+      async complete() {
+        providerCompleteCalls += 1;
+        return {
+          text: "職務要約の改善案",
+          usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+          provider: "mock",
+          model: "mock-v1",
+          latencyMs: 1,
+        };
+      },
+    };
+
+    const executed = await executeAiJob(db, {
+      job: secondClaim,
+      workerId: "alive-claim",
+      provider,
+    });
+    expect(executed.ok).toBe(true);
+    expect(providerCompleteCalls).toBe(1);
+
+    const after = await inspectAiRequestByClientRequestId(db, clientRequestId);
+    expect(after.inference.workerClaimAttempts).toBeGreaterThanOrEqual(2);
+    expect(after.inference.providerCallsInferred).toBe(1);
+    expect(after.inference.providerCalls[0]?.status).toBe("succeeded");
+
+    const fresh = await getAiJobById(db, enq.job.id);
+    expect(fresh?.status).toBe("succeeded");
   });
 });

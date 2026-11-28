@@ -1,5 +1,5 @@
 /**
- * Local CLI: inspect AI usage metadata (no prompt / resume body / secrets).
+ * Local CLI: inspect AI usage / Provider-call metadata (no prompt / resume / secrets).
  *
  * Examples (PowerShell / bash):
  *   pnpm ai:usage -- --request-id <clientRequestId>
@@ -7,14 +7,15 @@
  *
  * Timezone for --date: Asia/Tokyo (YYYY-MM-DD).
  * Requires DATABASE_URL (loads .env.local when present).
+ *
+ * --request-id returns job + usage + inferred Provider calls for one 添削.
+ * Note: ai_jobs.attempt = Worker claims; providerCallsInferred = actual Provider entry (0|1).
+ * Day summary `callsWithTokens` ≠ Provider call count (see field docs / notes).
  */
 import { getDb } from "../src/db";
 import { getServerEnv } from "../src/lib/env";
-import {
-  findAiUsageByRequestIdAnyUser,
-  serializeAiUsageMeta,
-  summarizeAiUsageForUserDay,
-} from "../src/lib/ai/usage";
+import { summarizeAiUsageForUserDay } from "../src/lib/ai/usage";
+import { inspectAiRequestByClientRequestId } from "../src/lib/ai/usage-inspect";
 
 function usage() {
   console.error(`Usage:
@@ -25,6 +26,8 @@ Notes:
   - --date is an Asia/Tokyo calendar day
   - Output is metadata only (tokens, cost estimate, status); never message bodies
   - estimatedCostUsd uses catalog pricing (not the vendor invoice)
+  - workerClaimAttempts ≠ Provider calls; see inference.notes
+  - callsWithTokens counts usage rows with tokens > 0, not Provider HTTP calls
 `);
 }
 
@@ -60,36 +63,20 @@ if (args.help || args.h) {
 const db = getDb();
 
 if (requestId) {
-  const row = await findAiUsageByRequestIdAnyUser(db, requestId);
-  if (!row) {
-    console.log(
-      JSON.stringify(
-        {
-          ok: false,
-          mode: "request-id",
-          requestId,
-          error: "not_found",
-          timezoneNote: "Asia/Tokyo for day queries",
-        },
-        null,
-        2,
-      ),
-    );
-    process.exitCode = 1;
-  } else {
-    console.log(
-      JSON.stringify(
-        {
-          ok: true,
-          mode: "request-id",
-          timezoneNote: "Asia/Tokyo for day queries",
-          usage: serializeAiUsageMeta(row),
-        },
-        null,
-        2,
-      ),
-    );
-  }
+  const inspect = await inspectAiRequestByClientRequestId(db, requestId);
+  console.log(
+    JSON.stringify(
+      {
+        ok: inspect.found,
+        mode: "request-id",
+        timezoneNote: "Asia/Tokyo for day queries",
+        ...inspect,
+      },
+      null,
+      2,
+    ),
+  );
+  if (!inspect.found) process.exitCode = 1;
 } else if (userId && day) {
   try {
     const summary = await summarizeAiUsageForUserDay(db, userId, day);
@@ -99,6 +86,14 @@ if (requestId) {
           ok: true,
           mode: "user-day",
           summary,
+          fieldNotes: {
+            callsWithTokens:
+              "Usage rows (ok/invalid_output/reserved) with token sum > 0 — not Provider HTTP call count.",
+            jobsEnteredProvider:
+              "Jobs that reached calling_provider / after_provider or left not_started (≤1 Provider call each).",
+            workerClaimAttemptsSum:
+              "Sum of ai_jobs.attempt (Worker claims/reclaims), not Provider calls.",
+          },
         },
         null,
         2,

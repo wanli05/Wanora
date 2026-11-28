@@ -39,6 +39,14 @@ export {
   updateAiUsageEventStatus,
 } from "@/lib/ai/usage";
 export {
+  inferProviderCallsFromJob,
+  inspectAiRequestByClientRequestId,
+  jobEnteredProvider,
+  type AiRequestInspectResult,
+  type InferredProviderCall,
+  type ProviderCallInference,
+} from "@/lib/ai/usage-inspect";
+export {
   applyPageNavigation,
   createMyCareerContextSource,
   MY_CAREER_DENIED_PROFILE_FIELDS,

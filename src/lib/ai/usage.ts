@@ -96,7 +96,19 @@ export type AiUsageDaySummary = {
   userId: string;
   succeededJobs: number;
   usageEvents: number;
+  /**
+   * Count of usage rows (ok/invalid_output/reserved) with input+output tokens > 0.
+   * NOT equal to Provider HTTP call count — use inspectAiRequestByClientRequestId
+   * / providerCallsInferred for per-request Provider calls.
+   */
   callsWithTokens: number;
+  /**
+   * Jobs that entered calling_provider / after_provider or left not_started.
+   * Upper bound on Provider calls that day (≤1 per job by product rules).
+   */
+  jobsEnteredProvider: number;
+  /** Sum of ai_jobs.attempt for the user's jobs that day (claims, not Provider calls). */
+  workerClaimAttemptsSum: number;
   inputTokens: number;
   outputTokens: number;
   estimatedCostUsd: string;
@@ -136,13 +148,12 @@ export async function summarizeAiUsageForUserDay(
     )
     .orderBy(desc(aiUsageEvents.createdAt));
 
-  const [succeeded] = await db
-    .select({ n: sql<number>`count(*)::int` })
+  const dayJobs = await db
+    .select()
     .from(aiJobs)
     .where(
       and(
         eq(aiJobs.userId, userId),
-        eq(aiJobs.status, "succeeded"),
         gte(aiJobs.createdAt, dayStart),
         lt(aiJobs.createdAt, dayEndExclusive),
       ),
@@ -173,15 +184,32 @@ export async function summarizeAiUsageForUserDay(
     }
   }
 
+  let jobsEnteredProvider = 0;
+  let workerClaimAttemptsSum = 0;
+  let succeededJobs = 0;
+  for (const job of dayJobs) {
+    workerClaimAttemptsSum += job.attempt;
+    if (job.status === "succeeded") succeededJobs += 1;
+    if (
+      job.executionPhase === "calling_provider" ||
+      job.executionPhase === "after_provider" ||
+      job.providerOutcome !== "not_started"
+    ) {
+      jobsEnteredProvider += 1;
+    }
+  }
+
   return {
     timezone: "Asia/Tokyo",
     day: dayYmd,
     dayStartIso: dayStart.toISOString(),
     dayEndExclusiveIso: dayEndExclusive.toISOString(),
     userId,
-    succeededJobs: succeeded?.n ?? 0,
+    succeededJobs,
     usageEvents: usageRows.length,
     callsWithTokens,
+    jobsEnteredProvider,
+    workerClaimAttemptsSum,
     inputTokens,
     outputTokens,
     estimatedCostUsd: estimatedCostUsd.toFixed(6),
