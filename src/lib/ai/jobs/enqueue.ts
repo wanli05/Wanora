@@ -13,11 +13,14 @@ import { checkUserRateLimit, withUserAiLock } from "@/lib/ai/rate-limit";
 import { insertAiUsageEvent } from "@/lib/ai/usage";
 import { getActiveAiConversation } from "@/lib/data/ai-conversations";
 import {
+  countOpenAiJobsForUser,
+  countSucceededAiJobsSince,
   findAiJobByClientRequestId,
   insertAiJob,
   type AiJobRow,
 } from "@/lib/data/ai-jobs";
 import { createAiMessage, listAiMessages, type AiMessageRow } from "@/lib/data/ai-messages";
+import { startOfTokyoDay } from "@/lib/ai/usage";
 
 export type EnqueueAiJobInput = {
   userId: string;
@@ -31,6 +34,16 @@ export type EnqueueAiJobInput = {
   now?: Date;
 };
 
+export type EnqueueAiJobRejectCode =
+  | "ai_unavailable"
+  | "not_found"
+  | "rate_limited"
+  | "budget_exceeded"
+  | "global_budget_exceeded"
+  | "daily_limit_exceeded"
+  | "job_in_progress"
+  | "invalid_request";
+
 export type EnqueueAiJobResult =
   | {
       ok: true;
@@ -40,12 +53,7 @@ export type EnqueueAiJobResult =
     }
   | {
       ok: false;
-      code:
-        | "ai_unavailable"
-        | "not_found"
-        | "rate_limited"
-        | "budget_exceeded"
-        | "invalid_request";
+      code: EnqueueAiJobRejectCode;
       message: string;
       detail?: string;
     };
@@ -228,6 +236,32 @@ export async function enqueueAiJob(
           };
         }
 
+        const openJobs = await countOpenAiJobsForUser(tx, input.userId);
+        if (openJobs >= env.AI_MAX_CONCURRENT_JOBS) {
+          return {
+            kind: "reject" as const,
+            code: "job_in_progress" as const,
+            message: `open jobs ${openJobs}/${env.AI_MAX_CONCURRENT_JOBS}`,
+            detail: "job_in_progress",
+          };
+        }
+
+        const dayStart = startOfTokyoDay(now);
+        const succeededToday = await countSucceededAiJobsSince(
+          tx,
+          input.userId,
+          dayStart,
+        );
+        // Open jobs also consume remaining daily slots (last-slot concurrency safe).
+        if (succeededToday + openJobs >= env.AI_DAILY_JOB_LIMIT) {
+          return {
+            kind: "reject" as const,
+            code: "daily_limit_exceeded" as const,
+            message: `daily job limit ${succeededToday}+${openJobs}/${env.AI_DAILY_JOB_LIMIT} (Asia/Tokyo)`,
+            detail: "daily_limit_exceeded",
+          };
+        }
+
         const budget = await checkAndReserveBudgets(tx, {
           userId: input.userId,
           estimatedCostUsd: reserve.estimatedCostUsd,
@@ -238,11 +272,19 @@ export async function enqueueAiJob(
           now,
         });
         if (!budget.allowed) {
+          if (budget.reason === "global_cost") {
+            return {
+              kind: "reject" as const,
+              code: "global_budget_exceeded" as const,
+              message: "global daily budget exceeded",
+              detail: budget.reason,
+            };
+          }
           return {
             kind: "reject" as const,
             code: "budget_exceeded" as const,
-            message: "budget exceeded",
-            detail: budget.detail,
+            message: "user daily budget exceeded",
+            detail: budget.reason,
           };
         }
 

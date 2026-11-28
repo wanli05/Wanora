@@ -113,6 +113,8 @@ function childEnv(databaseUrl: string): NodeJS.ProcessEnv {
     AI_WORKER_ID: "phase1c-qa-worker",
     AI_RATE_LIMIT_PER_MINUTE: process.env.AI_RATE_LIMIT_PER_MINUTE ?? "200",
     AI_DAILY_TOKEN_BUDGET: process.env.AI_DAILY_TOKEN_BUDGET ?? "500000",
+    AI_DAILY_JOB_LIMIT: process.env.AI_DAILY_JOB_LIMIT ?? "200",
+    AI_MAX_CONCURRENT_JOBS: process.env.AI_MAX_CONCURRENT_JOBS ?? "10",
     AI_DAILY_COST_BUDGET_USD: process.env.AI_DAILY_COST_BUDGET_USD ?? "5",
     AI_GLOBAL_DAILY_COST_BUDGET_USD:
       process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD ?? "50",

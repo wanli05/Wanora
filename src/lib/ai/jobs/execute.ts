@@ -198,9 +198,22 @@ export async function executeAiJob(
   const incomplete = completion.rejectReason === "incomplete";
   // Incomplete (with or without partial text) and empty text are not success replies.
   const rejectOutput = emptyText || incomplete;
+  const hasUsage = usageLooksPresent(completion.usage);
+
+  // Success-looking text without usage → unknown cost: hold reserve, no auto-retry.
+  if (!rejectOutput && !hasUsage) {
+    return finalizeUncertain(
+      db,
+      fence,
+      job,
+      now,
+      "usage_unknown",
+      "provider returned text without usage metadata",
+    );
+  }
 
   // Empty/incomplete without usage: clean fail (no known billable tokens).
-  if (rejectOutput && !usageLooksPresent(completion.usage)) {
+  if (rejectOutput && !hasUsage) {
     return finalizeCleanFailure(
       db,
       fence,

@@ -43,6 +43,22 @@ export async function POST(request: Request) {
         return aiError("rate_limited", 429, result.message);
       case "budget_exceeded":
         return aiError("budget_exceeded", 429, result.message, result.detail);
+      case "global_budget_exceeded":
+        return aiError(
+          "global_budget_exceeded",
+          429,
+          result.message,
+          result.detail,
+        );
+      case "daily_limit_exceeded":
+        return aiError(
+          "daily_limit_exceeded",
+          429,
+          result.message,
+          result.detail,
+        );
+      case "job_in_progress":
+        return aiError("job_in_progress", 409, result.message, result.detail);
       case "invalid_request":
         return aiError("invalid_body", 400, result.message);
       default: {

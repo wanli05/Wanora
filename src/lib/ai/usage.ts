@@ -1,16 +1,18 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { aiUsageEvents, type AiUsageStatus } from "@/db/schema";
+import { aiJobs, aiUsageEvents, type AiUsageStatus } from "@/db/schema";
 import {
   insertAiUsageEvent,
   updateAiUsageEventStatus,
   type AiUsageEventInput,
+  type AiUsageEventRow,
 } from "@/lib/data/ai-usage";
 
 export {
   insertAiUsageEvent,
   updateAiUsageEventStatus,
   type AiUsageEventInput,
+  type AiUsageEventRow,
 };
 
 /** Find the latest usage row by client/request idempotency key. */
@@ -31,6 +33,225 @@ export async function findAiUsageByRequestId(
     .orderBy(desc(aiUsageEvents.createdAt))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Ops / CLI: look up usage by request id across users (DB access required).
+ * Returns metadata only — never joins message/prompt bodies.
+ */
+export async function findAiUsageByRequestIdAnyUser(
+  db: Db,
+  requestId: string,
+) {
+  const [row] = await db
+    .select()
+    .from(aiUsageEvents)
+    .where(eq(aiUsageEvents.requestId, requestId))
+    .orderBy(desc(aiUsageEvents.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export type AiUsageCostDisplay =
+  | { kind: "known"; estimatedCostUsd: string }
+  | { kind: "unknown"; reason: string }
+  | { kind: "reserved"; estimatedCostUsd: string };
+
+/**
+ * Display helper: reserved holds estimated $; unknown never collapses to $0.
+ * Terminal error without settled tokens → unknown when provider may have billed.
+ */
+export function displayAiUsageCost(row: AiUsageEventRow): AiUsageCostDisplay {
+  if (row.status === "reserved") {
+    return { kind: "reserved", estimatedCostUsd: row.estimatedCostUsd };
+  }
+  if (
+    row.status === "ok" ||
+    row.status === "invalid_output"
+  ) {
+    return { kind: "known", estimatedCostUsd: row.estimatedCostUsd };
+  }
+  if (
+    row.errorCode === "usage_unknown" ||
+    row.errorCode === "provider_uncertain" ||
+    row.errorCode === "abandoned_reservation"
+  ) {
+    return {
+      kind: "unknown",
+      reason: row.errorCode ?? "usage_unknown",
+    };
+  }
+  if (row.status === "rejected_budget" || row.status === "rejected_rate") {
+    return { kind: "known", estimatedCostUsd: "0" };
+  }
+  // Clean provider errors released reserve → known $0; uncertain held separately.
+  return { kind: "known", estimatedCostUsd: row.estimatedCostUsd };
+}
+
+export type AiUsageDaySummary = {
+  timezone: "Asia/Tokyo";
+  day: string;
+  dayStartIso: string;
+  dayEndExclusiveIso: string;
+  userId: string;
+  succeededJobs: number;
+  usageEvents: number;
+  /**
+   * Count of usage rows (ok/invalid_output/reserved) with input+output tokens > 0.
+   * NOT equal to Provider HTTP call count — use inspectAiRequestByClientRequestId
+   * / providerCallsInferred for per-request Provider calls.
+   */
+  callsWithTokens: number;
+  /**
+   * Jobs that entered calling_provider / after_provider or left not_started.
+   * Upper bound on Provider calls that day (≤1 per job by product rules).
+   */
+  jobsEnteredProvider: number;
+  /** Sum of ai_jobs.attempt for the user's jobs that day (claims, not Provider calls). */
+  workerClaimAttemptsSum: number;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: string;
+  /** Events whose cost display is unknown (not treated as $0). */
+  unknownCostEvents: number;
+};
+
+/** Inclusive Tokyo calendar day → [start, nextDay). */
+export function tokyoDayBounds(dayYmd: string): {
+  dayStart: Date;
+  dayEndExclusive: Date;
+} {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayYmd)) {
+    throw new Error(`invalid Tokyo day (expected YYYY-MM-DD): ${dayYmd}`);
+  }
+  const dayStart = new Date(`${dayYmd}T00:00:00+09:00`);
+  const dayEndExclusive = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  return { dayStart, dayEndExclusive };
+}
+
+export async function summarizeAiUsageForUserDay(
+  db: Db,
+  userId: string,
+  dayYmd: string,
+): Promise<AiUsageDaySummary> {
+  const { dayStart, dayEndExclusive } = tokyoDayBounds(dayYmd);
+
+  const usageRows = await db
+    .select()
+    .from(aiUsageEvents)
+    .where(
+      and(
+        eq(aiUsageEvents.userId, userId),
+        gte(aiUsageEvents.createdAt, dayStart),
+        lt(aiUsageEvents.createdAt, dayEndExclusive),
+      ),
+    )
+    .orderBy(desc(aiUsageEvents.createdAt));
+
+  const dayJobs = await db
+    .select()
+    .from(aiJobs)
+    .where(
+      and(
+        eq(aiJobs.userId, userId),
+        gte(aiJobs.createdAt, dayStart),
+        lt(aiJobs.createdAt, dayEndExclusive),
+      ),
+    );
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let estimatedCostUsd = 0;
+  let callsWithTokens = 0;
+  let unknownCostEvents = 0;
+
+  for (const row of usageRows) {
+    const display = displayAiUsageCost(row);
+    if (display.kind === "unknown") {
+      unknownCostEvents += 1;
+    } else if (display.kind === "known" || display.kind === "reserved") {
+      estimatedCostUsd += Number(display.estimatedCostUsd);
+    }
+    const tokens = row.inputTokens + row.outputTokens;
+    if (
+      row.status === "ok" ||
+      row.status === "invalid_output" ||
+      row.status === "reserved"
+    ) {
+      inputTokens += row.inputTokens;
+      outputTokens += row.outputTokens;
+      if (tokens > 0) callsWithTokens += 1;
+    }
+  }
+
+  let jobsEnteredProvider = 0;
+  let workerClaimAttemptsSum = 0;
+  let succeededJobs = 0;
+  for (const job of dayJobs) {
+    workerClaimAttemptsSum += job.attempt;
+    if (job.status === "succeeded") succeededJobs += 1;
+    if (
+      job.executionPhase === "calling_provider" ||
+      job.executionPhase === "after_provider" ||
+      job.providerOutcome !== "not_started"
+    ) {
+      jobsEnteredProvider += 1;
+    }
+  }
+
+  return {
+    timezone: "Asia/Tokyo",
+    day: dayYmd,
+    dayStartIso: dayStart.toISOString(),
+    dayEndExclusiveIso: dayEndExclusive.toISOString(),
+    userId,
+    succeededJobs,
+    usageEvents: usageRows.length,
+    callsWithTokens,
+    jobsEnteredProvider,
+    workerClaimAttemptsSum,
+    inputTokens,
+    outputTokens,
+    estimatedCostUsd: estimatedCostUsd.toFixed(6),
+    unknownCostEvents,
+  };
+}
+
+/** Metadata-safe projection for CLI / logs (no prompt / resume body). */
+export function serializeAiUsageMeta(row: AiUsageEventRow) {
+  const cost = displayAiUsageCost(row);
+  return {
+    id: row.id,
+    userId: row.userId,
+    feature: row.feature,
+    provider: row.provider,
+    model: row.model,
+    status: row.status,
+    errorCode: row.errorCode,
+    requestId: row.requestId,
+    conversationId: row.conversationId,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+    cachedInputTokens: row.cachedInputTokens,
+    reasoningTokens: row.reasoningTokens,
+    estimatedCostUsd: row.estimatedCostUsd,
+    costDisplay:
+      cost.kind === "unknown"
+        ? { kind: "unknown" as const, reason: cost.reason }
+        : cost.kind === "reserved"
+          ? {
+              kind: "reserved" as const,
+              estimatedCostUsd: cost.estimatedCostUsd,
+            }
+          : {
+              kind: "known" as const,
+              estimatedCostUsd: cost.estimatedCostUsd,
+            },
+    pricingVersion: row.pricingVersion,
+    providerResponseId: row.providerResponseId,
+    latencyMs: row.latencyMs,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 /** Statuses that count toward daily token/cost budgets (billed empty = invalid_output). */

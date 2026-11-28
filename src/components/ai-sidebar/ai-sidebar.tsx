@@ -699,7 +699,10 @@ export function AiSidebar() {
       setMessages((m) => m.filter((x) => x.id !== optimistic.id));
       setDraft(content);
       const code = res.error.error;
-      if (code === "budget_exceeded") setError(t("errBudget"));
+      if (code === "global_budget_exceeded") setError(t("errGlobalBudget"));
+      else if (code === "budget_exceeded") setError(t("errBudget"));
+      else if (code === "daily_limit_exceeded") setError(t("errDailyLimit"));
+      else if (code === "job_in_progress") setError(t("errJobInProgress"));
       else if (code === "rate_limited") setError(t("errRate"));
       else if (code === "ai_unavailable") setError(t("errUnavailable"));
       else setError(res.error.message ?? t("errSend"));
@@ -1365,6 +1368,9 @@ export function AiSidebar() {
             {error}
             {/* Expected limit/unavailable: no one-click report. */}
             {error !== t("errBudget") &&
+            error !== t("errGlobalBudget") &&
+            error !== t("errDailyLimit") &&
+            error !== t("errJobInProgress") &&
             error !== t("errRate") &&
             error !== t("errUnavailable") ? (
               <ReportIssueButton

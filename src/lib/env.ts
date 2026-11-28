@@ -70,6 +70,17 @@ const serverEnvSchema = z
      */
     AI_LIVE_SMOKE: boolFromEnv(false),
     AI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
+    /**
+     * Max successful AI job delivers per user per Asia/Tokyo day.
+     * Open (queued/running) jobs also consume remaining slots so the last
+     * daily slot cannot be double-booked under concurrency.
+     */
+    AI_DAILY_JOB_LIMIT: z.coerce.number().int().positive().default(20),
+    /**
+     * Max concurrent open (queued/running) AI jobs per user.
+     * Default 1 → second tab gets 「処理中」 instead of parallel paid work.
+     */
+    AI_MAX_CONCURRENT_JOBS: z.coerce.number().int().positive().default(1),
     AI_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(100_000),
     AI_DAILY_COST_BUDGET_USD: z.coerce.number().nonnegative().default(1),
     /** Site-wide daily estimated cost cap (all users). */

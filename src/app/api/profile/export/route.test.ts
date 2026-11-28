@@ -84,6 +84,22 @@ describe("GET /api/profile/export", () => {
     expect(body.toString("utf8")).toBe("PK-docx");
   });
 
+  it("ignores forged userId query params and loads only the session user", async () => {
+    getSessionUser.mockResolvedValue({ id: "user-session" });
+    const { GET } = await import("./route");
+    const res = await GET(
+      new Request(
+        "http://localhost/api/profile/export?doc=rirekisho&format=docx&userId=user-other",
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(loadExportSnapshotForUser).toHaveBeenCalledWith({}, "user-session");
+    expect(loadExportSnapshotForUser).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "user-other",
+    );
+  });
+
   it("streams a pdf attachment", async () => {
     const { GET } = await import("./route");
     const res = await GET(

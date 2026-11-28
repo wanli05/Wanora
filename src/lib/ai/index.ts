@@ -27,12 +27,32 @@ export { checkAndReserveBudgets, settleBudgets } from "@/lib/ai/budget";
 export { checkUserRateLimit, withUserAiLock } from "@/lib/ai/rate-limit";
 export {
   countAiCallsSince,
+  displayAiUsageCost,
   findAiUsageByRequestId,
+  findAiUsageByRequestIdAnyUser,
   insertAiUsageEvent,
+  serializeAiUsageMeta,
   startOfTokyoDay,
+  summarizeAiUsageForUserDay,
   sumAiTokensForUserSince,
+  tokyoDayBounds,
   updateAiUsageEventStatus,
 } from "@/lib/ai/usage";
+export {
+  inferProviderCallsFromJob,
+  inspectAiRequestByClientRequestId,
+  jobEnteredProvider,
+  type AiRequestInspectResult,
+  type InferredProviderCall,
+  type ProviderCallInference,
+} from "@/lib/ai/usage-inspect";
+export {
+  AI_USAGE_RECENT_DEFAULT_LIMIT,
+  formatRecentAiUsageReport,
+  listRecentAiUsageRequests,
+  selectRecentAiUsageRows,
+  type RecentAiUsageRow,
+} from "@/lib/ai/usage-recent";
 export {
   applyPageNavigation,
   createMyCareerContextSource,

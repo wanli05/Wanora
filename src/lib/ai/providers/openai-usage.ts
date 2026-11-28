@@ -13,28 +13,57 @@ export type OpenAiUsageLike = {
   };
 };
 
-/** Map Responses `usage` → AiTokenUsage (reasoning is detail, not double-counted). */
-export function mapOpenAiUsage(usage: OpenAiUsageLike | null | undefined): {
-  mapped: AiTokenUsage;
-  scrubbed: Record<string, unknown>;
-} {
-  const inputTokens = Math.max(0, Number(usage?.input_tokens ?? 0));
-  const outputTokens = Math.max(0, Number(usage?.output_tokens ?? 0));
+export type MappedOpenAiUsage =
+  | {
+      present: true;
+      mapped: AiTokenUsage;
+      scrubbed: Record<string, unknown>;
+    }
+  | {
+      present: false;
+      mapped: AiTokenUsage;
+      scrubbed: Record<string, unknown>;
+    };
+
+const EMPTY_USAGE: AiTokenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+};
+
+/**
+ * Map Responses `usage` → AiTokenUsage.
+ * Absent / null usage is `present: false` (unknown — never treat as $0).
+ * A present object with zeros is still `present: true` (vendor reported free).
+ */
+export function mapOpenAiUsage(
+  usage: OpenAiUsageLike | null | undefined,
+): MappedOpenAiUsage {
+  if (usage == null) {
+    return {
+      present: false,
+      mapped: { ...EMPTY_USAGE },
+      scrubbed: { usage_present: false },
+    };
+  }
+
+  const inputTokens = Math.max(0, Number(usage.input_tokens ?? 0));
+  const outputTokens = Math.max(0, Number(usage.output_tokens ?? 0));
   const cachedInputTokens = Math.max(
     0,
-    Number(usage?.input_tokens_details?.cached_tokens ?? 0),
+    Number(usage.input_tokens_details?.cached_tokens ?? 0),
   );
   const cacheWriteTokens = Math.max(
     0,
-    Number(usage?.input_tokens_details?.cache_write_tokens ?? 0),
+    Number(usage.input_tokens_details?.cache_write_tokens ?? 0),
   );
   const reasoningTokens = Math.max(
     0,
-    Number(usage?.output_tokens_details?.reasoning_tokens ?? 0),
+    Number(usage.output_tokens_details?.reasoning_tokens ?? 0),
   );
   const totalTokens = Math.max(
     0,
-    Number(usage?.total_tokens ?? inputTokens + outputTokens),
+    Number(usage.total_tokens ?? inputTokens + outputTokens),
   );
 
   const mapped: AiTokenUsage = {
@@ -47,6 +76,7 @@ export function mapOpenAiUsage(usage: OpenAiUsageLike | null | undefined): {
   if (reasoningTokens > 0) mapped.reasoningTokens = reasoningTokens;
 
   const scrubbed: Record<string, unknown> = {
+    usage_present: true,
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     total_tokens: totalTokens,
@@ -55,7 +85,7 @@ export function mapOpenAiUsage(usage: OpenAiUsageLike | null | undefined): {
     reasoning_tokens: reasoningTokens,
   };
 
-  return { mapped, scrubbed };
+  return { present: true, mapped, scrubbed };
 }
 
 export function usageLooksPresent(usage: AiTokenUsage): boolean {

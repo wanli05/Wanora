@@ -23,6 +23,8 @@ function setAiEnv(overrides: Record<string, string> = {}) {
   process.env.AI_RATE_LIMIT_PER_MINUTE = "50";
   process.env.AI_DAILY_TOKEN_BUDGET = "100000";
   process.env.AI_DAILY_COST_BUDGET_USD = "1";
+  process.env.AI_DAILY_JOB_LIMIT = "100";
+  process.env.AI_MAX_CONCURRENT_JOBS = "10";
   process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD = "20";
   process.env.AI_OPENAI_MAX_OUTPUT_TOKENS = "64";
   process.env.AI_PRICING_VERSION = "2026-11-17";
@@ -41,6 +43,8 @@ afterEach(async () => {
   delete process.env.AI_RATE_LIMIT_PER_MINUTE;
   delete process.env.AI_DAILY_TOKEN_BUDGET;
   delete process.env.AI_DAILY_COST_BUDGET_USD;
+  delete process.env.AI_DAILY_JOB_LIMIT;
+  delete process.env.AI_MAX_CONCURRENT_JOBS;
   delete process.env.AI_GLOBAL_DAILY_COST_BUDGET_USD;
   resetServerEnvCache();
 });
@@ -170,6 +174,98 @@ describe("enqueueAiJob", () => {
       .from(aiMessages)
       .where(eq(aiMessages.userId, user.id));
     expect(msgs).toHaveLength(0);
+  });
+
+  it("rejects a second concurrent open job for the same user", async () => {
+    const db = getDb();
+    const user = newUser("Concurrent");
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "c" });
+    setAiEnv({ AI_MAX_CONCURRENT_JOBS: "1" });
+
+    const first = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId: randomUUID(),
+      content: "first",
+    });
+    expect(first.ok).toBe(true);
+
+    const second = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId: randomUUID(),
+      content: "second",
+    });
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.code).toBe("job_in_progress");
+  });
+
+  it("rejects when daily success+open job limit is reached", async () => {
+    const db = getDb();
+    const user = newUser("DailyLimit");
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "d" });
+    setAiEnv({ AI_DAILY_JOB_LIMIT: "1", AI_MAX_CONCURRENT_JOBS: "2" });
+
+    const first = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId: randomUUID(),
+      content: "slot-1",
+    });
+    expect(first.ok).toBe(true);
+
+    const second = await enqueueAiJob(db, {
+      userId: user.id,
+      conversationId: conv.id,
+      clientRequestId: randomUUID(),
+      content: "slot-2",
+    });
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.code).toBe("daily_limit_exceeded");
+  });
+
+  it("concurrent last USD slot: losers get budget_exceeded and create no jobs", async () => {
+    const db = getDb();
+    const user = newUser("LastSlot");
+    await db.insert(users).values(user);
+    const conv = await createAiConversation(db, user.id, { title: "slot" });
+    // Cap allows ~1–2 full-context reserves (same approach as guard.int).
+    setAiEnv({
+      AI_DAILY_COST_BUDGET_USD: "0.01",
+      AI_MAX_CONCURRENT_JOBS: "10",
+      AI_DAILY_JOB_LIMIT: "20",
+      AI_OPENAI_MAX_OUTPUT_TOKENS: "64",
+    });
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        enqueueAiJob(db, {
+          userId: user.id,
+          conversationId: conv.id,
+          clientRequestId: randomUUID(),
+          content: `競合${i}`,
+        }),
+      ),
+    );
+
+    const ok = results.filter((r) => r.ok);
+    const budgetFails = results.filter(
+      (r) => !r.ok && r.code === "budget_exceeded",
+    );
+    expect(ok.length).toBeGreaterThanOrEqual(1);
+    expect(ok.length + budgetFails.length).toBe(8);
+
+    // Rejected enqueues never create jobs → provider would never be called for them.
+    const jobs = await db
+      .select()
+      .from(aiJobs)
+      .where(eq(aiJobs.userId, user.id));
+    expect(jobs.length).toBe(ok.length);
+
+    const budget = await getAiDailyBudgetCounter(db, "user", user.id);
+    expect(Number(budget!.reservedUsd)).toBeLessThanOrEqual(0.01 + 1e-9);
   });
 
   it("rejects archived or foreign conversations", async () => {

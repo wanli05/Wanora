@@ -148,6 +148,28 @@ describe("createOpenAiProvider", () => {
     expect(create).toHaveBeenCalledOnce();
   });
 
+  it("throws uncertain when vendor omits usage entirely", async () => {
+    const client: OpenAiResponsesClient = {
+      responses: {
+        create: async () => {
+          const res = stubResponse({ output_text: "添削結果" });
+          // Force absent usage (stub defaults a usage object).
+          return { ...res, usage: undefined } as OpenAIResponse;
+        },
+      },
+    };
+    const provider = createOpenAiProvider({ env: baseEnv(), client });
+    await expect(
+      provider.complete({
+        feature: "self_pr_refine",
+        messages: [{ role: "user", content: "直して" }],
+      }),
+    ).rejects.toMatchObject({
+      name: "ProviderUncertainFailure",
+      code: "usage_unknown",
+    });
+  });
+
   it("throws clean failure for incomplete without usage", async () => {
     const provider = createOpenAiProvider({
       env: baseEnv(),
